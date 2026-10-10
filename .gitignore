@@ -7,6 +7,8 @@
 .phpunit.result.cache
 /.fleet
 /.idea
+/drivers
+/storage/app/hpc
 /.nova
 /.phpunit.cache
 /.vscode

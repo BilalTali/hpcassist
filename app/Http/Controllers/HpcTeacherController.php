@@ -86,20 +86,17 @@ class HpcTeacherController extends Controller
 
         $rules = [
             ['Rule #', 'Section / Page', 'Field Type', 'Rule Description', 'Permitted Values / Dragdown Options'],
-            ['1', 'Student Metadata', 'Locked String', 'APAAR ID, HPC Login ID, Student Name, and Status. HPC Login ID is the unique identifier.', 'Pre-filled from school portal roster.'],
-            ['2', 'Status Rule', 'System Rule', 'Students with status "HPC Completed" will be left untouched and skipped during update runs.', 'HPC Completed (skipped), HPC Pending / In Progress (updated)'],
-            ['3', 'Part-A(1) Profile', 'Dragdown (Select)', 'Select valid Class / Grade from dropdown.', 'Grade 6, Grade 7, Grade 8'],
-            ['4', 'Part-A(1) Profile', 'Dragdown (Select)', 'Select Medium of Instruction / Mother Tongue.', 'Kashmiri, Urdu, Hindi, English, Dogri, Punjabi, Other'],
-            ['5', 'Part-A(1) Profile', 'Dragdown (Select)', 'Select relationship of guardian.', 'Father, Mother, Guardian (Other than Parents)'],
-            ['6', 'Part-A(1) Attendance', 'Integer (Number)', 'Working and Present days must be numeric integers. Present days must be <= Working days.', 'Working: 150-260, Present: 0-260'],
-            ['7', 'Part-A(1) Interests', 'Dragdown (Select)', 'Select student primary hobby / interest.', 'Reading, Drawing, Sports, Music, Craft, Science, Mathematics...'],
-            ['8', 'Part-A(2) Habits', 'Dragdown (Select)', 'Student responsibility level in classroom.', 'All the time, Most times, Sometimes'],
-            ['9', 'Part-A(3) Ambition', 'String & Dragdown', 'Career ambition string and primary 21st Century skill.', 'Critical Thinking, Communication, Collaboration, Problem Solving...'],
-            ['10', 'Part-A(4) Home Feedback', 'Dragdown (Radio)', 'Parent observation ratings for motivation and progress.', 'Yes, Sometimes, No, Not Sure'],
-            ['11', 'Part-B Activities', 'Dragdown (Select)', 'Pedagogical approach for holistic activities.', 'Art-Integrated, Sports-Integrated, Toy-Based, Technology-Integrated...'],
-            ['12', 'Part-C Curricular', 'Dragdown (Radio)', 'Year-end formative and summative performance levels across domains.', 'Beginner, Proficient, Advanced'],
-            ['13', 'HPC Credit (Marks)', 'Integer (0-100)', 'Summative Assessment marks for each of the 8 subjects.', 'Max Marks (default 50), Marks Obtained (0 to Max Marks)'],
-            ['14', 'HPC Credit (Declaration)', 'Dragdown (Select)', 'Teacher declaration certifying entered evaluation.', 'Yes, No'],
+            ['1', 'Student Metadata', 'Locked String', 'APAAR ID, HPC Login ID, Student Name, and Status. HPC Login ID is the unique identifier on the PARAKH portal.', 'Pre-filled from school portal roster.'],
+            ['2', 'Status Protection', 'System Rule', 'Students with status "HPC Completed" will be protected and left untouched during update runs.', 'HPC Completed (skipped), HPC Pending / In Progress (updated)'],
+            ['3', 'Row 3 Guide Row', 'Guide Reference', 'Row 3 (DEMO_SAMPLE) provides a complete, realistic model of teacher evaluation for guidance. Do not delete or alter.', 'All 103 fields pre-filled for visual demonstration.'],
+            ['4', 'Part-A(1) Profile & Attendance', 'Dragdown & Integer', 'Admission No, Grade, Section, Location, Medium of Instruction, Mother Tongue, Guardian, Working/Present days, Absence Reason, Interests.', 'Grade: 6-8; Medium: English/Urdu/Hindi...; Present Days <= Working Days.'],
+            ['5', 'Part-A(2) All About Me', 'Text & Dragdown', 'Living arrangement, leisure activities, self-responsibility, improvement areas, friend info, academic & personal goals with rationale & steps, learnings in/outside school.', 'Responsibility: all the time, most times, sometimes.'],
+            ['6', 'Part-A(3) Ambition Card', 'Text & Dragdown', 'Student career ambition, path to achieve, 5 key skills, focus subjects, habits to cultivate, teacher mentor name & guidance, emotional reflections.', 'Mentor guidance and structured skill acquisition.'],
+            ['7', 'Part-A(4) Parent Partnership', 'Dragdown & Text', 'Home resources, motivation level, routine/screen time schedule, curriculum difficulty, academic progress, support needs, parent home action plan, peer review.', 'Motivation/Schedule/Difficulty/Progress: Yes, Sometimes, No, Not Sure.'],
+            ['8', 'Part-B Holistic Activities', 'Dragdown & Text', 'Pedagogical approach, activity title, description, rubric ratings (Awareness, Sensitivity, Creativity), student self-reflection, peer review, teacher strength/barrier areas & support plan.', 'Approach: Art-Integrated, Sports-Integrated...; Rubrics: Beginner, Proficient, Advanced.'],
+            ['9', 'Part-C Curricular Assessment', 'Dragdown (Level)', 'Year-end formative and summative performance levels across curricular domains.', 'Beginner, Proficient, Advanced'],
+            ['10', 'HPC Credit (Marks Grid)', 'Integer (0-50)', 'Summative Assessment marks for each of the 8 curricular subjects.', 'Max Marks (default 50), Marks Obtained (0 to Max Marks).'],
+            ['11', 'Declaration & Remarks', 'Dragdown & Text', 'Teacher declaration certifying entered evaluation and holistic summary observation.', 'Declaration: Yes, No; Holistic remarks.'],
         ];
 
         foreach ($rules as $rIdx => $row) {
@@ -125,106 +122,16 @@ class HpcTeacherController extends Controller
         }
 
         $instructionSheet->getColumnDimension('A')->setWidth(10);
-        $instructionSheet->getColumnDimension('B')->setWidth(24);
+        $instructionSheet->getColumnDimension('B')->setWidth(26);
         $instructionSheet->getColumnDimension('C')->setWidth(22);
-        $instructionSheet->getColumnDimension('D')->setWidth(50);
+        $instructionSheet->getColumnDimension('D')->setWidth(55);
         $instructionSheet->getColumnDimension('E')->setWidth(45);
 
         // ─── Sheet 2: Student Evaluations ─────────────────────────────────────
         $evalSheet = $spreadsheet->createSheet();
         $evalSheet->setTitle('Student Evaluations');
 
-        $columns = [
-            // Student Metadata (Locked)
-            ['key' => 'apaar_id',        'label' => 'APAAR ID (Locked)',             'width' => 20, 'type' => 'locked',  'note' => 'Official APAAR ID if assigned'],
-            ['key' => 'login_id',        'label' => 'HPC Login ID (Locked) *',       'width' => 22, 'type' => 'locked',  'note' => 'Unique student ID on portal'],
-            ['key' => 'name',            'label' => 'Student Name (Locked) *',       'width' => 26, 'type' => 'locked',  'note' => 'Locked name from portal'],
-            ['key' => 'status',          'label' => 'Status (Locked)',               'width' => 18, 'type' => 'locked',  'note' => 'HPC Completed (skipped) / Pending'],
-
-            // Part-A(1) Student Profile & Attendance
-            ['key' => 'grade',           'label' => 'Class / Grade *',               'width' => 16, 'type' => 'list',    'options' => '"Grade 6,Grade 7,Grade 8"', 'note' => 'Select grade'],
-            ['key' => 'section',         'label' => 'Section',                       'width' => 12, 'type' => 'list',    'options' => '"A,B,C,D,E"', 'note' => 'Select section'],
-            ['key' => 'location',        'label' => 'Area / Location',               'width' => 14, 'type' => 'list',    'options' => '"Rural,Urban"', 'note' => 'Rural or Urban'],
-            ['key' => 'mother_tongue',   'label' => 'Mother Tongue *',               'width' => 18, 'type' => 'list',    'options' => '"Kashmiri,Urdu,Hindi,English,Dogri,Punjabi,Other"', 'note' => 'Medium / Mother tongue'],
-            ['key' => 'relation',        'label' => 'Parent Relation *',             'width' => 22, 'type' => 'list',    'options' => '"Father,Mother,Guardian (Other than Parents)"', 'note' => 'Select relation'],
-            ['key' => 'parent_name',     'label' => 'Parent / Guardian Name *',      'width' => 24, 'type' => 'string',  'note' => 'Full name'],
-            ['key' => 'working_days',    'label' => 'School Working Days *',         'width' => 20, 'type' => 'integer', 'note' => 'Annual working days (e.g. 220)'],
-            ['key' => 'present_days',    'label' => 'Student Present Days *',        'width' => 20, 'type' => 'integer', 'note' => 'Annual present days (e.g. 204)'],
-            ['key' => 'absence_reason',  'label' => 'Reason for Absence (A1)',       'width' => 26, 'type' => 'string',  'note' => 'e.g. Illness / family function'],
-            ['key' => 'interest',        'label' => 'Primary Interest / Hobby *',    'width' => 22, 'type' => 'list',    'options' => '"Reading,Drawing,Sports,Music,Craft,Science,Mathematics,Drama,Dance,Social Service"', 'note' => 'Hobby / Interest'],
-
-            // Part-A(2) All About Me & Academic Goals
-            ['key' => 'live_with',       'label' => 'I Live With (A2)',              'width' => 24, 'type' => 'string',  'note' => 'e.g. Parents and Grandparents'],
-            ['key' => 'stay_at',         'label' => 'We Stay At (A2)',               'width' => 22, 'type' => 'string',  'note' => 'e.g. Sugin, Budgam'],
-            ['key' => 'free_time',       'label' => 'Free Time Activity (A2)',       'width' => 26, 'type' => 'string',  'note' => 'e.g. Reading storybooks and cricket'],
-            ['key' => 'do_well',         'label' => 'Things I Do Well (A2)',         'width' => 26, 'type' => 'string',  'note' => 'e.g. Mental math and sketching'],
-            ['key' => 'responsible',     'label' => 'I Am Responsible (A2) *',      'width' => 20, 'type' => 'list',    'options' => '"All the time,Most times,Sometimes"', 'note' => 'Self-discipline level'],
-            ['key' => 'could_improve',   'label' => 'Could Do Better At (A2)',       'width' => 26, 'type' => 'string',  'note' => 'e.g. Time management in exams'],
-            ['key' => 'care_about',      'label' => 'Care About Others (A2)',        'width' => 26, 'type' => 'string',  'note' => 'e.g. Helping peers with notes'],
-            ['key' => 'feel_proud',      'label' => 'Feel Proud When (A2)',          'width' => 26, 'type' => 'string',  'note' => 'e.g. When solving difficult science problems'],
-            ['key' => 'academic_goal',   'label' => 'Academic Goal Name (A2)',       'width' => 28, 'type' => 'string',  'note' => 'e.g. Excel in Science and Mathematics'],
-            ['key' => 'goal_importance', 'label' => 'Why Goal Important (A2)',      'width' => 30, 'type' => 'string',  'note' => 'e.g. Foundation for higher education'],
-            ['key' => 'goal_step1',      'label' => 'Goal Step 1 (A2)',              'width' => 26, 'type' => 'string',  'note' => 'e.g. Daily formula revision'],
-            ['key' => 'goal_step2',      'label' => 'Goal Step 2 (A2)',              'width' => 26, 'type' => 'string',  'note' => 'e.g. Weekly practice problem sets'],
-            ['key' => 'personal_goal',   'label' => 'Personal Goal (A2)',            'width' => 28, 'type' => 'string',  'note' => 'e.g. Read one informative book monthly'],
-            ['key' => 'learnt_school',   'label' => 'Learnings At School (A2)',      'width' => 28, 'type' => 'string',  'note' => 'e.g. Algebraic equations and plant anatomy'],
-            ['key' => 'learnt_outside',  'label' => 'Learnings Outside School (A2)', 'width' => 28, 'type' => 'string',  'note' => 'e.g. Gardening and cycling repair'],
-            ['key' => 'teacher_help',    'label' => 'How Teacher Can Help (A2)',     'width' => 28, 'type' => 'string',  'note' => 'e.g. Guidance in laboratory practicals'],
-            ['key' => 'teacher_know',    'label' => 'Teacher Should Know (A2)',      'width' => 28, 'type' => 'string',  'note' => 'e.g. Enjoys hands-on activities'],
-
-            // Part-A(3) Ambition Card & 21st Century Skills
-            ['key' => 'ambition',        'label' => 'Career Ambition (A3) *',        'width' => 22, 'type' => 'string',  'note' => 'e.g. Teacher, Engineer, Doctor'],
-            ['key' => 'ambition_how',    'label' => 'How To Achieve Ambition (A3)',  'width' => 28, 'type' => 'string',  'note' => 'e.g. Daily study and active curiosity'],
-            ['key' => 'skill',           'label' => 'Primary 21stC Skill (A3) *',    'width' => 22, 'type' => 'list',    'options' => '"Critical Thinking,Communication,Collaboration,Problem Solving,Creativity"', 'note' => 'Core 21st century skill'],
-            ['key' => 'focus_subjects',  'label' => 'Subjects To Focus On (A3)',     'width' => 24, 'type' => 'string',  'note' => 'e.g. Mathematics and Science'],
-            ['key' => 'habits_build',    'label' => 'Habits To Build (A3)',          'width' => 26, 'type' => 'string',  'note' => 'e.g. Disciplined reading routine'],
-            ['key' => 'mentor',          'label' => 'Teacher Mentor Name (A3)',      'width' => 22, 'type' => 'string',  'note' => 'Mentor full name'],
-
-            // Part-A(4) Self-Reflection & Home Feedback
-            ['key' => 'p_motivation',    'label' => 'Home Motivation Level (A4) *',  'width' => 22, 'type' => 'list',    'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Home motivation'],
-            ['key' => 'p_progress',      'label' => 'Home Progress Level (A4) *',    'width' => 22, 'type' => 'list',    'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Parent progress view'],
-            ['key' => 'parent_feedback', 'label' => 'Parent Observation (A4)',       'width' => 32, 'type' => 'string',  'note' => 'e.g. Regular evening study observed'],
-            ['key' => 'peer_rating',     'label' => 'Peer Review Rating (A4) *',     'width' => 22, 'type' => 'list',    'options' => '"All the time,Most times,Sometimes"', 'note' => 'Classroom collaboration'],
-
-            // Part-B Holistic Activities
-            ['key' => 'act_approach',      'label' => 'Activity Approach (B) *',       'width' => 24, 'type' => 'list',    'options' => '"Art-Integrated,Sports-Integrated,Toy-Based,Technology-Integrated,Experiential Learning,Any Other"', 'note' => 'Pedagogical approach'],
-            ['key' => 'act_title',         'label' => 'Activity Title (B)',            'width' => 28, 'type' => 'string',  'note' => 'e.g. Solar System 3D Model & Daily Life Geometry'],
-            ['key' => 'act_desc',          'label' => 'Activity Description (B)',       'width' => 32, 'type' => 'string',  'note' => 'e.g. Creating scale planetary models'],
-            ['key' => 'act_level',         'label' => 'Activity Level (B) *',          'width' => 20, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Holistic activity level'],
-            ['key' => 'act_learnt',        'label' => 'Student Learnt (B)',            'width' => 32, 'type' => 'string',  'note' => 'Student self-reflection on learnings'],
-            ['key' => 'act_interesting',   'label' => 'Most Interesting Aspect (B)',   'width' => 28, 'type' => 'string',  'note' => 'What student enjoyed most'],
-            ['key' => 'act_practice',      'label' => 'Need Help / Practice (B)',      'width' => 28, 'type' => 'string',  'note' => 'Areas needing extra practice'],
-            ['key' => 'act_peer_name',     'label' => 'Peer Reviewer Name (B)',        'width' => 22, 'type' => 'string',  'note' => 'Peer student name'],
-            ['key' => 'act_peer_feedback', 'label' => 'Peer Review Feedback (B)',      'width' => 32, 'type' => 'string',  'note' => 'Peer observation / remarks'],
-            ['key' => 'act_strength',      'label' => 'Teacher Strength Area (B) *',   'width' => 24, 'type' => 'list',    'options' => '"Critical Thinking,Problem Solving,Collaboration,Communication,Creativity,Persistence,Active Curiosity"', 'note' => 'Dominant observed strength'],
-            ['key' => 'act_support_plan',  'label' => 'Teacher Support Plan (B)',      'width' => 32, 'type' => 'string',  'note' => 'How teacher will support student'],
-
-            // Part-C Curricular Domains
-            ['key' => 'c_formative',     'label' => 'Formative Level (C) *',         'width' => 20, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Curricular progress'],
-            ['key' => 'c_summative',     'label' => 'Summative Level (C) *',         'width' => 20, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Curricular progress'],
-
-            // HPC Credit (Summative Assessment Marks Grid)
-            ['key' => 'l1_max',          'label' => 'Lang 1 Max Marks *',            'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'l1_obt',          'label' => 'Lang 1 Marks Obtained *',       'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'l2_max',          'label' => 'Lang 2 Max Marks *',            'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'l2_obt',          'label' => 'Lang 2 Marks Obtained *',       'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'l3_max',          'label' => 'Lang 3 Max Marks *',            'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'l3_obt',          'label' => 'Lang 3 Marks Obtained *',       'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'm_max',           'label' => 'Maths Max Marks *',             'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'm_obt',           'label' => 'Maths Marks Obtained *',        'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'sci_max',         'label' => 'Science Max Marks *',           'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'sci_obt',         'label' => 'Science Marks Obtained *',      'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'soc_max',         'label' => 'Soc Sci Max Marks *',           'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'soc_obt',         'label' => 'Soc Sci Marks Obtained *',      'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'art_max',         'label' => 'Art Ed Max Marks *',            'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'art_obt',         'label' => 'Art Ed Marks Obtained *',       'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'pe_max',          'label' => 'Physical Ed Max Marks *',       'width' => 20, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'pe_obt',          'label' => 'Physical Ed Marks Obt *',       'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-
-            // HPC Credit (Declaration & Teacher Remarks)
-            ['key' => 'declaration',     'label' => 'Declaration Certified *',       'width' => 22, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Confirm accurate evaluation'],
-            ['key' => 'remarks',         'label' => 'Teacher Remarks',               'width' => 32, 'type' => 'string',  'note' => 'Holistic summary observation'],
-        ];
+        $columns = $this->getEvaluationColumns();
 
         // Write Header (Row 1) & Notes (Row 2)
         foreach ($columns as $idx => $col) {
@@ -251,80 +158,7 @@ class HpcTeacherController extends Controller
         $evalSheet->getRowDimension(2)->setRowHeight(20);
 
         // ─── Row 3: COMPLETE DEMO / DUMMY STUDENT (GUIDE ONLY) ────────────────
-        $demoRow = [
-            'SAMPLE999',
-            'DEMO_SAMPLE',
-            '[SAMPLE DEMO STUDENT - GUIDE ONLY]',
-            'Sample Demo',
-            // Part-A(1)
-            'Grade 6',
-            'A',
-            'Rural',
-            'Kashmiri',
-            'Father',
-            'Mohammad Ahmad',
-            220,
-            204,
-            'Viral fever during autumn break',
-            'Reading',
-            // Part-A(2)
-            'Parents and Grandparents',
-            'Sugin, Budgam',
-            'Reading storybooks and cricket',
-            'Solving puzzles and sketching',
-            'Most times',
-            'Time management in exams',
-            'Helping classmates with notes',
-            'When solving difficult math problems',
-            'Excel in Science and Mathematics',
-            'Build strong conceptual foundations for engineering',
-            'Daily formula revision and note making',
-            'Weekly practice test solving',
-            'Read one informative book every month',
-            'Algebraic equations and botanical plant parts',
-            'Kitchen gardening and basic cycling repair',
-            'Guidance in laboratory practical experiments',
-            'I learn best through hands-on practical activities',
-            // Part-A(3)
-            'Teacher',
-            'Consistent daily study and active curiosity',
-            'Critical Thinking',
-            'Mathematics and Physical Sciences',
-            'Disciplined reading and punctual routine',
-            'Bilal Ahmad Tali',
-            // Part-A(4)
-            'Yes',
-            'Yes',
-            'Regular evening study observed; keen interest in science activities',
-            'Most times',
-            // Part-B Holistic Activities
-            'Art-Integrated',
-            'Solar System 3D Model & Daily Life Geometry',
-            'Creating scale planetary models and identifying geometric shapes in nature',
-            'Proficient',
-            'Learned fundamental scientific principles, geometric symmetry, and practical modeling',
-            'Collaborating with peers on 3D planetary models and interactive presentations',
-            'Time management and drawing complex scientific diagrams',
-            'Ayaan',
-            'Cooperative and helpful team member; explains difficult concepts clearly',
-            'Critical Thinking',
-            'Provide advanced problem-solving challenges and continuous lab exploration',
-            // Part-C
-            'Proficient',
-            'Proficient',
-            // HPC Credit Marks (8 Subjects)
-            50, 42,
-            50, 40,
-            50, 41,
-            50, 44,
-            50, 43,
-            50, 42,
-            50, 46,
-            50, 47,
-            // Declaration & Remarks
-            'Yes',
-            'Consistent performer with excellent curiosity and strong analytical reasoning'
-        ];
+        $demoRow = $this->getDemoStudentRow();
 
         foreach ($columns as $cIdx => $col) {
             $colLetter = $this->indexToColumnLetter($cIdx);
@@ -348,6 +182,7 @@ class HpcTeacherController extends Controller
             ]);
         }
         $evalSheet->getRowDimension(3)->setRowHeight(24);
+
 
         // ─── Rows 4 onwards: REAL ENROLLED STUDENTS (ALL EVAL FIELDS BLANK) ──
         foreach ($students as $sIdx => $st) {
@@ -449,95 +284,18 @@ class HpcTeacherController extends Controller
             $ws  = $ss->getSheetByName('Student Evaluations') ?? $ss->getActiveSheet();
             $max = $ws->getHighestDataRow();
 
+            $columns = $this->getEvaluationColumns();
+
             for ($r = 3; $r <= $max; $r++) {
-                $apaarId        = trim((string) $ws->getCell("A{$r}")->getValue());
-                $loginId        = trim((string) $ws->getCell("B{$r}")->getValue());
-                $name           = trim((string) $ws->getCell("C{$r}")->getValue());
-                $status         = trim((string) $ws->getCell("D{$r}")->getValue());
+                $rowValues = [];
+                foreach ($columns as $cIdx => $col) {
+                    $colLetter = $this->indexToColumnLetter($cIdx);
+                    $rowValues[$col['key']] = trim((string) $ws->getCell("{$colLetter}{$r}")->getValue());
+                }
 
-                // Part-A(1) Profile & Attendance
-                $grade          = trim((string) $ws->getCell("E{$r}")->getValue());
-                $section        = trim((string) $ws->getCell("F{$r}")->getValue());
-                $location       = trim((string) $ws->getCell("G{$r}")->getValue());
-                $motherTongue   = trim((string) $ws->getCell("H{$r}")->getValue());
-                $relation       = trim((string) $ws->getCell("I{$r}")->getValue());
-                $parentName     = trim((string) $ws->getCell("J{$r}")->getValue());
-                $workingDays    = trim((string) $ws->getCell("K{$r}")->getValue());
-                $presentDays    = trim((string) $ws->getCell("L{$r}")->getValue());
-                $absenceReason  = trim((string) $ws->getCell("M{$r}")->getValue());
-                $interest       = trim((string) $ws->getCell("N{$r}")->getValue());
-
-                // Part-A(2) All About Me & Academic Goals
-                $liveWith       = trim((string) $ws->getCell("O{$r}")->getValue());
-                $stayAt         = trim((string) $ws->getCell("P{$r}")->getValue());
-                $freeTime       = trim((string) $ws->getCell("Q{$r}")->getValue());
-                $doWell         = trim((string) $ws->getCell("R{$r}")->getValue());
-                $responsible    = trim((string) $ws->getCell("S{$r}")->getValue());
-                $couldImprove   = trim((string) $ws->getCell("T{$r}")->getValue());
-                $careAbout      = trim((string) $ws->getCell("U{$r}")->getValue());
-                $feelProud      = trim((string) $ws->getCell("V{$r}")->getValue());
-                $academicGoal   = trim((string) $ws->getCell("W{$r}")->getValue());
-                $goalImportance = trim((string) $ws->getCell("X{$r}")->getValue());
-                $goalStep1      = trim((string) $ws->getCell("Y{$r}")->getValue());
-                $goalStep2      = trim((string) $ws->getCell("Z{$r}")->getValue());
-                $personalGoal   = trim((string) $ws->getCell("AA{$r}")->getValue());
-                $learntSchool   = trim((string) $ws->getCell("AB{$r}")->getValue());
-                $learntOutside  = trim((string) $ws->getCell("AC{$r}")->getValue());
-                $teacherHelp    = trim((string) $ws->getCell("AD{$r}")->getValue());
-                $teacherKnow    = trim((string) $ws->getCell("AE{$r}")->getValue());
-
-                // Part-A(3) Ambition Card & 21st Century Skills
-                $ambition       = trim((string) $ws->getCell("AF{$r}")->getValue());
-                $ambitionHow    = trim((string) $ws->getCell("AG{$r}")->getValue());
-                $skill          = trim((string) $ws->getCell("AH{$r}")->getValue());
-                $focusSubjects  = trim((string) $ws->getCell("AI{$r}")->getValue());
-                $habitsBuild    = trim((string) $ws->getCell("AJ{$r}")->getValue());
-                $mentor         = trim((string) $ws->getCell("AK{$r}")->getValue());
-
-                // Part-A(4) Self-Reflection & Home Feedback
-                $pMotivation    = trim((string) $ws->getCell("AL{$r}")->getValue());
-                $pProgress      = trim((string) $ws->getCell("AM{$r}")->getValue());
-                $parentFeedback = trim((string) $ws->getCell("AN{$r}")->getValue());
-                $peerRating     = trim((string) $ws->getCell("AO{$r}")->getValue());
-
-                // Part-B Holistic Activities
-                $actApproach    = trim((string) $ws->getCell("AP{$r}")->getValue());
-                $actTitle       = trim((string) $ws->getCell("AQ{$r}")->getValue());
-                $actDesc        = trim((string) $ws->getCell("AR{$r}")->getValue());
-                $actLevel       = trim((string) $ws->getCell("AS{$r}")->getValue());
-                $actLearnt      = trim((string) $ws->getCell("AT{$r}")->getValue());
-                $actInteresting = trim((string) $ws->getCell("AU{$r}")->getValue());
-                $actPractice    = trim((string) $ws->getCell("AV{$r}")->getValue());
-                $actPeerName    = trim((string) $ws->getCell("AW{$r}")->getValue());
-                $actPeerFeedback= trim((string) $ws->getCell("AX{$r}")->getValue());
-                $actStrength    = trim((string) $ws->getCell("AY{$r}")->getValue());
-                $actSupportPlan = trim((string) $ws->getCell("AZ{$r}")->getValue());
-
-                // Part-C Curricular Domains
-                $cFormative     = trim((string) $ws->getCell("BA{$r}")->getValue());
-                $cSummative     = trim((string) $ws->getCell("BB{$r}")->getValue());
-
-                // HPC Credit (Marks)
-                $l1Max          = trim((string) $ws->getCell("BC{$r}")->getValue());
-                $l1Obt          = trim((string) $ws->getCell("BD{$r}")->getValue());
-                $l2Max          = trim((string) $ws->getCell("BE{$r}")->getValue());
-                $l2Obt          = trim((string) $ws->getCell("BF{$r}")->getValue());
-                $l3Max          = trim((string) $ws->getCell("BG{$r}")->getValue());
-                $l3Obt          = trim((string) $ws->getCell("BH{$r}")->getValue());
-                $mMax           = trim((string) $ws->getCell("BI{$r}")->getValue());
-                $mObt           = trim((string) $ws->getCell("BJ{$r}")->getValue());
-                $sciMax         = trim((string) $ws->getCell("BK{$r}")->getValue());
-                $sciObt         = trim((string) $ws->getCell("BL{$r}")->getValue());
-                $socMax         = trim((string) $ws->getCell("BM{$r}")->getValue());
-                $socObt         = trim((string) $ws->getCell("BN{$r}")->getValue());
-                $artMax         = trim((string) $ws->getCell("BO{$r}")->getValue());
-                $artObt         = trim((string) $ws->getCell("BP{$r}")->getValue());
-                $peMax          = trim((string) $ws->getCell("BQ{$r}")->getValue());
-                $peObt          = trim((string) $ws->getCell("BR{$r}")->getValue());
-
-                // HPC Credit (Declaration & Remarks)
-                $declaration    = trim((string) $ws->getCell("BS{$r}")->getValue());
-                $remarks        = trim((string) $ws->getCell("BT{$r}")->getValue());
+                $name    = $rowValues['name'] ?? '';
+                $loginId = $rowValues['login_id'] ?? '';
+                $status  = $rowValues['status'] ?? '';
 
                 if ($name === '' && $loginId === '') continue;
 
@@ -550,78 +308,24 @@ class HpcTeacherController extends Controller
                     if ($loginId === '') $rowErrors[] = 'HPC Login ID missing';
                 }
 
-                $preview[] = [
-                    'row'             => $r,
-                    'apaar_id'        => $apaarId,
-                    'login_id'        => $loginId,
-                    'name'            => $name,
-                    'status'          => $status ?: 'HPC Pending',
-                    'is_demo'         => $isDemo,
-                    'is_completed'    => $isCompleted,
-                    'grade'           => $grade ?: 'Grade 6',
-                    'section'         => $section ?: 'A',
-                    'location'        => $location ?: 'Rural',
-                    'mother_tongue'   => $motherTongue ?: 'Kashmiri',
-                    'relation'        => $relation ?: 'Father',
-                    'parent_name'     => $parentName ?: 'Parent',
-                    'working_days'    => $workingDays ?: '220',
-                    'present_days'    => $presentDays ?: '204',
-                    'absence_reason'  => $absenceReason ?: 'Illness / fever',
-                    'interest'        => $interest ?: 'Reading',
-                    'live_with'       => $liveWith ?: 'Family',
-                    'stay_at'         => $stayAt ?: 'Sugin, Budgam',
-                    'free_time'       => $freeTime ?: 'Reading books and cricket',
-                    'do_well'         => $doWell ?: 'Sketching and math puzzles',
-                    'responsible'     => $responsible ?: 'Most times',
-                    'could_improve'   => $couldImprove ?: 'Time management in exams',
-                    'care_about'      => $careAbout ?: 'Helping peers with notes',
-                    'feel_proud'      => $feelProud ?: 'When solving difficult problems',
-                    'academic_goal'   => $academicGoal ?: 'Excel in Science and Mathematics',
-                    'goal_importance' => $goalImportance ?: 'Foundation for higher learning',
-                    'goal_step1'      => $goalStep1 ?: 'Daily formula revision',
-                    'goal_step2'      => $goalStep2 ?: 'Weekly practice problem sets',
-                    'personal_goal'   => $personalGoal ?: 'Read one informative book monthly',
-                    'learnt_school'   => $learntSchool ?: 'Algebraic concepts and plant anatomy',
-                    'learnt_outside'  => $learntOutside ?: 'Gardening and cycling maintenance',
-                    'teacher_help'    => $teacherHelp ?: 'Guidance in laboratory practicals',
-                    'teacher_know'    => $teacherKnow ?: 'Enjoys hands-on practical learning',
-                    'ambition'        => $ambition ?: 'Teacher',
-                    'ambition_how'    => $ambitionHow ?: 'Daily study and active curiosity',
-                    'skill'           => $skill ?: 'Critical Thinking',
-                    'focus_subjects'  => $focusSubjects ?: 'Science and Mathematics',
-                    'habits_build'    => $habitsBuild ?: 'Disciplined reading routine',
-                    'mentor'          => $mentor ?: 'Teacher Mentor',
-                    'p_motivation'    => $pMotivation ?: 'Yes',
-                    'p_progress'      => $pProgress ?: 'Yes',
-                    'parent_feedback' => $parentFeedback ?: 'Regular evening study observed; keen interest in science activities',
-                    'peer_rating'     => $peerRating ?: 'Most times',
-                    'act_approach'    => $actApproach ?: 'Art-Integrated',
-                    'act_title'       => $actTitle ?: 'Holistic Concept Project',
-                    'act_desc'        => $actDesc ?: 'Interactive domain model and conceptual learning exercise',
-                    'act_level'       => $actLevel ?: 'Proficient',
-                    'act_learnt'      => $actLearnt ?: 'Learned fundamental concepts and practical application',
-                    'act_interesting' => $actInteresting ?: 'Collaborative experiments and model making',
-                    'act_practice'    => $actPractice ?: 'Further numerical practice and time management',
-                    'act_peer_name'   => $actPeerName ?: 'Ayaan',
-                    'act_peer_feedback'=> $actPeerFeedback ?: 'Cooperative, helpful, and explains concepts clearly',
-                    'act_strength'    => $actStrength ?: 'Critical Thinking',
-                    'act_support_plan'=> $actSupportPlan ?: 'Provide challenging tasks and continuous encouragement',
-                    'c_formative'     => $cFormative ?: 'Proficient',
-                    'c_summative'     => $cSummative ?: 'Proficient',
+                $rowItem = array_merge($rowValues, [
+                    'row'          => $r,
+                    'is_demo'      => $isDemo,
+                    'is_completed' => $isCompleted,
+                    'errors'       => $rowErrors,
                     'marks' => [
-                        'l1' => ['max' => $l1Max ?: '50', 'obt' => $l1Obt ?: '42'],
-                        'l2' => ['max' => $l2Max ?: '50', 'obt' => $l2Obt ?: '40'],
-                        'l3' => ['max' => $l3Max ?: '50', 'obt' => $l3Obt ?: '41'],
-                        'm'  => ['max' => $mMax  ?: '50', 'obt' => $mObt  ?: '44'],
-                        'sci'=> ['max' => $sciMax ?: '50', 'obt' => $sciObt ?: '43'],
-                        'soc'=> ['max' => $socMax ?: '50', 'obt' => $socObt ?: '42'],
-                        'art'=> ['max' => $artMax ?: '50', 'obt' => $artObt ?: '46'],
-                        'pe' => ['max' => $peMax ?: '50', 'obt' => $peObt ?: '47'],
+                        'l1' => ['max' => $rowValues['l1_max'] ?: '50', 'obt' => $rowValues['l1_obt'] ?: '42'],
+                        'l2' => ['max' => $rowValues['l2_max'] ?: '50', 'obt' => $rowValues['l2_obt'] ?: '40'],
+                        'l3' => ['max' => $rowValues['l3_max'] ?: '50', 'obt' => $rowValues['l3_obt'] ?: '41'],
+                        'm'  => ['max' => $rowValues['m_max']  ?: '50', 'obt' => $rowValues['m_obt']  ?: '44'],
+                        'sci'=> ['max' => $rowValues['sci_max'] ?: '50', 'obt' => $rowValues['sci_obt'] ?: '43'],
+                        'soc'=> ['max' => $rowValues['soc_max'] ?: '50', 'obt' => $rowValues['soc_obt'] ?: '42'],
+                        'art'=> ['max' => $rowValues['art_max'] ?: '50', 'obt' => $rowValues['art_obt'] ?: '46'],
+                        'pe' => ['max' => $rowValues['pe_max'] ?: '50', 'obt' => $rowValues['pe_obt'] ?: '47'],
                     ],
-                    'declaration'     => $declaration ?: 'Yes',
-                    'remarks'         => $remarks ?: 'Good progress and consistent participation',
-                    'errors'          => $rowErrors,
-                ];
+                ]);
+
+                $preview[] = $rowItem;
 
                 if (! empty($rowErrors)) {
                     $errors[] = "Row {$r} ({$name}): " . implode(', ', $rowErrors);
@@ -858,4 +562,241 @@ class HpcTeacherController extends Controller
         if (is_dir($profileDir)) exec("rm -rf " . escapeshellarg($profileDir));
         return response()->json(['ok' => true, 'message' => "Session ended for active teacher profile."]);
     }
+
+    public function getEvaluationColumns(): array
+    {
+        return [
+            // ── Student Metadata (Locked) ─────────────────────────────────────────────
+            ['key' => 'apaar_id',               'label' => 'APAAR ID (Locked)',                      'width' => 20, 'type' => 'locked',  'note' => 'Official APAAR ID if assigned'],
+            ['key' => 'login_id',               'label' => 'HPC Login ID (Locked) *',                'width' => 22, 'type' => 'locked',  'note' => 'Unique student ID on portal'],
+            ['key' => 'name',                   'label' => 'Student Name (Locked) *',                'width' => 26, 'type' => 'locked',  'note' => 'Locked name from portal'],
+            ['key' => 'status',                 'label' => 'Status (Locked)',                        'width' => 18, 'type' => 'locked',  'note' => 'HPC Completed (skipped) / Pending'],
+
+            // ── Part-A(1) Student Profile & Attendance ─────────────────────────────────
+            ['key' => 'admission_no',           'label' => 'School Admission Number *',              'width' => 22, 'type' => 'string',  'note' => 'Official school admission / roll no.'],
+            ['key' => 'grade',                  'label' => 'Class / Grade *',                        'width' => 16, 'type' => 'list',    'options' => '"Grade 6,Grade 7,Grade 8"', 'note' => 'Select grade'],
+            ['key' => 'section',                'label' => 'Section',                                'width' => 12, 'type' => 'list',    'options' => '"A,B,C,D,E"', 'note' => 'Select section'],
+            ['key' => 'location',               'label' => 'Area / Location',                        'width' => 14, 'type' => 'list',    'options' => '"Rural,Urban"', 'note' => 'Rural or Urban'],
+            ['key' => 'medium_of_instruction',  'label' => 'Medium of Instruction *',                'width' => 22, 'type' => 'list',    'options' => '"English,Urdu,Hindi,Kashmiri,Dogri,Other"', 'note' => 'Instructional medium'],
+            ['key' => 'mother_tongue',          'label' => 'Mother Tongue *',                        'width' => 18, 'type' => 'list',    'options' => '"Kashmiri,Urdu,Hindi,English,Dogri,Punjabi,Other"', 'note' => 'Student mother tongue'],
+            ['key' => 'relation',               'label' => 'Parent Relation *',                      'width' => 22, 'type' => 'list',    'options' => '"Father,Mother,Guardian (Other than Parents)"', 'note' => 'Select relation'],
+            ['key' => 'parent_name',            'label' => 'Parent / Guardian Name *',               'width' => 24, 'type' => 'string',  'note' => 'Full parent / guardian name'],
+            ['key' => 'working_days',           'label' => 'School Working Days *',                  'width' => 20, 'type' => 'integer', 'note' => 'Annual working days (e.g. 220)'],
+            ['key' => 'present_days',           'label' => 'Student Present Days *',                 'width' => 20, 'type' => 'integer', 'note' => 'Annual present days (e.g. 204)'],
+            ['key' => 'absence_reason',         'label' => 'Reason for Absence (A1)',                'width' => 26, 'type' => 'string',  'note' => 'e.g. Brief seasonal viral illness'],
+            ['key' => 'interest',               'label' => 'Primary Interest / Hobby (A1) *',         'width' => 32, 'type' => 'list',    'options' => '"Reading,Dancing or Singing or Playing a musical instrument,Creative Writing,Gardening,Yoga,Art,Craft,Sports or Games,Cooking,Participation at home"', 'note' => 'Student hobby from Doc 29'],
+
+            // ── Part-A(2) All About Me & Goal Setting ──────────────────────────────────
+            ['key' => 'live_with',              'label' => 'I Live With (A2)',                       'width' => 24, 'type' => 'string',  'note' => 'e.g. Parents and Grandparents'],
+            ['key' => 'stay_at',                'label' => 'We Stay At (A2)',                        'width' => 22, 'type' => 'string',  'note' => 'e.g. Sugin, Budgam'],
+            ['key' => 'free_time',              'label' => 'Free Time Activity (A2)',                'width' => 28, 'type' => 'string',  'note' => 'e.g. Reading storybooks, science experiments & cricket'],
+            ['key' => 'do_well',                'label' => 'Things I Do Very Well (A2)',             'width' => 28, 'type' => 'string',  'note' => 'e.g. Mental arithmetic, sketching & recitation'],
+            ['key' => 'responsible',            'label' => 'I Am Responsible (A2) *',               'width' => 22, 'type' => 'list',    'options' => '"all the time,most times,sometimes"', 'note' => 'Exact radio from Doc 29'],
+            ['key' => 'do_better',              'label' => 'Could Do Better At (A2)',                'width' => 28, 'type' => 'string',  'note' => 'e.g. Public speaking & cursive handwriting speed'],
+            ['key' => 'care_others',            'label' => 'I Care About Others (A2)',               'width' => 30, 'type' => 'string',  'note' => 'e.g. Sharing study notes & helping classmates'],
+            ['key' => 'feel_proud',             'label' => 'Feel Proud When (A2)',                   'width' => 30, 'type' => 'string',  'note' => 'e.g. Solving difficult math problems independently'],
+            ['key' => 'friend_name',            'label' => 'Best Friend Name (A2)',                  'width' => 22, 'type' => 'string',  'note' => 'e.g. Ayaan Ahmad'],
+            ['key' => 'friend_age',             'label' => 'Best Friend Age (A2)',                   'width' => 18, 'type' => 'integer', 'note' => 'e.g. 12'],
+            ['key' => 'acad_goal',              'label' => 'Academic Goal (A2)',                     'width' => 28, 'type' => 'string',  'note' => 'e.g. Score above 90% in Maths & Science'],
+            ['key' => 'acad_goal_why',          'label' => 'Why Academic Goal Matters (A2) *',       'width' => 32, 'type' => 'string',  'note' => 'e.g. Foundation for engineering studies'],
+            ['key' => 'acad_step1',             'label' => 'Academic Goal Step 1 (A2)',              'width' => 28, 'type' => 'string',  'note' => 'e.g. Daily formula revision and practice'],
+            ['key' => 'acad_step2',             'label' => 'Academic Goal Step 2 (A2)',              'width' => 28, 'type' => 'string',  'note' => 'e.g. Weekly problem solving tests'],
+            ['key' => 'pers_goal',              'label' => 'Personal Goal (A2)',                     'width' => 28, 'type' => 'string',  'note' => 'e.g. Morning exercise & reading routine'],
+            ['key' => 'pers_goal_why',          'label' => 'Why Personal Goal Matters (A2) *',       'width' => 32, 'type' => 'string',  'note' => 'e.g. Boosts stamina and daily concentration'],
+            ['key' => 'pers_step1',             'label' => 'Personal Goal Step 1 (A2)',              'width' => 28, 'type' => 'string',  'note' => 'e.g. Wake up at 6 AM and 30 min yoga'],
+            ['key' => 'pers_step2',             'label' => 'Personal Goal Step 2 (A2)',              'width' => 28, 'type' => 'string',  'note' => 'e.g. Read 15 pages of books before bed'],
+            ['key' => 'sch_learn1',             'label' => 'School Learning 1 (A2)',                 'width' => 28, 'type' => 'string',  'note' => 'e.g. Laws of reflection and light refraction'],
+            ['key' => 'sch_learn2',             'label' => 'School Learning 2 (A2)',                 'width' => 28, 'type' => 'string',  'note' => 'e.g. Solving linear equations with one variable'],
+            ['key' => 'sch_learn3',             'label' => 'School Learning 3 (A2)',                 'width' => 28, 'type' => 'string',  'note' => 'e.g. Preamble and fundamental civic rights'],
+            ['key' => 'out_learn1',             'label' => 'Outside Learning 1 (A2)',                'width' => 28, 'type' => 'string',  'note' => 'e.g. Kitchen gardening and composting at home'],
+            ['key' => 'out_learn2',             'label' => 'Outside Learning 2 (A2)',                'width' => 28, 'type' => 'string',  'note' => 'e.g. Bicycle maintenance and chain lubrication'],
+            ['key' => 'out_learn3',             'label' => 'Outside Learning 3 (A2)',                'width' => 28, 'type' => 'string',  'note' => 'e.g. Basic family budgeting and grocery calculation'],
+            ['key' => 'help_with',              'label' => 'How Teacher Can Help (A2)',              'width' => 30, 'type' => 'string',  'note' => 'e.g. Science laboratory experiments & advanced math'],
+            ['key' => 'teacher_know',           'label' => 'Teacher Should Know (A2)',               'width' => 30, 'type' => 'string',  'note' => 'e.g. Thrives in collaborative practical projects'],
+
+            // ── Part-A(3) My Ambition Card ─────────────────────────────────────────────
+            ['key' => 'ambition',               'label' => 'My Ambition Is (A3) *',                  'width' => 24, 'type' => 'string',  'note' => 'e.g. Astrophysicist / Software Engineer / Doctor'],
+            ['key' => 'achieve_how',            'label' => 'Achieve Ambition By (A3) *',             'width' => 32, 'type' => 'string',  'note' => 'e.g. Deep conceptual study in Maths & Science'],
+            ['key' => 'skills_needed',          'label' => '5 Skills Needed (A3) *',                 'width' => 30, 'type' => 'string',  'note' => 'e.g. Critical Thinking, Coding, Persistence'],
+            ['key' => 'focus_subjects',         'label' => 'Subjects To Focus On (A3) *',            'width' => 28, 'type' => 'string',  'note' => 'e.g. Mathematics, Science, English, Computing'],
+            ['key' => 'habits_build',           'label' => 'Habits To Build (A3)',                   'width' => 28, 'type' => 'string',  'note' => 'e.g. Daily disciplined study & curious questioning'],
+            ['key' => 'i_will',                 'label' => 'I Will... (A3) *',                       'width' => 30, 'type' => 'string',  'note' => 'e.g. Maintain daily science journal and problem solving'],
+            ['key' => 'mentor',                 'label' => 'Guidance From Mentor (A3) *',            'width' => 24, 'type' => 'string',  'note' => 'Teacher Mentor name (e.g. Bilal Ahmad Tali)'],
+            ['key' => 'mentor_help',            'label' => 'Mentor Will Help By (A3) *',             'width' => 32, 'type' => 'string',  'note' => 'e.g. Recommending advanced reference books & Olympiads'],
+            ['key' => 'learn_new',              'label' => 'I Will Learn New... (A3) *',             'width' => 30, 'type' => 'string',  'note' => 'e.g. Scientific analysis and computer algorithms'],
+            ['key' => 'feel_when_achieve',      'label' => 'I Will Feel When Achieved (A3) *',       'width' => 30, 'type' => 'string',  'note' => 'e.g. Deeply fulfilled, proud, and inspired'],
+            ['key' => 'parents_feel',           'label' => 'Parents Will Feel (A3) *',               'width' => 28, 'type' => 'string',  'note' => 'e.g. Immensely joyful, proud, and grateful'],
+
+            // ── Part-A(4) Parent-Teacher Partnership Card ──────────────────────────────
+            ['key' => 'home_resources',         'label' => 'Home Resources Available (A4) *',        'width' => 32, 'type' => 'string',  'note' => 'e.g. Books, Newspaper, Computer, Internet, TV'],
+            ['key' => 'p_motivated',            'label' => 'Child Motivated To Learn (A4) *',        'width' => 24, 'type' => 'list',    'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Doc 29 Q1: motivated to learn'],
+            ['key' => 'p_schedule',             'label' => 'Follows Home Schedule (A4) *',           'width' => 22, 'type' => 'list',    'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Doc 29 Q2: home schedule & screen time'],
+            ['key' => 'p_curriculum_diff',      'label' => 'Curriculum Difficult (A4) *',            'width' => 22, 'type' => 'list',    'options' => '"No,Sometimes,Yes,Not Sure"', 'note' => 'Doc 29 Q3: curriculum difficulty'],
+            ['key' => 'p_progress',             'label' => 'Good Grade Progress (A4) *',             'width' => 22, 'type' => 'list',    'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Doc 29 Q4: grade progress'],
+            ['key' => 'child_needs_support',    'label' => 'Child Needs Support With (A4) *',        'width' => 32, 'type' => 'string',  'note' => 'e.g. Mathematics, Science, Time management'],
+            ['key' => 'parent_feedback',        'label' => 'Parent Home Support Plan (A4) *',        'width' => 34, 'type' => 'string',  'note' => 'e.g. Evening study supervision & screen time limits'],
+            ['key' => 'peer_rating',            'label' => 'Peer Review Collaboration (A4) *',       'width' => 24, 'type' => 'list',    'options' => '"All the time,Most times,Sometimes"', 'note' => 'Peer collaboration rating'],
+
+            // ── Part-B Holistic Activities ─────────────────────────────────────────────
+            ['key' => 'act_approach',           'label' => 'Activity Approach (B) *',                'width' => 24, 'type' => 'list',    'options' => '"Art-Integrated,Sports-Integrated,Toy-Based,Technology-Integrated,Experiential Learning,Any Other"', 'note' => 'Pedagogical approach from Doc 29'],
+            ['key' => 'act_title',              'label' => 'Activity Title (B)',                     'width' => 28, 'type' => 'string',  'note' => 'e.g. Solar System 3D Model & Daily Life Geometry'],
+            ['key' => 'act_desc',               'label' => 'Activity Description (B)',                'width' => 34, 'type' => 'string',  'note' => 'e.g. Created scale planetary orbits and verified ratios'],
+            ['key' => 'act_rubric_awareness',   'label' => 'Rubric: Awareness (B) *',                'width' => 22, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Doc 29 rubric level'],
+            ['key' => 'act_rubric_sensitivity', 'label' => 'Rubric: Sensitivity (B) *',              'width' => 22, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Doc 29 rubric level'],
+            ['key' => 'act_rubric_creativity',  'label' => 'Rubric: Creativity (B) *',               'width' => 22, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Doc 29 rubric level'],
+            ['key' => 'act_self_effort',        'label' => 'Self: Proud of Effort (B) *',            'width' => 22, 'type' => 'list',    'options' => '"Yes,To an extent,No,Not Sure"', 'note' => 'Doc 29 student reflection Q1'],
+            ['key' => 'act_self_apply',         'label' => 'Self: Apply To Real Life (B) *',         'width' => 22, 'type' => 'list',    'options' => '"Yes,To an extent,No,Not Sure"', 'note' => 'Doc 29 student reflection Q2'],
+            ['key' => 'act_self_motivated',     'label' => 'Self: Motivated To Learn (B) *',         'width' => 22, 'type' => 'list',    'options' => '"Yes,To an extent,No,Not Sure"', 'note' => 'Doc 29 student reflection Q3'],
+            ['key' => 'act_learnt',             'label' => 'Student Learnt (B) *',                   'width' => 34, 'type' => 'string',  'note' => 'By doing this activity, I learnt (Doc 29)'],
+            ['key' => 'act_interesting',        'label' => 'Most Interesting Aspect (B) *',          'width' => 32, 'type' => 'string',  'note' => 'The most interesting thing was (Doc 29)'],
+            ['key' => 'act_practice',           'label' => 'Need Practice On (B) *',                 'width' => 30, 'type' => 'string',  'note' => 'I need practice on (Doc 29)'],
+            ['key' => 'act_help',               'label' => 'Need Help With (B) *',                   'width' => 30, 'type' => 'string',  'note' => 'I need help with (Doc 29)'],
+            ['key' => 'act_peer_name',          'label' => 'Peer Reviewer Name (B) *',               'width' => 22, 'type' => 'string',  'note' => 'My Peer\'s Name is (Doc 29)'],
+            ['key' => 'act_peer_engaged',       'label' => 'Peer: Engaged & Motivated (B) *',        'width' => 24, 'type' => 'list',    'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Doc 29 Peer Q1'],
+            ['key' => 'act_peer_shared',        'label' => 'Peer: Shared Thoughts (B) *',            'width' => 24, 'type' => 'list',    'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Doc 29 Peer Q2'],
+            ['key' => 'act_peer_practice',      'label' => 'Peer: Needs Practice On (B)',            'width' => 30, 'type' => 'string',  'note' => 'My peer needs to practice (Doc 29)'],
+            ['key' => 'act_peer_help',          'label' => 'Peer: Needs Help With (B)',              'width' => 30, 'type' => 'string',  'note' => 'My peer needs help with (Doc 29)'],
+            ['key' => 'act_peer_feedback',      'label' => 'Peer General Remarks (B)',               'width' => 32, 'type' => 'string',  'note' => 'Peer holistic comment'],
+            ['key' => 'act_strength',           'label' => 'Teacher Strength Area (B) *',            'width' => 26, 'type' => 'list',    'options' => '"Follow Instructions,Collaboration,Independent Work,Responsible,Communication,Creative,Solution-Focused Thinking,Concentration,Empathy,Organization & Prioritization"', 'note' => 'Exact from Doc 29'],
+            ['key' => 'act_barriers',           'label' => 'Teacher Barrier(s) Area (B) *',          'width' => 26, 'type' => 'list',    'options' => '"None,Lack of Attention,Peer Pressure,Lack of Motivation,Undefined Goals,Lack of Preparation,Domestic Issues,Inappropriate behavior in classroom,Severe illness or injury"', 'note' => 'Exact from Doc 29'],
+            ['key' => 'act_support_plan',       'label' => 'Teacher Support Plan (B) *',             'width' => 34, 'type' => 'string',  'note' => 'How I can help student progress further (Doc 29)'],
+
+            // ── Part-C Year-End Curricular Assessment ───────────────────────────────────
+            ['key' => 'c_formative',            'label' => 'Formative Overall Level (C) *',          'width' => 22, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Curricular formative progress'],
+            ['key' => 'c_summative',            'label' => 'Summative Overall Level (C) *',          'width' => 22, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Curricular summative progress'],
+
+            // ── HPC Credit (Summative Assessment Marks Grid) ───────────────────────────
+            ['key' => 'l1_max',                 'label' => 'Lang 1 Max Marks *',                     'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'l1_obt',                 'label' => 'Lang 1 Marks Obtained *',                'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'l2_max',                 'label' => 'Lang 2 Max Marks *',                     'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'l2_obt',                 'label' => 'Lang 2 Marks Obtained *',                'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'l3_max',                 'label' => 'Lang 3 Max Marks *',                     'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'l3_obt',                 'label' => 'Lang 3 Marks Obtained *',                'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'm_max',                  'label' => 'Maths Max Marks *',                      'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'm_obt',                  'label' => 'Maths Marks Obtained *',                 'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'sci_max',                'label' => 'Science Max Marks *',                    'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'sci_obt',                'label' => 'Science Marks Obtained *',               'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'soc_max',                'label' => 'Soc Sci Max Marks *',                    'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'soc_obt',                'label' => 'Soc Sci Marks Obtained *',               'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'art_max',                'label' => 'Art Ed Max Marks *',                     'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'art_obt',                'label' => 'Art Ed Marks Obtained *',                'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'pe_max',                 'label' => 'Physical Ed Max Marks *',                'width' => 20, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'pe_obt',                 'label' => 'Physical Ed Marks Obt *',                'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+
+            // ── Declaration & Final Remarks ────────────────────────────────────────────
+            ['key' => 'declaration',            'label' => 'Declaration Certified *',                'width' => 22, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Confirm certified evaluation'],
+            ['key' => 'remarks',                'label' => 'Teacher Holistic Summary Remarks',        'width' => 36, 'type' => 'string',  'note' => 'Professional teacher overall appraisal'],
+        ];
+    }
+
+    public function getDemoStudentRow(): array
+    {
+        return [
+            // Metadata
+            'SAMPLE999',
+            'DEMO_SAMPLE',
+            '[SAMPLE DEMO STUDENT - GUIDE ONLY]',
+            'Sample Demo',
+            // Part-A(1)
+            'ADM-2026-089',
+            'Grade 6',
+            'A',
+            'Rural',
+            'English',
+            'Kashmiri',
+            'Father',
+            'Mohammad Ahmad Wani',
+            220,
+            204,
+            'Viral fever during seasonal change in November',
+            'Reading',
+            // Part-A(2)
+            'Parents and Grandparents',
+            'Sugin, Budgam',
+            'Reading storybooks, science experiments & playing cricket',
+            'Mental arithmetic, pencil sketching and recitation',
+            'most times',
+            'Public speaking and cursive handwriting speed',
+            'Sharing study notes and helping classmates with difficulties',
+            'Solving challenging geometry problems and helping peers',
+            'Ayaan Ahmad',
+            12,
+            'Score above 90% in Mathematics and Science',
+            'Builds solid foundation for pursuing higher studies in Engineering',
+            'Dedicate 45 minutes daily to numerical problem solving and formula revision',
+            'Clarify doubts with subject teachers immediately and practice weekly mock tests',
+            'Develop regular physical exercise and disciplined reading habits',
+            'Keeps mind alert, improves stamina, and enhances daily concentration',
+            'Wake up at 6:00 AM every morning and do 30 minutes of yoga and jogging',
+            'Read at least 15 pages of non-academic literature before bedtime',
+            'Laws of reflection and refraction in science laboratory',
+            'Formulating and solving linear equations in single variable',
+            'Constitutional preamble and fundamental rights in Social Science',
+            'Organic kitchen gardening, composting, and soil preparation',
+            'Bicycle maintenance, tire inflation, and chain lubrication',
+            'Basic household budgeting and grocery calculation',
+            'Hands-on science experiments and advanced mathematical puzzles',
+            'I am enthusiastic about collaborative group projects and active discussions',
+            // Part-A(3)
+            'Astrophysicist & Space Research Scientist',
+            'Deep conceptual focus in Mathematics, regular physics experiments, and continuous reading',
+            'Critical Thinking, Problem Solving, Data Analysis, Scientific Curiosity, Persistence',
+            'Mathematics, Physics, Chemistry, English, Computer Science',
+            'Consistent daily study routine, punctual time management, and inquisitive questioning',
+            'Maintain daily science journal and read monthly astronomy publications',
+            'Bilal Ahmad Tali',
+            'Mentoring in Olympiad preparations and recommending advanced reference materials',
+            'Scientific problem-solving strategies and computational simulations',
+            'Immensely fulfilled, proud, and inspired to contribute to the nation space mission',
+            'Overjoyed, deeply proud, and grateful',
+            // Part-A(4)
+            'Books and Magazines, Newspaper, Phone and Computer, Internet, T.V., Toys Games Sports',
+            'Yes',
+            'Yes',
+            'No',
+            'Yes',
+            'Mathematics, Science, Developing effective study skills like time management',
+            'Provide quiet study space, supervise 1.5 hours of evening revision, monitor screen time, and discuss daily learnings',
+            'All the time',
+            // Part-B
+            'Art-Integrated',
+            'Solar System 3D Model & Daily Life Geometry',
+            'Constructed scale models of planetary orbits, computed relative ratios, and demonstrated to class',
+            'Advanced',
+            'Proficient',
+            'Advanced',
+            'Yes',
+            'Yes',
+            'Yes',
+            'Learned celestial orbital distances, 3D scale geometry, and public presentation skills',
+            'Fabricating rotating planetary models using recycled materials and LED lighting',
+            'Time management during hands-on model assembly and fine scale calibrations',
+            'Calculating complex elliptical orbit equations and angular measurements',
+            'Ayaan Ahmad',
+            'Yes',
+            'Yes',
+            'Color shading and finer model labeling',
+            'Mathematical formula application during group work',
+            'Very supportive and collaborative teammate; explained difficult astronomical concepts clearly',
+            'Critical Thinking',
+            'None',
+            'Encourage participation in inter-school science competitions, provide advanced telescope observation sessions, and recommend for student mentorship roles',
+            // Part-C
+            'Advanced',
+            'Proficient',
+            // HPC Credit Marks
+            50, 46,
+            50, 45,
+            50, 44,
+            50, 48,
+            50, 47,
+            50, 44,
+            50, 48,
+            50, 49,
+            // Declaration & Remarks
+            'Yes',
+            'Faizan is an exceptionally motivated, intellectually curious, and responsible student. Demonstrates superior grasp in Mathematics and Sciences, with remarkable peer collaboration and positive leadership in class activities.'
+        ];
+    }
 }
+

@@ -354,21 +354,30 @@ class HpcTeacherRun extends Command
             $a2Values = [
                 'live_with'       => $s['live_with'] ?? 'Parents and Grandparents',
                 'stay_at'         => $s['stay_at'] ?? 'Sugin, Budgam',
-                'free_time'       => $s['free_time'] ?? 'Reading books and cricket',
-                'do_well'         => $s['do_well'] ?? 'Solving puzzles and sketching',
-                'responsible'     => $s['responsible'] ?? 'Most times',
-                'could_improve'   => $s['could_improve'] ?? 'Time management in exams',
-                'care_about'      => $s['care_about'] ?? 'Helping classmates with notes',
-                'feel_proud'      => $s['feel_proud'] ?? 'When solving difficult math problems',
-                'academic_goal'   => $s['academic_goal'] ?? 'Excel in Science and Mathematics',
-                'goal_importance' => $s['goal_importance'] ?? 'Build strong conceptual foundations for engineering',
-                'goal_step1'      => $s['goal_step1'] ?? 'Daily formula revision and note making',
-                'goal_step2'      => $s['goal_step2'] ?? 'Weekly practice test solving',
-                'personal_goal'   => $s['personal_goal'] ?? 'Read one informative book every month',
-                'learnt_school'   => $s['learnt_school'] ?? 'Algebraic equations and botanical plant parts',
-                'learnt_outside'  => $s['learnt_outside'] ?? 'Kitchen gardening and basic cycling repair',
-                'teacher_help'    => $s['teacher_help'] ?? 'Guidance in laboratory practical experiments',
-                'teacher_know'    => $s['teacher_know'] ?? 'I learn best through hands-on practical activities',
+                'free_time'       => $s['free_time'] ?? 'Reading storybooks, science experiments & playing cricket',
+                'do_well'         => $s['do_well'] ?? 'Mental arithmetic, pencil sketching and recitation',
+                'responsible'     => $s['responsible'] ?? 'most times',
+                'do_better'       => $s['do_better'] ?? ($s['could_improve'] ?? 'Public speaking and cursive handwriting speed'),
+                'care_others'     => $s['care_others'] ?? ($s['care_about'] ?? 'Sharing study notes and helping classmates with difficulties'),
+                'feel_proud'      => $s['feel_proud'] ?? 'Solving challenging geometry problems and helping peers',
+                'friend_name'     => $s['friend_name'] ?? 'Ayaan Ahmad',
+                'friend_age'      => $s['friend_age'] ?? '12',
+                'acad_goal'       => $s['acad_goal'] ?? ($s['academic_goal'] ?? 'Score above 90% in Mathematics and Science'),
+                'acad_goal_why'   => $s['acad_goal_why'] ?? ($s['goal_importance'] ?? 'Builds solid foundation for pursuing higher studies in Engineering'),
+                'acad_step1'      => $s['acad_step1'] ?? ($s['goal_step1'] ?? 'Dedicate 45 minutes daily to numerical problem solving and formula revision'),
+                'acad_step2'      => $s['acad_step2'] ?? ($s['goal_step2'] ?? 'Clarify doubts with subject teachers immediately and practice weekly mock tests'),
+                'pers_goal'       => $s['pers_goal'] ?? ($s['personal_goal'] ?? 'Develop regular physical exercise and disciplined reading habits'),
+                'pers_goal_why'   => $s['pers_goal_why'] ?? 'Keeps mind alert, improves stamina, and enhances daily concentration',
+                'pers_step1'      => $s['pers_step1'] ?? 'Wake up at 6:00 AM every morning and do 30 minutes of yoga and jogging',
+                'pers_step2'      => $s['pers_step2'] ?? 'Read at least 15 pages of non-academic literature before bedtime',
+                'sch_learn1'      => $s['sch_learn1'] ?? ($s['learnt_school'] ?? 'Laws of reflection and refraction in science laboratory'),
+                'sch_learn2'      => $s['sch_learn2'] ?? 'Formulating and solving linear equations in single variable',
+                'sch_learn3'      => $s['sch_learn3'] ?? 'Constitutional preamble and fundamental rights in Social Science',
+                'out_learn1'      => $s['out_learn1'] ?? ($s['learnt_outside'] ?? 'Organic kitchen gardening, composting, and soil preparation'),
+                'out_learn2'      => $s['out_learn2'] ?? 'Bicycle maintenance, tire inflation, and chain lubrication',
+                'out_learn3'      => $s['out_learn3'] ?? 'Basic household budgeting and grocery calculation',
+                'help_with'       => $s['help_with'] ?? ($s['teacher_help'] ?? 'Hands-on science experiments and advanced mathematical puzzles'),
+                'teacher_know'    => $s['teacher_know'] ?? 'I am enthusiastic about collaborative group projects and active discussions',
             ];
 
             $client->executeScript("
@@ -383,28 +392,32 @@ class HpcTeacherRun extends Command
                 };
 
                 const inputs = Array.from(document.querySelectorAll('input:not([type=\"hidden\"]):not([type=\"checkbox\"]):not([type=\"radio\"]), textarea'));
-                inputs.forEach((inp, idx) => {
+                inputs.forEach(inp => {
                     if (inp.value && inp.value.trim().length > 1) return;
                     const container = inp.closest('.form-group, div');
                     const lbl = (container?.querySelector('label, p, strong')?.innerText || inp.placeholder || '').toLowerCase();
 
-                    let val = a2.academic_goal;
+                    let val = a2.acad_goal;
                     if (lbl.includes('live with')) val = a2.live_with;
                     else if (lbl.includes('stay at')) val = a2.stay_at;
                     else if (lbl.includes('free time')) val = a2.free_time;
                     else if (lbl.includes('very well') || lbl.includes('do well')) val = a2.do_well;
                     else if (lbl.includes('responsible')) val = a2.responsible;
-                    else if (lbl.includes('could do better') || lbl.includes('improve')) val = a2.could_improve;
-                    else if (lbl.includes('care about')) val = a2.care_about;
+                    else if (lbl.includes('could do better') || lbl.includes('better') || lbl.includes('improve')) val = a2.do_better;
+                    else if (lbl.includes('care about') || lbl.includes('care others')) val = a2.care_others;
                     else if (lbl.includes('feel proud')) val = a2.feel_proud;
-                    else if (lbl.includes('personal goal')) val = a2.personal_goal;
-                    else if (lbl.includes('academic goal') || lbl.includes('goal')) val = a2.academic_goal;
-                    else if (lbl.includes('step 1')) val = a2.goal_step1;
-                    else if (lbl.includes('step 2')) val = a2.goal_step2;
-                    else if (lbl.includes('important to me') || lbl.includes('importance')) val = a2.goal_importance;
-                    else if (lbl.includes('learnt at school')) val = a2.learnt_school;
-                    else if (lbl.includes('learnt outside school')) val = a2.learnt_outside;
-                    else if (lbl.includes('help me with') || lbl.includes('help')) val = a2.teacher_help;
+                    else if (lbl.includes('friend name') || lbl.includes('friend\'s name')) val = a2.friend_name;
+                    else if (lbl.includes('friend age') || lbl.includes('age')) val = a2.friend_age;
+                    else if (lbl.includes('personal goal') && lbl.includes('why')) val = a2.pers_goal_why;
+                    else if (lbl.includes('personal goal')) val = a2.pers_goal;
+                    else if (lbl.includes('academic goal') && lbl.includes('why')) val = a2.acad_goal_why;
+                    else if (lbl.includes('academic goal') || lbl.includes('goal')) val = a2.acad_goal;
+                    else if (lbl.includes('step 1')) val = a2.acad_step1;
+                    else if (lbl.includes('step 2')) val = a2.acad_step2;
+                    else if (lbl.includes('important to me') || lbl.includes('importance')) val = a2.acad_goal_why;
+                    else if (lbl.includes('learnt at school') || lbl.includes('school learn')) val = a2.sch_learn1;
+                    else if (lbl.includes('learnt outside school') || lbl.includes('outside learn')) val = a2.out_learn1;
+                    else if (lbl.includes('help me with') || lbl.includes('help')) val = a2.help_with;
                     else if (lbl.includes('teacher to know') || lbl.includes('teacher know')) val = a2.teacher_know;
 
                     setNativeValue(inp, val);
@@ -418,12 +431,17 @@ class HpcTeacherRun extends Command
         // ── 4. Fill Part-A3 ───────────────────────────────────────────────────
         if (str_contains($client->getCurrentURL(), '/part-A3')) {
             $a3Values = [
-                'ambition'       => $s['ambition'] ?? 'Teacher',
-                'ambition_how'   => $s['ambition_how'] ?? 'Consistent daily study and active curiosity',
-                'skill'          => $s['skill'] ?? 'Critical Thinking',
-                'focus_subjects' => $s['focus_subjects'] ?? 'Mathematics and Physical Sciences',
-                'habits_build'   => $s['habits_build'] ?? 'Disciplined reading and punctual routine',
-                'mentor'         => $s['mentor'] ?? 'Bilal Ahmad Tali',
+                'ambition'          => $s['ambition'] ?? 'Astrophysicist & Space Research Scientist',
+                'achieve_how'       => $s['achieve_how'] ?? ($s['ambition_how'] ?? 'Deep conceptual focus in Mathematics, regular physics experiments, and continuous reading'),
+                'skills_needed'     => $s['skills_needed'] ?? ($s['skill'] ?? 'Critical Thinking, Problem Solving, Data Analysis, Scientific Curiosity, Persistence'),
+                'focus_subjects'    => $s['focus_subjects'] ?? 'Mathematics, Physics, Chemistry, English, Computer Science',
+                'habits_build'      => $s['habits_build'] ?? 'Consistent daily study routine, punctual time management, and inquisitive questioning',
+                'i_will'            => $s['i_will'] ?? 'Maintain daily science journal and read monthly astronomy publications',
+                'mentor'            => $s['mentor'] ?? 'Bilal Ahmad Tali',
+                'mentor_help'       => $s['mentor_help'] ?? 'Mentoring in Olympiad preparations and recommending advanced reference materials',
+                'learn_new'         => $s['learn_new'] ?? 'Scientific problem-solving strategies and computational simulations',
+                'feel_when_achieve' => $s['feel_when_achieve'] ?? 'Immensely fulfilled, proud, and inspired to contribute to the nation space mission',
+                'parents_feel'      => $s['parents_feel'] ?? 'Overjoyed, deeply proud, and grateful',
             ];
 
             $client->executeScript("
@@ -444,22 +462,29 @@ class HpcTeacherRun extends Command
 
                     let val = a3.ambition;
                     if (lbl.includes('ambition') || lbl.includes('want to become')) val = a3.ambition;
-                    else if (lbl.includes('how') || lbl.includes('achieve')) val = a3.ambition_how;
+                    else if (lbl.includes('how') || lbl.includes('achieve')) val = a3.achieve_how;
+                    else if (lbl.includes('skills')) val = a3.skills_needed;
                     else if (lbl.includes('subject') || lbl.includes('focus')) val = a3.focus_subjects;
                     else if (lbl.includes('habit')) val = a3.habits_build;
+                    else if (lbl.includes('i will') || lbl.includes('i shall')) val = a3.i_will;
+                    else if (lbl.includes('mentor help') || lbl.includes('help by')) val = a3.mentor_help;
                     else if (lbl.includes('mentor') || lbl.includes('role model')) val = a3.mentor;
+                    else if (lbl.includes('learn new')) val = a3.learn_new;
+                    else if (lbl.includes('parents')) val = a3.parents_feel;
+                    else if (lbl.includes('feel when') || lbl.includes('feel')) val = a3.feel_when_achieve;
 
                     setNativeValue(inp, val);
                 });
 
                 // Check skill checkboxes matching skill name or first 5
-                const targetSkill = a3.skill.toLowerCase();
+                const targetSkills = a3.skills_needed.toLowerCase();
                 const skillCbs = Array.from(document.querySelectorAll('input[type=\"checkbox\"]'));
-                const matchedCb = skillCbs.find(cb => {
+                skillCbs.forEach(cb => {
                     const label = (cb.closest('label')?.innerText || '').toLowerCase();
-                    return label.includes(targetSkill);
+                    if (targetSkills.includes(label) || label.includes('critical') || label.includes('problem')) {
+                        if (!cb.checked) cb.click();
+                    }
                 });
-                if (matchedCb && !matchedCb.checked) matchedCb.click();
                 skillCbs.slice(0, 5).forEach(cb => { if (!cb.checked) cb.click(); });
             ");
             usleep($delayMs * 1000);
@@ -469,8 +494,8 @@ class HpcTeacherRun extends Command
 
         // ── 5. Fill Part-A4 (Smileys, Multi-selects & Textareas) ───────────────
         if (str_contains($client->getCurrentURL(), '/part-A4')) {
-            $parentFeedback = $s['parent_feedback'] ?? 'Regular evening study observed; keen interest in science activities';
-            $pMotivation    = $s['p_motivation'] ?? 'Yes';
+            $parentFeedback = $s['parent_feedback'] ?? 'Provide quiet study space, supervise 1.5 hours of evening revision, monitor screen time, and discuss daily learnings';
+            $pMotivation    = $s['p_motivated'] ?? ($s['p_motivation'] ?? 'Yes');
 
             $client->executeScript("
                 const pFeedback = " . json_encode($parentFeedback) . ";
@@ -512,14 +537,17 @@ class HpcTeacherRun extends Command
         // ── 6. Fill Part-B (All 11 Domain Activities) ───────────────────────
         if (str_contains($client->getCurrentURL(), '/part-B')) {
             $actTitle       = $s['act_title'] ?? '';
-            $actDesc        = $s['act_desc'] ?? 'Comprehensive practical project and engagement.';
+            $actDesc        = $s['act_desc'] ?? 'Constructed scale models of planetary orbits, computed relative ratios, and demonstrated to class';
             $actLevel       = strtolower($s['act_level'] ?? 'proficient');
-            $actLearnt      = $s['act_learnt'] ?? 'Learned fundamental concepts and practical application';
-            $actInteresting = $s['act_interesting'] ?? 'Collaborative experiments and model making';
-            $actPractice    = $s['act_practice'] ?? 'Further numerical practice and time management';
-            $actPeerName    = $s['act_peer_name'] ?? 'Ayaan';
-            $actPeerFeedback= $s['act_peer_feedback'] ?? 'Cooperative, helpful, and explains concepts clearly';
-            $actSupportPlan = $s['act_support_plan'] ?? 'Provide challenging tasks and continuous encouragement';
+            $actAwr         = strtolower($s['act_rubric_awareness'] ?? $actLevel);
+            $actSen         = strtolower($s['act_rubric_sensitivity'] ?? $actLevel);
+            $actCre         = strtolower($s['act_rubric_creativity'] ?? $actLevel);
+            $actLearnt      = $s['act_learnt'] ?? 'Learned celestial orbital distances, 3D scale geometry, and public presentation skills';
+            $actInteresting = $s['act_interesting'] ?? 'Fabricating rotating planetary models using recycled materials and LED lighting';
+            $actPractice    = $s['act_practice'] ?? 'Time management during hands-on model assembly and fine scale calibrations';
+            $actPeerName    = $s['act_peer_name'] ?? 'Ayaan Ahmad';
+            $actPeerFeedback= $s['act_peer_feedback'] ?? 'Very supportive and collaborative teammate; explained difficult astronomical concepts clearly';
+            $actSupportPlan = $s['act_support_plan'] ?? 'Encourage participation in inter-school science competitions, provide advanced telescope observation sessions, and recommend for student mentorship roles';
 
             $domainsConfig = [
                 ['code' => 'SL1', 'id' => 269, 'name' => 'Language 1 (R1)', 'gl' => 'L1CG1', 'cpt' => 'L1C1.1'],
@@ -593,7 +621,9 @@ class HpcTeacherRun extends Command
 
                 // Dispatch complete valid state
                 $client->executeScript("
-                    const actLevelVal = " . json_encode($actLevel) . ";
+                    const actAwrVal = " . json_encode($actAwr) . ";
+                    const actSenVal = " . json_encode($actSen) . ";
+                    const actCreVal = " . json_encode($actCre) . ";
                     const actDescVal = " . json_encode($actDesc) . ";
                     const actLearntVal = " . json_encode($actLearnt) . ";
                     const actInterestingVal = " . json_encode($actInteresting) . ";
@@ -615,9 +645,9 @@ class HpcTeacherRun extends Command
                                 any_other: ['', '', ''],
                                 ast: [1, 2, 3],
                                 bar: [9],
-                                awr: ['Demonstrates good awareness', 'Demonstrates strong awareness', 'Demonstrates exceptional awareness', actLevelVal],
-                                sen: ['Shows sensitivity', 'Shows great sensitivity', 'Shows excellent sensitivity', actLevelVal],
-                                cre: ['Displays creative thinking', 'Displays innovative creativity', 'Displays high creativity', actLevelVal],
+                                awr: ['Demonstrates good awareness', 'Demonstrates strong awareness', 'Demonstrates exceptional awareness', actAwrVal],
+                                sen: ['Shows sensitivity', 'Shows great sensitivity', 'Shows excellent sensitivity', actSenVal],
+                                cre: ['Displays creative thinking', 'Displays innovative creativity', 'Displays high creativity', actCreVal],
                                 desc: [actDescVal, 'Achieved all learning objectives successfully.'],
                                 ml: [actLearntVal, 'Developed practical confidence.', 'Collaborated actively.', actInterestingVal],
                                 slr: ['Student actively engaged throughout.', actPracticeVal, 'Completed assignments joyfully.'],

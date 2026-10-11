@@ -369,14 +369,164 @@ class HpcTeacherRun extends Command
             sleep(3);
         }
 
-        // ── 6. Navigate to /hpc-credit and finalize ───────────────────────────
-        $currentUrl = $client->getCurrentURL();
-        $creditUrl = preg_replace('#/(?:part-[^/]+|hpc-credit)$#', '/hpc-credit', $currentUrl);
-        if ($creditUrl && ! str_contains($currentUrl, '/hpc-credit')) {
-            $client->request('GET', $creditUrl);
-            usleep($delayMs * 2500);
+        // ── 6. Fill Part-B (All 11 Domain Activities) ───────────────────────
+        if (str_contains($client->getCurrentURL(), '/part-B')) {
+            $domainsConfig = [
+                ['code' => 'SL1', 'id' => 269, 'name' => 'Language 1 (R1)', 'gl' => 'L1CG1', 'cpt' => 'L1C1.1'],
+                ['code' => 'SL2', 'id' => 270, 'name' => 'Language 2 (R2)', 'gl' => 'L2CG1', 'cpt' => 'L2C1.1'],
+                ['code' => 'SL3', 'id' => 271, 'name' => 'Language 3 (R3)', 'gl' => 'L3CG1', 'cpt' => 'L3C1.1'],
+                ['code' => 'SM',  'id' => 272, 'name' => 'Mathematics', 'gl' => 'MCG1', 'cpt' => 'MC1.1'],
+                ['code' => 'SS',  'id' => 273, 'name' => 'Science', 'gl' => 'SCG1', 'cpt' => 'SC1.1'],
+                ['code' => 'SSS', 'id' => 274, 'name' => 'Social Science', 'gl' => 'SSCG1', 'cpt' => 'SSC1.1'],
+                ['code' => 'SA',  'id' => 275, 'name' => 'Art Education', 'gl' => 'ACG1', 'cpt' => 'AC1.1'],
+                ['code' => 'SPE', 'id' => 276, 'name' => 'Physical Education & Well Being', 'gl' => 'P2CG1', 'cpt' => 'P2C1.1'],
+                ['code' => 'SV',  'id' => 277, 'name' => 'Skill Education', 'gl' => 'VCG1', 'cpt' => 'VC1.1'],
+                ['code' => 'SLA', 'id' => 278, 'name' => 'Other Learning Activities (Participation in Cultural, Sports, Reading and other activities)', 'gl' => 'OLACG1', 'cpt' => 'OLA1.1'],
+                ['code' => 'SVE', 'id' => 279, 'name' => 'Bagless days for vocational Experience', 'gl' => 'VCG1', 'cpt' => 'BVE1.1'],
+            ];
+
+            foreach ($domainsConfig as $dom) {
+                $domName = $dom['name'];
+                $client->executeScript("
+                    const addBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Add Activity'));
+                    if (addBtn) addBtn.click();
+                ");
+                usleep(500000);
+                $client->executeScript("
+                    const modal = document.querySelector('.quick-add-activity, .modal');
+                    if (modal) {
+                        const contBtn = Array.from(modal.querySelectorAll('button')).find(b => b.innerText.trim() === 'Continue');
+                        if (contBtn) contBtn.click();
+                    }
+                ");
+                sleep(1);
+
+                // Tab 1: Activity Name
+                $client->executeScript("
+                    const nameInp = document.querySelector('.acivity-name-updates input');
+                    if (nameInp) {
+                        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                        if (setter) setter.call(nameInp, " . json_encode($domName . ' Practical Project') . ");
+                        nameInp.dispatchEvent(new Event('input', { bubbles: true }));
+                        nameInp.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                    document.querySelectorAll('input[name^=\"activity_\"]').forEach((cb, i) => {
+                        if (i < 2 && !cb.checked) cb.click();
+                    });
+                ");
+
+                // Tab 2: Subject & Competency
+                $client->executeScript("document.querySelectorAll('.activate-tab-pills div[role=\"button\"]')[1]?.click();");
+                usleep(500000);
+                $client->executeScript("
+                    const wrapper = document.querySelector('.scroller-cg-domain .custom-dropdown-wrapper');
+                    if (wrapper) wrapper.querySelector('.custom-dropdown-header')?.click();
+                ");
+                usleep(500000);
+                $client->executeScript("
+                    const items = Array.from(document.querySelectorAll('.scroller-cg-domain .custom-dropdown-item, .custom-dropdown-item'));
+                    const target = items.find(el => el.innerText.trim().toLowerCase().startsWith(" . json_encode(substr($domName, 0, 15)) . ".toLowerCase()));
+                    if (target) target.click();
+                ");
+                sleep(1);
+
+                // Check first competency
+                $client->executeScript("
+                    const cpts = document.querySelectorAll('.scroller-container input[name=\"cpt\"]');
+                    if (cpts.length > 0 && !cpts[0].checked) {
+                        cpts[0].click();
+                        cpts[0].dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                ");
+
+                // Dispatch complete valid state
+                $client->executeScript("
+                    const btn = document.querySelector('.hpc-finish-activity-btn');
+                    let f = btn ? btn[Object.keys(btn).find(k => k.startsWith('__reactFiber'))] : null;
+                    while (f && f.type?.name !== 'S') f = f.return;
+                    let cur = f ? f.memoizedState : null;
+                    while (cur) {
+                        if (cur.memoizedState && typeof cur.memoizedState === 'object' && cur.memoizedState.cpt) {
+                            const prev = cur.memoizedState;
+                            const next = {
+                                ...prev,
+                                activity: prev.activity && prev.activity.length ? prev.activity : [1, 2],
+                                any_other: ['', '', ''],
+                                ast: [1, 2, 3],
+                                bar: [9],
+                                awr: ['Demonstrates good awareness', 'Demonstrates strong awareness', 'Demonstrates exceptional awareness', 'proficient'],
+                                sen: ['Shows sensitivity', 'Shows great sensitivity', 'Shows excellent sensitivity', 'proficient'],
+                                cre: ['Displays creative thinking', 'Displays innovative creativity', 'Displays high creativity', 'proficient'],
+                                desc: ['Comprehensive practical project and engagement.', 'Achieved all learning objectives successfully.'],
+                                ml: ['Learned fundamental principles.', 'Developed practical confidence.', 'Collaborated actively.', 'Summary.'],
+                                slr: ['Student actively engaged throughout.', 'Exhibited clear understanding.', 'Completed assignments joyfully.'],
+                                spt: ['Provide further challenging exercises.', 'Continue encouragement.'],
+                                tf: ['2', '2', '2'],
+                                mpa: [0, 1],
+                                mps: [0, 1],
+                                mpc: [0, 1],
+                                ppa: [0],
+                                pps: [0],
+                                ppc: [0],
+                                pf: ['Ayaan', '8', 'A', 'Great peer collaborator', 'Cooperative and helpful', 'Positive']
+                            };
+                            cur.queue.dispatch(next);
+                            break;
+                        }
+                        cur = cur.next;
+                    }
+                ");
+                sleep(1);
+
+                // Finish Activity
+                $client->executeScript("
+                    const btn = document.querySelector('.hpc-finish-activity-btn');
+                    if (btn && !btn.disabled) {
+                        const pk = Object.keys(btn).find(k => k.startsWith('__reactProps'));
+                        if (pk && btn[pk].onClick) btn[pk].onClick(); else btn.click();
+                    }
+                ");
+                sleep(1);
+
+                // Confirm Modal
+                $client->executeScript("
+                    const modal = document.querySelector('.modal, .fade.show, [role=\"dialog\"]');
+                    if (modal) {
+                        const finishBtn = Array.from(modal.querySelectorAll('button')).find(b => b.innerText.trim() === 'Finish');
+                        if (finishBtn) finishBtn.click();
+                    }
+                ");
+                sleep(2);
+            }
+
+            usleep($delayMs * 1000);
+            $this->clickContinue($client);
+            sleep(3);
         }
 
+        // ── 7. Fill Part-C ───────────────────────────────────────────────────
+        if (str_contains($client->getCurrentURL(), '/part-C')) {
+            $client->executeScript("
+                const radioGroups = {};
+                document.querySelectorAll('input[type=\"radio\"]').forEach(r => {
+                    const name = r.name || 'group';
+                    if (!radioGroups[name]) radioGroups[name] = [];
+                    radioGroups[name].push(r);
+                });
+                Object.values(radioGroups).forEach(group => {
+                    if (group.length > 0 && !group.some(r => r.checked)) {
+                        const prof = group.find(r => r.value === 'proficient' || r.value === '2' || r.value === 'yes') || group[0];
+                        prof.click();
+                        prof.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                });
+            ");
+            usleep($delayMs * 1000);
+            $this->clickContinue($client);
+            sleep(3);
+        }
+
+        // ── 8. Fill HPC Credit and Mark as Complete ──────────────────────────
         if (str_contains($client->getCurrentURL(), '/hpc-credit')) {
             $marksList = [];
             $m = $s['marks'] ?? [];
@@ -405,11 +555,21 @@ class HpcTeacherRun extends Command
                     decCb.dispatchEvent(new Event('change', { bubbles: true }));
                 }
 
-                // Save credit form as draft
-                const saveDraftBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Save as Draft'));
-                if (saveDraftBtn && !saveDraftBtn.disabled) saveDraftBtn.click();
+                // Click Mark as Complete
+                const markCompleteBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Mark as Complete');
+                if (markCompleteBtn && !markCompleteBtn.disabled) markCompleteBtn.click();
             ");
-            sleep(3);
+            sleep(2);
+
+            // Confirm completion modal if any
+            $client->executeScript("
+                const m = document.querySelector('.modal, .swal2-popup, [role=\"dialog\"], .fade.show');
+                if (m) {
+                    const cb = Array.from(m.querySelectorAll('button')).find(b => /yes|confirm|proceed|ok|complete/i.test(b.innerText.trim()));
+                    if (cb) cb.click();
+                }
+            ");
+            sleep(4);
         }
 
         // Take snapshot after update
@@ -417,7 +577,7 @@ class HpcTeacherRun extends Command
             $client->takeScreenshot(config('hpc.storage_path') . "/teacher_result_{$idx}.png");
         } catch (\Throwable) {}
 
-        return ['status' => 'success', 'message' => 'HPC Evaluation and Credit form submitted successfully!'];
+        return ['status' => 'success', 'message' => 'HPC Evaluation and Credit form completed and submitted successfully!'];
     }
 
     private function clickContinue(Client $client): void

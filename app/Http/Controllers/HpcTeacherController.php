@@ -86,19 +86,20 @@ class HpcTeacherController extends Controller
 
         $rules = [
             ['Rule #', 'Section / Page', 'Field Type', 'Rule Description', 'Permitted Values / Dragdown Options'],
-            ['1', 'Student Metadata', 'Locked String', 'Student Name and HPC Login ID must not be altered.', 'Pre-filled from school portal roster.'],
-            ['2', 'Part-A(1) Profile', 'Dragdown (Select)', 'Select valid Class / Grade from dropdown.', 'Grade 6, Grade 7, Grade 8'],
-            ['3', 'Part-A(1) Profile', 'Dragdown (Select)', 'Select Medium of Instruction / Mother Tongue.', 'Kashmiri, Urdu, Hindi, English, Dogri, Punjabi, Other'],
-            ['4', 'Part-A(1) Profile', 'Dragdown (Select)', 'Select relationship of guardian.', 'Father, Mother, Guardian (Other than Parents)'],
-            ['5', 'Part-A(1) Attendance', 'Integer (Number)', 'Working and Present days must be numeric integers. Present days must be <= Working days.', 'Working: 150-260, Present: 0-260'],
-            ['6', 'Part-A(1) Interests', 'Dragdown (Select)', 'Select student primary hobby / interest.', 'Reading, Drawing, Sports, Music, Craft, Science, Mathematics...'],
-            ['7', 'Part-A(2) Habits', 'Dragdown (Select)', 'Student responsibility level in classroom.', 'All the time, Most times, Sometimes'],
-            ['8', 'Part-A(3) Ambition', 'String & Dragdown', 'Career ambition string and primary 21st Century skill.', 'Critical Thinking, Communication, Collaboration, Problem Solving...'],
-            ['9', 'Part-A(4) Home Feedback', 'Dragdown (Radio)', 'Parent observation ratings for motivation and progress.', 'Yes, Sometimes, No, Not Sure'],
-            ['10', 'Part-B Activities', 'Dragdown (Select)', 'Pedagogical approach for holistic activities.', 'Art-Integrated, Sports-Integrated, Toy-Based, Technology-Integrated...'],
-            ['11', 'Part-C Curricular', 'Dragdown (Radio)', 'Year-end formative and summative performance levels across domains.', 'Beginner, Proficient, Advanced'],
-            ['12', 'HPC Credit (Marks)', 'Integer (0-100)', 'Summative Assessment marks for each of the 8 subjects.', 'Max Marks (default 50), Marks Obtained (0 to Max Marks)'],
-            ['13', 'HPC Credit (Declaration)', 'Dragdown (Select)', 'Teacher declaration certifying entered evaluation.', 'Yes, No'],
+            ['1', 'Student Metadata', 'Locked String', 'APAAR ID, HPC Login ID, Student Name, and Status. HPC Login ID is the unique identifier.', 'Pre-filled from school portal roster.'],
+            ['2', 'Status Rule', 'System Rule', 'Students with status "HPC Completed" will be left untouched and skipped during update runs.', 'HPC Completed (skipped), HPC Pending / In Progress (updated)'],
+            ['3', 'Part-A(1) Profile', 'Dragdown (Select)', 'Select valid Class / Grade from dropdown.', 'Grade 6, Grade 7, Grade 8'],
+            ['4', 'Part-A(1) Profile', 'Dragdown (Select)', 'Select Medium of Instruction / Mother Tongue.', 'Kashmiri, Urdu, Hindi, English, Dogri, Punjabi, Other'],
+            ['5', 'Part-A(1) Profile', 'Dragdown (Select)', 'Select relationship of guardian.', 'Father, Mother, Guardian (Other than Parents)'],
+            ['6', 'Part-A(1) Attendance', 'Integer (Number)', 'Working and Present days must be numeric integers. Present days must be <= Working days.', 'Working: 150-260, Present: 0-260'],
+            ['7', 'Part-A(1) Interests', 'Dragdown (Select)', 'Select student primary hobby / interest.', 'Reading, Drawing, Sports, Music, Craft, Science, Mathematics...'],
+            ['8', 'Part-A(2) Habits', 'Dragdown (Select)', 'Student responsibility level in classroom.', 'All the time, Most times, Sometimes'],
+            ['9', 'Part-A(3) Ambition', 'String & Dragdown', 'Career ambition string and primary 21st Century skill.', 'Critical Thinking, Communication, Collaboration, Problem Solving...'],
+            ['10', 'Part-A(4) Home Feedback', 'Dragdown (Radio)', 'Parent observation ratings for motivation and progress.', 'Yes, Sometimes, No, Not Sure'],
+            ['11', 'Part-B Activities', 'Dragdown (Select)', 'Pedagogical approach for holistic activities.', 'Art-Integrated, Sports-Integrated, Toy-Based, Technology-Integrated...'],
+            ['12', 'Part-C Curricular', 'Dragdown (Radio)', 'Year-end formative and summative performance levels across domains.', 'Beginner, Proficient, Advanced'],
+            ['13', 'HPC Credit (Marks)', 'Integer (0-100)', 'Summative Assessment marks for each of the 8 subjects.', 'Max Marks (default 50), Marks Obtained (0 to Max Marks)'],
+            ['14', 'HPC Credit (Declaration)', 'Dragdown (Select)', 'Teacher declaration certifying entered evaluation.', 'Yes, No'],
         ];
 
         foreach ($rules as $rIdx => $row) {
@@ -134,8 +135,10 @@ class HpcTeacherController extends Controller
         $evalSheet->setTitle('Student Evaluations');
 
         $columns = [
-            ['key' => 'name',         'label' => 'Student Name (Locked) *',  'width' => 24, 'type' => 'locked',  'note' => 'Locked name from portal'],
-            ['key' => 'login_id',     'label' => 'HPC Login ID (Locked) *',  'width' => 22, 'type' => 'locked',  'note' => 'Locked ID from portal'],
+            ['key' => 'apaar_id',     'label' => 'APAAR ID (Locked)',        'width' => 20, 'type' => 'locked',  'note' => 'Official APAAR ID if assigned'],
+            ['key' => 'login_id',     'label' => 'HPC Login ID (Locked) *',  'width' => 22, 'type' => 'locked',  'note' => 'Unique student ID on portal'],
+            ['key' => 'name',         'label' => 'Student Name (Locked) *',  'width' => 26, 'type' => 'locked',  'note' => 'Locked name from portal'],
+            ['key' => 'status',       'label' => 'Status (Locked)',          'width' => 18, 'type' => 'locked',  'note' => 'HPC Completed (skipped) / Pending'],
             ['key' => 'grade',        'label' => 'Class / Grade *',          'width' => 16, 'type' => 'list',    'options' => '"Grade 6,Grade 7,Grade 8"', 'note' => 'Select grade'],
             ['key' => 'section',      'label' => 'Section',                  'width' => 12, 'type' => 'list',    'options' => '"A,B,C,D,E"', 'note' => 'Select section'],
             ['key' => 'location',     'label' => 'Area / Location',          'width' => 14, 'type' => 'list',    'options' => '"Rural,Urban"', 'note' => 'Rural or Urban'],
@@ -204,8 +207,10 @@ class HpcTeacherController extends Controller
             $rowNum = $sIdx + 3;
 
             $defaults = [
-                $st['name'],
-                $st['login_id'],
+                $st['apaar_id'] ?? '',
+                $st['login_id'] ?? '',
+                $st['name'] ?? '',
+                $st['status'] ?? 'HPC Pending',
                 'Grade 6',
                 'A',
                 'Rural',
@@ -266,7 +271,7 @@ class HpcTeacherController extends Controller
             $evalSheet->getRowDimension($rowNum)->setRowHeight(22);
         }
 
-        $evalSheet->freezePane('C3');
+        $evalSheet->freezePane('E3');
 
         $filename = 'hpc_teacher_assessment_template.xlsx';
         $writer   = new Xlsx($spreadsheet);
@@ -327,61 +332,70 @@ class HpcTeacherController extends Controller
             $max = $ws->getHighestDataRow();
 
             for ($r = 3; $r <= $max; $r++) {
-                $name        = trim((string) $ws->getCell("A{$r}")->getValue());
+                $apaarId     = trim((string) $ws->getCell("A{$r}")->getValue());
                 $loginId     = trim((string) $ws->getCell("B{$r}")->getValue());
-                $grade       = trim((string) $ws->getCell("C{$r}")->getValue());
-                $section     = trim((string) $ws->getCell("D{$r}")->getValue());
-                $location    = trim((string) $ws->getCell("E{$r}")->getValue());
-                $motherTongue= trim((string) $ws->getCell("F{$r}")->getValue());
-                $relation    = trim((string) $ws->getCell("G{$r}")->getValue());
-                $parentName  = trim((string) $ws->getCell("H{$r}")->getValue());
-                $workingDays = trim((string) $ws->getCell("I{$r}")->getValue());
-                $presentDays = trim((string) $ws->getCell("J{$r}")->getValue());
-                $interest    = trim((string) $ws->getCell("K{$r}")->getValue());
-                $responsible = trim((string) $ws->getCell("L{$r}")->getValue());
-                $goal        = trim((string) $ws->getCell("M{$r}")->getValue());
-                $ambition    = trim((string) $ws->getCell("N{$r}")->getValue());
-                $skill       = trim((string) $ws->getCell("O{$r}")->getValue());
-                $mentor      = trim((string) $ws->getCell("P{$r}")->getValue());
-                $pMotivation = trim((string) $ws->getCell("Q{$r}")->getValue());
-                $pProgress   = trim((string) $ws->getCell("R{$r}")->getValue());
-                $actApproach = trim((string) $ws->getCell("S{$r}")->getValue());
-                $cFormative  = trim((string) $ws->getCell("T{$r}")->getValue());
-                $cSummative  = trim((string) $ws->getCell("U{$r}")->getValue());
+                $name        = trim((string) $ws->getCell("C{$r}")->getValue());
+                $status      = trim((string) $ws->getCell("D{$r}")->getValue());
+                $grade       = trim((string) $ws->getCell("E{$r}")->getValue());
+                $section     = trim((string) $ws->getCell("F{$r}")->getValue());
+                $location    = trim((string) $ws->getCell("G{$r}")->getValue());
+                $motherTongue= trim((string) $ws->getCell("H{$r}")->getValue());
+                $relation    = trim((string) $ws->getCell("I{$r}")->getValue());
+                $parentName  = trim((string) $ws->getCell("J{$r}")->getValue());
+                $workingDays = trim((string) $ws->getCell("K{$r}")->getValue());
+                $presentDays = trim((string) $ws->getCell("L{$r}")->getValue());
+                $interest    = trim((string) $ws->getCell("M{$r}")->getValue());
+                $responsible = trim((string) $ws->getCell("N{$r}")->getValue());
+                $goal        = trim((string) $ws->getCell("O{$r}")->getValue());
+                $ambition    = trim((string) $ws->getCell("P{$r}")->getValue());
+                $skill       = trim((string) $ws->getCell("Q{$r}")->getValue());
+                $mentor      = trim((string) $ws->getCell("R{$r}")->getValue());
+                $pMotivation = trim((string) $ws->getCell("S{$r}")->getValue());
+                $pProgress   = trim((string) $ws->getCell("T{$r}")->getValue());
+                $actApproach = trim((string) $ws->getCell("U{$r}")->getValue());
+                $cFormative  = trim((string) $ws->getCell("V{$r}")->getValue());
+                $cSummative  = trim((string) $ws->getCell("W{$r}")->getValue());
 
                 // Marks
-                $l1Max = trim((string) $ws->getCell("V{$r}")->getValue());
-                $l1Obt = trim((string) $ws->getCell("W{$r}")->getValue());
-                $l2Max = trim((string) $ws->getCell("X{$r}")->getValue());
-                $l2Obt = trim((string) $ws->getCell("Y{$r}")->getValue());
-                $l3Max = trim((string) $ws->getCell("Z{$r}")->getValue());
-                $l3Obt = trim((string) $ws->getCell("AA{$r}")->getValue());
-                $mMax  = trim((string) $ws->getCell("AB{$r}")->getValue());
-                $mObt  = trim((string) $ws->getCell("AC{$r}")->getValue());
-                $sciMax= trim((string) $ws->getCell("AD{$r}")->getValue());
-                $sciObt= trim((string) $ws->getCell("AE{$r}")->getValue());
-                $socMax= trim((string) $ws->getCell("AF{$r}")->getValue());
-                $socObt= trim((string) $ws->getCell("AG{$r}")->getValue());
-                $artMax= trim((string) $ws->getCell("AH{$r}")->getValue());
-                $artObt= trim((string) $ws->getCell("AI{$r}")->getValue());
-                $peMax = trim((string) $ws->getCell("AJ{$r}")->getValue());
-                $peObt = trim((string) $ws->getCell("AK{$r}")->getValue());
+                $l1Max = trim((string) $ws->getCell("X{$r}")->getValue());
+                $l1Obt = trim((string) $ws->getCell("Y{$r}")->getValue());
+                $l2Max = trim((string) $ws->getCell("Z{$r}")->getValue());
+                $l2Obt = trim((string) $ws->getCell("AA{$r}")->getValue());
+                $l3Max = trim((string) $ws->getCell("AB{$r}")->getValue());
+                $l3Obt = trim((string) $ws->getCell("AC{$r}")->getValue());
+                $mMax  = trim((string) $ws->getCell("AD{$r}")->getValue());
+                $mObt  = trim((string) $ws->getCell("AE{$r}")->getValue());
+                $sciMax= trim((string) $ws->getCell("AF{$r}")->getValue());
+                $sciObt= trim((string) $ws->getCell("AG{$r}")->getValue());
+                $socMax= trim((string) $ws->getCell("AH{$r}")->getValue());
+                $socObt= trim((string) $ws->getCell("AI{$r}")->getValue());
+                $artMax= trim((string) $ws->getCell("AJ{$r}")->getValue());
+                $artObt= trim((string) $ws->getCell("AK{$r}")->getValue());
+                $peMax = trim((string) $ws->getCell("AL{$r}")->getValue());
+                $peObt = trim((string) $ws->getCell("AM{$r}")->getValue());
 
-                $declaration = trim((string) $ws->getCell("AL{$r}")->getValue());
-                $remarks     = trim((string) $ws->getCell("AM{$r}")->getValue());
+                $declaration = trim((string) $ws->getCell("AN{$r}")->getValue());
+                $remarks     = trim((string) $ws->getCell("AO{$r}")->getValue());
 
                 if ($name === '' && $loginId === '') continue;
 
+                $isCompleted = strcasecmp($status, 'HPC Completed') === 0;
+
                 $rowErrors = [];
-                if ($name === '') $rowErrors[] = 'Student Name missing';
-                if ($loginId === '') $rowErrors[] = 'HPC Login ID missing';
-                if ($motherTongue === '') $rowErrors[] = 'Mother Tongue required';
-                if ($parentName === '') $rowErrors[] = 'Parent Name required';
+                if (! $isCompleted) {
+                    if ($name === '') $rowErrors[] = 'Student Name missing';
+                    if ($loginId === '') $rowErrors[] = 'HPC Login ID missing';
+                    if ($motherTongue === '') $rowErrors[] = 'Mother Tongue required';
+                    if ($parentName === '') $rowErrors[] = 'Parent Name required';
+                }
 
                 $preview[] = [
                     'row'          => $r,
-                    'name'         => $name,
+                    'apaar_id'     => $apaarId,
                     'login_id'     => $loginId,
+                    'name'         => $name,
+                    'status'       => $status ?: 'HPC Pending',
+                    'is_completed' => $isCompleted,
                     'grade'        => $grade ?: 'Grade 6',
                     'section'      => $section ?: 'A',
                     'location'     => $location ?: 'Rural',

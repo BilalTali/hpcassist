@@ -89,6 +89,7 @@
                     <div class="flex items-center gap-3">
                         <select id="stage-select"
                                 class="text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                            <option value="all" selected>All Stages (Middle &amp; Preparatory)</option>
                             @foreach($stages as $st)
                                 <option value="{{ $st['slug'] }}">
                                     {{ $st['title'] }} ({{ $st['slug'] }})
@@ -113,40 +114,57 @@
                             School: <strong class="text-slate-800">{{ $activeSchool['name'] }}</strong>
                         </span>
                     </div>
-                    <div class="max-h-56 overflow-y-auto">
+                    <div class="max-h-64 overflow-y-auto">
                         <table class="w-full text-xs text-left">
                             <thead class="bg-white text-slate-500 border-b border-slate-100 font-semibold sticky top-0">
                                 <tr>
-                                    <th class="px-4 py-2">#</th>
-                                    <th class="px-4 py-2">Student Name</th>
-                                    <th class="px-4 py-2">HPC Login ID</th>
-                                    <th class="px-4 py-2">Status</th>
-                                    <th class="px-4 py-2">Assessment URL</th>
+                                    <th class="px-3 py-2">#</th>
+                                    <th class="px-3 py-2">APAAR ID</th>
+                                    <th class="px-3 py-2">HPC Login ID *</th>
+                                    <th class="px-3 py-2">Student Name</th>
+                                    <th class="px-3 py-2">Status</th>
+                                    <th class="px-3 py-2">Stage</th>
+                                    <th class="px-3 py-2">Update Action</th>
                                 </tr>
                             </thead>
                             <tbody id="students-table-body" class="divide-y divide-slate-100 bg-white">
                                 @forelse($students as $st)
+                                    @php
+                                        $isCompleted = strcasecmp($st['status'] ?? '', 'HPC Completed') === 0;
+                                    @endphp
                                     <tr class="hover:bg-slate-50/80">
-                                        <td class="px-4 py-2 font-mono text-slate-400">{{ $st['row'] ?? '-' }}</td>
-                                        <td class="px-4 py-2 font-bold text-slate-800">{{ $st['name'] }}</td>
-                                        <td class="px-4 py-2 font-mono text-slate-600">{{ $st['login_id'] }}</td>
-                                        <td class="px-4 py-2">
-                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                                {{ $st['status'] ?? 'HPC Pending' }}
-                                            </span>
-                                        </td>
-                                        <td class="px-4 py-2 font-mono text-[11px] text-indigo-600">
-                                            @if(!empty($st['form_url']))
-                                                <span class="text-emerald-600 font-bold">✓ Form Mapped</span>
+                                        <td class="px-3 py-2 font-mono text-slate-400">{{ $st['row'] ?? '-' }}</td>
+                                        <td class="px-3 py-2 font-mono text-slate-600">{{ !empty($st['apaar_id']) ? $st['apaar_id'] : '—' }}</td>
+                                        <td class="px-3 py-2 font-mono font-bold text-slate-800">{{ $st['login_id'] }}</td>
+                                        <td class="px-3 py-2 font-bold text-slate-900">{{ $st['name'] }}</td>
+                                        <td class="px-3 py-2">
+                                            @if($isCompleted)
+                                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                    ✓ HPC Completed (Protected)
+                                                </span>
                                             @else
-                                                <span class="text-slate-400">Ready via stage</span>
+                                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                                                    ⏳ {{ $st['status'] ?? 'HPC Pending' }}
+                                                </span>
+                                            @endif
+                                        </td>
+                                        <td class="px-3 py-2 text-slate-600 text-[11px] font-medium">
+                                            {{ $st['stage_title'] ?? $st['stage'] ?? 'Middle Stage' }}
+                                        </td>
+                                        <td class="px-3 py-2 font-mono text-[11px]">
+                                            @if($isCompleted)
+                                                <span class="text-slate-400 italic">Left untouched</span>
+                                            @else
+                                                <span class="text-indigo-600 font-semibold">Ready for update</span>
                                             @endif
                                         </td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="5" class="px-4 py-6 text-center text-slate-400 italic">
-                                            No students loaded yet. Click "Sync Stage Students" above to fetch from the portal.
+                                        <td colspan="7" class="px-4 py-6 text-center text-slate-400 italic">
+                                            No students loaded yet. Click "Sync Stage Students" above to fetch from Middle &amp; Preparatory stages.
                                         </td>
                                     </tr>
                                 @endforelse
@@ -252,16 +270,17 @@
                         <table class="w-full text-xs text-left">
                             <thead class="bg-white text-slate-500 border-b border-slate-100 font-semibold sticky top-0">
                                 <tr>
-                                    <th class="px-4 py-2">Row</th>
-                                    <th class="px-4 py-2">Student Name</th>
-                                    <th class="px-4 py-2">Login ID</th>
-                                    <th class="px-4 py-2">Status</th>
-                                    <th class="px-4 py-2">Outcome / Remarks</th>
+                                    <th class="px-3 py-2">Row</th>
+                                    <th class="px-3 py-2">APAAR ID</th>
+                                    <th class="px-3 py-2">HPC Login ID *</th>
+                                    <th class="px-3 py-2">Student Name</th>
+                                    <th class="px-3 py-2">Status</th>
+                                    <th class="px-3 py-2">Outcome / Remarks</th>
                                 </tr>
                             </thead>
                             <tbody id="results-table-body" class="divide-y divide-slate-100 bg-white">
                                 <tr>
-                                    <td colspan="5" class="px-4 py-6 text-center text-slate-400 italic">
+                                    <td colspan="6" class="px-4 py-6 text-center text-slate-400 italic">
                                         Upload an Excel file and start the evaluation to see live progress here.
                                     </td>
                                 </tr>
@@ -401,12 +420,31 @@
             tbody.innerHTML = '';
             preview.forEach(p => {
                 const tr = document.createElement('tr');
+                let badge = '';
+                if (p.is_completed) {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✓ HPC Completed (Protected)</span>';
+                } else if (p.errors && p.errors.length) {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">✕ Invalid</span>';
+                } else {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">● Ready to Update</span>';
+                }
+
+                let remarks = '';
+                if (p.is_completed) {
+                    remarks = '<span class="text-slate-400 italic">Will be left untouched during bulk run</span>';
+                } else if (p.errors && p.errors.length) {
+                    remarks = '<span class="text-rose-600 font-semibold">' + p.errors.join(', ') + '</span>';
+                } else {
+                    remarks = '<span class="text-slate-600">Grade: ' + p.grade + ' | Mother Tongue: ' + p.mother_tongue + ' | Approach: ' + p.act_approach + '</span>';
+                }
+
                 tr.innerHTML = `
-                    <td class="px-4 py-2 font-mono text-slate-400">${p.row}</td>
-                    <td class="px-4 py-2 font-bold text-slate-800">${p.name}</td>
-                    <td class="px-4 py-2 font-mono text-slate-600">${p.login_id}</td>
-                    <td class="px-4 py-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${p.errors.length ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}">${p.errors.length ? 'Invalid' : 'Ready'}</span></td>
-                    <td class="px-4 py-2 text-slate-500">${p.errors.length ? p.errors.join(', ') : 'Activity: ' + p.activity + ' | Goal: ' + p.goal}</td>
+                    <td class="px-3 py-2 font-mono text-slate-400">${p.row}</td>
+                    <td class="px-3 py-2 font-mono text-slate-600">${p.apaar_id || '—'}</td>
+                    <td class="px-3 py-2 font-mono font-bold text-slate-800">${p.login_id}</td>
+                    <td class="px-3 py-2 font-bold text-slate-900">${p.name}</td>
+                    <td class="px-3 py-2">${badge}</td>
+                    <td class="px-3 py-2 text-xs">${remarks}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -463,17 +501,26 @@
             tbody.innerHTML = '';
             results.forEach(r => {
                 const tr = document.createElement('tr');
-                const isSuccess = r.status === 'success';
+                let badge = '';
+                if (r.status === 'skipped') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">⏭ Left Untouched</span>';
+                } else if (r.status === 'success') {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✓ Completed</span>';
+                } else {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">✕ Error</span>';
+                }
+
                 tr.innerHTML = `
-                    <td class="px-4 py-2 font-mono text-slate-400">${r.row}</td>
-                    <td class="px-4 py-2 font-bold text-slate-800">${r.name}</td>
-                    <td class="px-4 py-2 font-mono text-slate-600">${r.login_id}</td>
-                    <td class="px-4 py-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isSuccess ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}">${isSuccess ? 'Success' : 'Error'}</span></td>
-                    <td class="px-4 py-2 text-slate-500">${r.message}</td>
+                    <td class="px-3 py-2 font-mono text-slate-400">${r.row}</td>
+                    <td class="px-3 py-2 font-mono text-slate-600">${r.apaar_id || '—'}</td>
+                    <td class="px-3 py-2 font-mono font-bold text-slate-800">${r.login_id}</td>
+                    <td class="px-3 py-2 font-bold text-slate-900">${r.name}</td>
+                    <td class="px-3 py-2">${badge}</td>
+                    <td class="px-3 py-2 text-slate-600">${r.message}</td>
                 `;
                 tbody.appendChild(tr);
             });
-            document.getElementById('results-count').innerText = `${results.length} evaluated`;
+            document.getElementById('results-count').innerText = `${results.length} processed`;
         }
 
         async function resetRun() {

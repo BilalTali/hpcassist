@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Symfony\Component\Panther\Client;
-use Facebook\WebDriver\WebDriverBy;
+use App\Services\HpcBrowserManager;
 
 class HpcTeacherDiscover extends Command
 {
@@ -24,21 +24,9 @@ class HpcTeacherDiscover extends Command
         $profileDir = $this->resolveActiveTeacherProfile();
         $this->info("Teacher Profile: {$profileDir}");
 
-        if (file_exists($driverBin) && ! is_executable($driverBin)) {
-            @chmod($driverBin, 0755);
-        }
-
-        $_SERVER['PANTHER_NO_HEADLESS'] = '1';
-        putenv('PANTHER_NO_HEADLESS=1');
-
-        $this->info("Launching Chrome...");
+        $this->info("Connecting to Chrome...");
         try {
-            $client = Client::createChromeClient($driverBin, [
-                '--user-data-dir=' => $profileDir,
-                '--window-size=1400,900',
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-            ]);
+            $client = HpcBrowserManager::createOrConnect($driverBin, $profileDir);
         } catch (\Throwable $e) {
             $this->error("Could not launch Chrome: " . $e->getMessage());
             return self::FAILURE;
@@ -140,132 +128,84 @@ JS);
             $this->line("  • {$st['title']} ({$st['slug']})");
         }
 
-        // Pick stage to scrape students from
-        $selectedStage = null;
-        if ($targetStage) {
+        // ── 3. Fetch Students from Stages (Middle & Preparatory) ─────────────
+        $targetStages = [];
+        if ($targetStage && $targetStage !== 'all') {
             foreach ($stages as $st) {
                 if ($st['slug'] === $targetStage || str_contains($st['slug'], $targetStage)) {
-                    $selectedStage = $st;
+                    $targetStages[] = $st;
                     break;
                 }
             }
         }
-        if (! $selectedStage) {
-            $selectedStage = $stages[0]; // Default to first available stage
+        if (empty($targetStages)) {
+            $targetStages = $stages; // Default to all stages
         }
 
-        $this->info("\nFetching students for stage: {$selectedStage['title']} ({$selectedStage['slug']})");
-        $stageUrl = $selectedStage['url'];
+        $allStudents = [];
+        $globalIndex = 1;
 
-        try {
-            $client->request('GET', $stageUrl);
-            sleep(4);
-        } catch (\Throwable $e) {
-            $this->error("Failed to open stage URL: " . $e->getMessage());
-            $client->quit();
-            return self::FAILURE;
-        }
-
-        $wd = $client->getWebDriver();
-
-        // ── 3. Read Student Rows ──────────────────────────────────────────────
-        $rowsData = $client->executeScript(<<<'JS'
-            const rows = Array.from(document.querySelectorAll('tbody tr')).map((tr, idx) => {
-                const cells = Array.from(tr.querySelectorAll('td')).map(td => td.innerText.trim());
-                if (cells.length === 1 && cells[0].toLowerCase().includes('no rows')) {
-                    return null;
-                }
-                return {
-                    row_index: idx,
-                    apaar_id: cells[0] || '',
-                    login_id: cells[1] || '',
-                    name: cells[2] || '',
-                    status: cells[3] || 'HPC Pending'
-                };
-            }).filter(Boolean);
-
-            return rows;
-JS);
-
-        if (empty($rowsData)) {
-            $this->warn("No students found in {$selectedStage['title']}.");
-            file_put_contents($storagePath . '/teacher_students.json', json_encode([], JSON_PRETTY_PRINT));
-            $client->quit();
-            return self::SUCCESS;
-        }
-
-        $this->info("Found " . count($rowsData) . " students. Resolving direct HPC assessment form URLs...");
-
-        // ── 4. Extract Direct Assessment Form URL for Each Student ────────────
-        $students = [];
-        foreach ($rowsData as $idx => $r) {
-            $this->line("  [#" . ($idx + 1) . "] {$r['name']} ({$r['login_id']})...");
+        foreach ($targetStages as $selectedStage) {
+            $this->info("\nFetching students for stage: {$selectedStage['title']} ({$selectedStage['slug']})");
+            $stageUrl = $selectedStage['url'];
 
             try {
-                // Click the action dropdown header on this specific row
-                $dropdownHeaders = $wd->findElements(WebDriverBy::cssSelector('tbody tr .custom-dropdown-header'));
-                if (isset($dropdownHeaders[$idx])) {
-                    $dropdownHeaders[$idx]->click();
-                    usleep(400000);
-
-                    // Click 'Open' in the dropdown
-                    $client->executeScript(<<<'JS'
-                        const items = Array.from(document.querySelectorAll('.custom-dropdown-item'));
-                        const openItem = items.find(it => it.innerText.trim().toLowerCase() === 'open');
-                        if (openItem) openItem.click();
-JS);
-                    sleep(3);
-
-                    // Grab form URL
-                    $formUrl = $client->getCurrentURL();
-                    $encodedId = '';
-                    if (preg_match('#/' . preg_quote($selectedStage['slug'], '#') . '/([^/]+)/#', $formUrl, $m)) {
-                        $encodedId = $m[1];
-                    }
-
-                    $students[] = [
-                        'row'        => $idx + 1,
-                        'name'       => $r['name'],
-                        'login_id'   => $r['login_id'],
-                        'apaar_id'   => $r['apaar_id'],
-                        'status'     => $r['status'],
-                        'stage'      => $selectedStage['slug'],
-                        'encoded_id' => $encodedId,
-                        'form_url'   => $formUrl,
-                    ];
-
-                    $this->line("      ➔ URL: {$formUrl}");
-
-                    // Navigate back to stage table for next student
-                    $client->request('GET', $stageUrl);
-                    sleep(2);
-                } else {
-                    $students[] = array_merge($r, ['stage' => $selectedStage['slug'], 'form_url' => '', 'encoded_id' => '']);
-                }
+                $client->request('GET', $stageUrl);
+                sleep(3);
             } catch (\Throwable $e) {
-                $this->warn("      Could not resolve URL for {$r['name']}: " . $e->getMessage());
-                $students[] = array_merge($r, ['stage' => $selectedStage['slug'], 'form_url' => '', 'encoded_id' => '']);
-                try {
-                    $client->request('GET', $stageUrl);
-                    sleep(2);
-                } catch (\Throwable) {}
+                $this->warn("Failed to open stage URL ({$stageUrl}): " . $e->getMessage());
+                continue;
+            }
+
+            $rowsData = $client->executeScript(<<<'JS'
+                const rows = Array.from(document.querySelectorAll('tbody tr')).map((tr, idx) => {
+                    const cells = Array.from(tr.querySelectorAll('td')).map(td => td.innerText.trim());
+                    if (cells.length === 1 && cells[0].toLowerCase().includes('no rows')) {
+                        return null;
+                    }
+                    return {
+                        row_key: tr.getAttribute('data-tv-row-key') || '',
+                        apaar_id: cells[0] || '',
+                        login_id: cells[1] || '',
+                        name: cells[2] || '',
+                        status: cells[3] || 'HPC Pending'
+                    };
+                }).filter(Boolean);
+
+                return rows;
+            JS);
+
+            $this->info("Found " . count($rowsData) . " student(s) in {$selectedStage['title']}.");
+
+            foreach ($rowsData as $r) {
+                $allStudents[] = [
+                    'row'        => $globalIndex++,
+                    'apaar_id'   => $r['apaar_id'],
+                    'login_id'   => $r['login_id'],
+                    'name'       => $r['name'],
+                    'status'     => $r['status'],
+                    'stage'      => $selectedStage['slug'],
+                    'stage_title'=> $selectedStage['title'],
+                    'row_key'    => $r['row_key'],
+                ];
             }
         }
 
-        // Save students
-        file_put_contents($storagePath . '/teacher_students.json', json_encode($students, JSON_PRETTY_PRINT));
+        // Save combined students
+        file_put_contents($storagePath . '/teacher_students.json', json_encode($allStudents, JSON_PRETTY_PRINT));
         $this->newLine();
-        $this->info("✅ Successfully saved " . count($students) . " students to teacher_students.json!");
+        $this->info("✅ Successfully saved " . count($allStudents) . " students to teacher_students.json!");
 
         $tableRows = array_map(fn($s) => [
             $s['row'],
-            $s['name'],
+            $s['apaar_id'] ?: '—',
             $s['login_id'],
+            $s['name'],
             $s['status'],
-            !empty($s['encoded_id']) ? 'Ready' : 'Pending'
-        ], $students);
+            $s['stage_title']
+        ], $allStudents);
 
-        $this->table(['#', 'Student Name', 'Login ID', 'Status', 'URL Ready'], $tableRows);
+        $this->table(['#', 'APAAR ID', 'HPC Login ID', 'Student Name', 'Status', 'Stage'], $tableRows);
 
         $client->quit();
         return self::SUCCESS;

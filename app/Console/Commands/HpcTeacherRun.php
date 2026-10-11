@@ -3,8 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use Symfony\Component\Panther\Client;
-use Facebook\WebDriver\WebDriverBy;
+use App\Services\HpcBrowserManager;
 
 class HpcTeacherRun extends Command
 {
@@ -45,20 +44,8 @@ class HpcTeacherRun extends Command
             'results'    => [],
         ], $resultsFile);
 
-        if (file_exists($driverBin) && ! is_executable($driverBin)) {
-            @chmod($driverBin, 0755);
-        }
-
-        $_SERVER['PANTHER_NO_HEADLESS'] = '1';
-        putenv('PANTHER_NO_HEADLESS=1');
-
         try {
-            $client = Client::createChromeClient($driverBin, [
-                '--user-data-dir=' => $profileDir,
-                '--window-size=1400,900',
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-            ]);
+            $client = HpcBrowserManager::createOrConnect($driverBin, $profileDir);
         } catch (\Throwable $e) {
             $this->finishFatal(null, $resultsFile, [], $total, "Could not launch Chrome: " . $e->getMessage());
             return self::FAILURE;
@@ -126,8 +113,33 @@ class HpcTeacherRun extends Command
         foreach ($students as $idx => $st) {
             $name    = trim($st['name'] ?? '');
             $loginId = trim($st['login_id'] ?? '');
+            $status  = trim($st['status'] ?? '');
+            $apaarId = trim($st['apaar_id'] ?? '');
 
-            // Match student record to get form URL
+            // RULE: If status is 'HPC Completed', leave untouched / skip!
+            if (!empty($st['is_completed']) || strcasecmp($status, 'HPC Completed') === 0) {
+                $this->info("Skipping student [{$loginId}] {$name}: Already HPC Completed (left untouched).");
+                $results[] = [
+                    'row'      => $st['row'] ?? ($idx + 1),
+                    'apaar_id' => $apaarId,
+                    'name'     => $name,
+                    'login_id' => $loginId,
+                    'status'   => 'skipped',
+                    'message'  => 'HPC Completed (left untouched)',
+                ];
+
+                $this->writeStatus([
+                    'started'    => true,
+                    'done'       => false,
+                    'login_done' => true,
+                    'total'      => $total,
+                    'processed'  => $idx + 1,
+                    'results'    => $results,
+                ], $resultsFile);
+                continue;
+            }
+
+            // Match student record to get form URL if pre-scraped
             $matchedUrl = '';
             foreach ($studentsList as $sl) {
                 if (($loginId && ($sl['login_id'] ?? '') === $loginId) || ($name && ($sl['name'] ?? '') === $name)) {
@@ -144,6 +156,7 @@ class HpcTeacherRun extends Command
 
             $results[] = [
                 'row'      => $st['row'] ?? ($idx + 1),
+                'apaar_id' => $apaarId,
                 'name'     => $name,
                 'login_id' => $loginId,
                 'status'   => $result['status'],
@@ -174,44 +187,90 @@ class HpcTeacherRun extends Command
         return self::SUCCESS;
     }
 
-    private function processStudentAssessment(Client $client, array $s, string $formUrl, string $hpcHomeUrl, int $delayMs, int $idx): array
+    private function processStudentAssessment($client, array $s, string $formUrl, string $hpcHomeUrl, int $delayMs, int $idx): array
     {
-        // 1. Navigate to student's HPC form
-        if ($formUrl && str_contains($formUrl, '/part-')) {
-            $client->request('GET', $formUrl);
-            usleep($delayMs * 3000);
-        } else {
-            // Navigate via HPC home ➔ Stage ➔ Open
-            $client->request('GET', 'https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage');
+        // 1. Locate student using unique HPC Login ID across stages (Middle Stage & Preparatory Stage)
+        $targetStages = [
+            'https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage',
+            'https://hpc.parakh.ncert.gov.in/en/hpc/preparatory-stage',
+        ];
+
+        if (!empty($s['stage'])) {
+            $stageUrl = "https://hpc.parakh.ncert.gov.in/en/hpc/{$s['stage']}";
+            $targetStages = array_unique(array_merge([$stageUrl], $targetStages));
+        }
+
+        $found = false;
+        $loginId = $s['login_id'];
+
+        foreach ($targetStages as $stgUrl) {
+            $client->request('GET', $stgUrl);
             sleep(3);
 
-            // Find row matching student and click action Open
-            $wd = $client->getWebDriver();
-            $opened = $client->executeScript("
-                const loginId = " . json_encode($s['login_id']) . ";
+            $rowCheck = $client->executeScript("
+                const loginId = " . json_encode($loginId) . ";
                 const rows = Array.from(document.querySelectorAll('tbody tr'));
-                const targetRow = rows.find(tr => tr.innerText.includes(loginId));
-                if (targetRow) {
-                    const header = targetRow.querySelector('.custom-dropdown-header');
-                    if (header) {
-                        header.click();
-                        return true;
-                    }
-                }
-                return false;
+                const targetRow = rows.find(tr => {
+                    const cells = Array.from(tr.querySelectorAll('td'));
+                    return (cells[1] && cells[1].innerText.trim() === loginId) || tr.innerText.includes(loginId);
+                });
+                if (!targetRow) return { found: false };
+
+                const cells = Array.from(targetRow.querySelectorAll('td'));
+                const statusText = (cells[3] ? cells[3].innerText : targetRow.innerText).trim();
+                const isCompleted = statusText.toLowerCase().includes('completed');
+
+                return {
+                    found: true,
+                    isCompleted: isCompleted,
+                    statusText: statusText
+                };
             ");
 
-            if ($opened) {
-                usleep(500000);
-                $client->executeScript("
-                    const items = Array.from(document.querySelectorAll('.custom-dropdown-item'));
-                    const openItem = items.find(it => it.innerText.trim().toLowerCase() === 'open');
-                    if (openItem) openItem.click();
+            if ($rowCheck && !empty($rowCheck['found'])) {
+                $found = true;
+
+                // Live portal check: If status on portal table shows completed, leave untouched!
+                if (!empty($rowCheck['isCompleted'])) {
+                    return [
+                        'status'  => 'skipped',
+                        'message' => 'Status is ' . $rowCheck['statusText'] . ' on portal (left untouched)'
+                    ];
+                }
+
+                // Click action dropdown
+                $opened = $client->executeScript("
+                    const loginId = " . json_encode($loginId) . ";
+                    const rows = Array.from(document.querySelectorAll('tbody tr'));
+                    const targetRow = rows.find(tr => {
+                        const cells = Array.from(tr.querySelectorAll('td'));
+                        return (cells[1] && cells[1].innerText.trim() === loginId) || tr.innerText.includes(loginId);
+                    });
+                    if (targetRow) {
+                        const header = targetRow.querySelector('.custom-dropdown-header');
+                        if (header) {
+                            header.click();
+                            return true;
+                        }
+                    }
+                    return false;
                 ");
-                sleep(4);
-            } else {
-                return ['status' => 'error', 'message' => "Student {$s['name']} not found in stage table."];
+
+                if ($opened) {
+                    usleep(500000);
+                    $client->executeScript("
+                        const items = Array.from(document.querySelectorAll('.custom-dropdown-item'));
+                        const actionItem = items.find(it => /open|edit/i.test(it.innerText.trim()));
+                        if (actionItem) actionItem.click();
+                    ");
+                    sleep(4);
+                }
+                break;
             }
+        }
+
+        if (! $found) {
+            return ['status' => 'error', 'message' => "Student with HPC Login ID {$s['login_id']} ({$s['name']}) not found in Middle or Preparatory stage tables."];
         }
 
         // Verify we are on part-A1
@@ -580,7 +639,7 @@ class HpcTeacherRun extends Command
         return ['status' => 'success', 'message' => 'HPC Evaluation and Credit form completed and submitted successfully!'];
     }
 
-    private function clickContinue(Client $client): void
+    private function clickContinue($client): void
     {
         $client->executeScript("
             const btns = Array.from(document.querySelectorAll('button'));
@@ -597,7 +656,7 @@ class HpcTeacherRun extends Command
         file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
     }
 
-    private function finishFatal(?Client $client, string $file, array $results, int $total, string $msg): void
+    private function finishFatal($client, string $file, array $results, int $total, string $msg): void
     {
         $this->writeStatus([
             'started'   => true,

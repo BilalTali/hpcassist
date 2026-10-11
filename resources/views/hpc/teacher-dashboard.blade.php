@@ -1,130 +1,349 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center justify-between flex-wrap gap-4">
-            <div class="flex items-center gap-3">
-                <a href="{{ route('dashboard') }}" class="text-sm text-slate-500 hover:text-slate-800 transition-colors">
-                    ← Dashboard
+        <div class="flex items-center justify-between flex-wrap gap-3">
+            <div class="flex items-center gap-2">
+                <a href="{{ route('dashboard') }}" class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition">
+                    Dashboard
                 </a>
-                <span class="text-slate-300">/</span>
-                <a href="{{ route('hpc.dashboard') }}" class="text-sm text-slate-500 hover:text-indigo-600 transition-colors">
+                <span class="text-slate-300 text-xs">/</span>
+                <a href="{{ route('hpc.dashboard') }}" class="text-xs font-semibold text-slate-500 hover:text-indigo-600 transition">
                     Student Registration
                 </a>
-                <span class="text-slate-300">/</span>
-                <h2 class="font-extrabold text-2xl text-slate-900 tracking-tight flex items-center gap-2">
-                    👩‍🏫 Teacher HPC Evaluation Suite
+                <span class="text-slate-300 text-xs">/</span>
+                <h2 class="font-extrabold text-lg text-slate-900 tracking-tight flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+                    Teacher Assessment Suite
                 </h2>
             </div>
 
-            <!-- Multi-School & Multi-Teacher Controls -->
-            <div class="flex items-center gap-3 flex-wrap">
+            <!-- Profile & Portal Controls -->
+            <div class="flex items-center gap-2.5 flex-wrap">
                 <!-- Teacher Selector -->
-                <div class="flex items-center gap-2 bg-white border border-slate-300 rounded-xl px-3 py-1.5 shadow-sm">
-                    <span class="text-xs font-bold text-slate-600 flex items-center gap-1">
-                        👩‍🏫 Teacher:
-                    </span>
+                <div class="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1 shadow-sm">
+                    <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Teacher:</span>
                     <select id="teacher-select" onchange="handleTeacherChange(this.value)"
-                            class="text-xs font-bold bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                            class="text-xs font-bold bg-transparent border-none py-0 pl-1 pr-6 text-slate-800 focus:ring-0 cursor-pointer">
                         @foreach($activeSchool['teachers'] ?? [] as $t)
                             <option value="{{ $t['id'] }}" {{ $t['id'] === $activeTeacher['id'] ? 'selected' : '' }}>
                                 {{ $t['name'] }}
                             </option>
                         @endforeach
-                        <option value="__add_new_teacher__">➕ + Add New Teacher Profile...</option>
+                        <option value="__add_new_teacher__">+ Add New Teacher...</option>
                     </select>
                     @if(($activeTeacher['id'] ?? '') !== 'teacher_default')
                         <button onclick="deleteActiveTeacher('{{ $activeTeacher['id'] }}', '{{ addslashes($activeTeacher['name']) }}')"
-                                class="text-slate-400 hover:text-rose-600 p-0.5 text-xs transition" title="Delete this teacher profile">
-                            🗑️
+                                class="text-slate-400 hover:text-rose-600 text-xs transition" title="Delete teacher profile">
+                            ✕
                         </button>
                     @endif
                 </div>
 
                 <!-- Session Status Badge -->
                 @if($hasSession)
-                    <span id="session-badge" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm"
+                    <span id="session-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
                           title="Logged in session active for {{ $activeTeacher['name'] }}">
-                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        {{ $activeTeacher['name'] }} Ready
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        {{ $activeTeacher['name'] }} (Ready)
                     </span>
                     <button onclick="endTeacherSession()"
-                            class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition shadow-sm"
-                            title="Log out teacher session">
-                        🚪 Log Out Teacher
+                            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 transition shadow-sm">
+                        Log Out
                     </button>
                 @else
-                    <span id="session-badge" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200 shadow-sm">
-                        <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                    <span id="session-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
                         No Active Session
                     </span>
                     <button onclick="startTeacherSession()"
-                            class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition shadow-sm"
-                            title="Open Chrome to log in as Teacher">
-                        🚀 Log In as Teacher
+                            class="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-sm">
+                        Log In as Teacher
                     </button>
                 @endif
 
                 <a href="{{ config('hpc.hpc_home_url') }}" target="_blank"
-                   class="text-xs text-slate-600 hover:text-indigo-600 bg-white border border-slate-200 px-3 py-1.5 rounded-full font-medium transition shadow-sm flex items-center gap-1">
-                    🔗 Portal ↗
+                   class="text-xs text-slate-600 hover:text-indigo-600 bg-white border border-slate-200 px-2.5 py-1 rounded-lg font-medium transition shadow-sm flex items-center gap-1">
+                    Portal ↗
                 </a>
             </div>
         </div>
     </x-slot>
 
-    <div class="py-8 bg-slate-100/60 min-h-screen">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+    <div class="py-6 bg-slate-50/70 min-h-screen">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
-            <!-- STAGE SELECTOR & STUDENT DISCOVERY -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
+            <!-- EXECUTIVE QUICK METRICS STRIP -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-sm flex items-center justify-between">
                     <div>
-                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
-                            <span>🏫 Stage Selection &amp; Student Discovery</span>
-                            <span class="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">Live Sync</span>
-                        </h3>
-                        <p class="text-xs text-slate-500 mt-0.5">
-                            Select the evaluation stage to sync student rosters and direct assessment URLs from the HPC portal.
-                        </p>
+                        <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Enrolled Roster</div>
+                        <div class="text-base font-extrabold text-slate-900 mt-0.5"><span id="metric-students-count">{{ count($students) }}</span> Students</div>
                     </div>
-                    <div class="flex items-center gap-3">
-                        <select id="stage-select"
-                                class="text-xs font-bold bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer">
-                            <option value="all" selected>All Stages (Middle &amp; Preparatory)</option>
-                            @foreach($stages as $st)
-                                <option value="{{ $st['slug'] }}">
-                                    {{ $st['title'] }} ({{ $st['slug'] }})
-                                </option>
-                            @endforeach
-                        </select>
-                        <button id="btn-discover" onclick="discoverStageStudents()"
-                                class="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs shadow-sm transition">
-                            <span id="discover-spinner" class="hidden">⏳</span>
-                            <span>🔄 Sync Stage Students</span>
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-sm">👥</span>
+                </div>
+
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Academic Calendar</div>
+                        <div class="text-base font-extrabold text-slate-900 mt-0.5">{{ $workingDays->total_days ?? 222 }} Days</div>
+                    </div>
+                    <span class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 font-bold flex items-center justify-center text-sm">📅</span>
+                </div>
+
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Subject Max Marks</div>
+                        <div class="text-base font-extrabold text-slate-900 mt-0.5">{{ $maxMarks->l1_max ?? 50 }} Marks</div>
+                    </div>
+                    <span class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 font-bold flex items-center justify-center text-sm">🎯</span>
+                </div>
+
+                <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Template View</div>
+                        <div class="text-base font-extrabold text-indigo-700 mt-0.5">33 Visible Cols</div>
+                    </div>
+                    <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center text-sm">⚡</span>
+                </div>
+            </div>
+
+            <!-- CORE 3-STEP ASSESSMENT PIPELINE -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+                <!-- STEP 1: DOWNLOAD TEMPLATE -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                Step 1 · Download
+                            </span>
+                            <span class="text-[11px] text-slate-400 font-medium">33 Cols Active</span>
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-900 mb-1">Assessment Template (.xlsx)</h3>
+                        <p class="text-xs text-slate-500 mb-3 leading-relaxed">
+                            Compact sheet without horizontal dragging. Fill obtained marks directly on screen.
+                        </p>
+
+                        <ul class="text-[11px] text-slate-600 space-y-1.5 mb-4 font-medium">
+                            <li class="flex items-center gap-1.5">
+                                <span class="text-emerald-600">✓</span>
+                                <span><strong>Identity:</strong> Only Student Name visible (frozen on left)</span>
+                            </li>
+                            <li class="flex items-center gap-1.5">
+                                <span class="text-rose-600">●</span>
+                                <span><strong>Smart Red Alert:</strong> Empty cells turn red until filled</span>
+                            </li>
+                            <li class="flex items-center gap-1.5">
+                                <span class="text-amber-600">✏️</span>
+                                <span><strong>Marks Ready:</strong> 8 subject columns highlighted yellow</span>
+                            </li>
+                            <li class="flex items-center gap-1.5">
+                                <span class="text-indigo-600">📁</span>
+                                <span><strong>Expand [ + ]:</strong> 114 detailed columns collapsed in groups</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <a href="{{ route('hpc.teacher.template.download') }}"
+                       class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-sm transition">
+                        📥 Download Template (.xlsx)
+                    </a>
+                </div>
+
+                <!-- STEP 2: UPLOAD & VALIDATE -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                Step 2 · Upload
+                            </span>
+                            <span class="text-[11px] text-slate-400 font-medium">Auto-Validate</span>
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-900 mb-1">Upload Completed Excel</h3>
+                        <p class="text-xs text-slate-500 mb-3 leading-relaxed">
+                            Upload your filled template. Real students are validated instantly before running.
+                        </p>
+
+                        <div id="drop-zone" onclick="document.getElementById('file-input').click()"
+                             class="border-2 border-dashed border-slate-200 hover:border-indigo-500 rounded-lg p-5 text-center cursor-pointer transition bg-slate-50/50 hover:bg-indigo-50/30">
+                            <input type="file" id="file-input" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleFileUpload(this.files[0])">
+                            <div class="text-xl mb-1">📤</div>
+                            <div class="text-xs font-bold text-slate-700">Click or drag &amp; drop filled file</div>
+                            <div class="text-[10px] text-slate-400 mt-0.5">XLSX, XLS (up to 10MB)</div>
+                        </div>
+                    </div>
+
+                    <div id="upload-status" class="mt-3 text-xs font-medium text-slate-500 text-center hidden"></div>
+                </div>
+
+                <!-- STEP 3: BULK EVALUATION RUNNER -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200">
+                                Step 3 · Evaluate
+                            </span>
+                            <span class="text-[11px] text-slate-400 font-medium">Chrome Automation</span>
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-900 mb-1">Execute Assessment</h3>
+                        <p class="text-xs text-slate-500 mb-3 leading-relaxed">
+                            Automatically updates forms on the PARAKH portal student-by-student with live feedback.
+                        </p>
+
+                        <!-- Progress Bar (shown when active) -->
+                        <div id="progress-container" class="space-y-1.5 mb-4 p-3 bg-slate-50 border border-slate-200 rounded-lg hidden">
+                            <div class="flex justify-between text-xs font-bold text-slate-700">
+                                <span id="progress-text">Processing...</span>
+                                <span id="progress-percent">0%</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                                <div id="progress-bar" class="bg-indigo-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <button id="btn-reset" onclick="resetRun()"
+                                class="w-1/3 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition text-center">
+                            ↺ Reset
+                        </button>
+                        <button id="btn-run" onclick="startRun()"
+                                class="w-2/3 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-sm transition">
+                            🚀 Start Run
                         </button>
                     </div>
                 </div>
 
-                <!-- Discovered Students Roster Table -->
-                <div class="border border-slate-200 rounded-xl overflow-hidden">
-                    <div class="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                        <span class="text-xs font-bold text-slate-700">
-                            Enrolled Students (<span id="students-count">{{ count($students) }}</span>)
-                        </span>
-                        <span class="text-[11px] text-slate-500 font-medium">
-                            School: <strong class="text-slate-800">{{ $activeSchool['name'] }}</strong>
+            </div>
+
+            <!-- VALIDATION & RESULTS MONITOR TABLE -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="bg-slate-50/80 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold text-slate-900">Validation &amp; Execution Monitor</span>
+                        <span id="results-count" class="text-[11px] font-semibold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md">
+                            {{ !empty($preview) ? count($preview) . ' loaded' : '0 evaluated' }}
                         </span>
                     </div>
-                    <div class="max-h-64 overflow-y-auto">
+                    <span class="text-[11px] text-slate-400">Shows real-time status of student records</span>
+                </div>
+                <div class="max-h-60 overflow-y-auto">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-white text-slate-500 border-b border-slate-100 font-semibold sticky top-0">
+                            <tr>
+                                <th class="px-3 py-2">Row</th>
+                                <th class="px-3 py-2">APAAR ID</th>
+                                <th class="px-3 py-2">HPC Login ID</th>
+                                <th class="px-3 py-2">Student Name</th>
+                                <th class="px-3 py-2">Status</th>
+                                <th class="px-3 py-2">Outcome / Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-table-body" class="divide-y divide-slate-100 bg-white">
+                            @if(!empty($preview))
+                                @foreach($preview as $p)
+                                    @php
+                                        $isDemo = !empty($p['is_demo']);
+                                        $isCompleted = !empty($p['is_completed']);
+                                        $hasErrors = !empty($p['errors']);
+                                    @endphp
+                                    <tr class="hover:bg-slate-50/60">
+                                        <td class="px-3 py-2 font-mono text-slate-400">{{ $p['row'] ?? '-' }}</td>
+                                        <td class="px-3 py-2 font-mono text-slate-600">{{ $p['apaar_id'] ?: '—' }}</td>
+                                        <td class="px-3 py-2 font-mono font-bold text-slate-800">{{ $p['login_id'] ?? '' }}</td>
+                                        <td class="px-3 py-2 font-bold text-slate-900">{{ $p['name'] ?? '' }}</td>
+                                        <td class="px-3 py-2">
+                                            @if($isDemo)
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">📖 Demo Guide</span>
+                                            @elseif($isCompleted)
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✓ Completed</span>
+                                            @elseif($hasErrors)
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">✕ Invalid</span>
+                                            @else
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">● Ready</span>
+                                            @endif
+                                        </td>
+                                        <td class="px-3 py-2 text-xs text-slate-600">
+                                            @if($isDemo)
+                                                <span class="text-amber-700 italic">Sample student guide row (skipped during evaluation run)</span>
+                                            @elseif($hasErrors)
+                                                <span class="text-rose-600 font-semibold">{{ implode(', ', $p['errors']) }}</span>
+                                            @else
+                                                <span>Grade: {{ $p['grade'] ?? 'Grade 6' }} | Section: {{ $p['section'] ?? 'A' }}</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            @else
+                                <tr>
+                                    <td colspan="6" class="px-4 py-6 text-center text-slate-400 italic">
+                                        Upload an Excel file in Step 2 to preview students and start evaluation.
+                                    </td>
+                                </tr>
+                            @endif
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- COMPACT TABBED SETTINGS & ROSTER HUB -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <!-- Tab Navigation Bar -->
+                <div class="flex items-center justify-between border-b border-slate-200 px-4 bg-slate-50/70">
+                    <div class="flex gap-2">
+                        <button type="button" id="tab-btn-roster" onclick="switchConfigTab('roster')"
+                                class="config-tab-btn py-3 px-3 text-xs font-bold border-b-2 border-indigo-600 text-indigo-600 transition flex items-center gap-1.5">
+                            <span>👥 Enrolled Students</span>
+                            <span class="bg-indigo-100 text-indigo-700 px-1.5 py-0.2 rounded text-[10px]">{{ count($students) }}</span>
+                        </button>
+                        <button type="button" id="tab-btn-calendar" onclick="switchConfigTab('calendar')"
+                                class="config-tab-btn py-3 px-3 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition flex items-center gap-1.5">
+                            <span>📅 Working Days Calendar</span>
+                            <span class="bg-slate-200/80 text-slate-700 px-1.5 py-0.2 rounded text-[10px]">{{ $workingDays->total_days ?? 222 }}d</span>
+                        </button>
+                        <button type="button" id="tab-btn-marks" onclick="switchConfigTab('marks')"
+                                class="config-tab-btn py-3 px-3 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition flex items-center gap-1.5">
+                            <span>🎯 Curricular Max Marks</span>
+                            <span class="bg-slate-200/80 text-slate-700 px-1.5 py-0.2 rounded text-[10px]">{{ $maxMarks->l1_max ?? 50 }}m</span>
+                        </button>
+                    </div>
+
+                    <span class="text-[11px] text-slate-400 hidden sm:inline">School: <strong class="text-slate-700">{{ $activeSchool['name'] }}</strong></span>
+                </div>
+
+                <!-- TAB PANEL 1: ENROLLED STUDENTS ROSTER -->
+                <div id="tab-panel-roster" class="config-tab-panel p-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                        <p class="text-xs text-slate-500">
+                            Synced rosters from PARAKH portal. Student Login IDs and names match exactly.
+                        </p>
+                        <div class="flex items-center gap-2">
+                            <select id="stage-select"
+                                    class="text-xs font-bold bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                                <option value="all" selected>All Stages (Middle &amp; Preparatory)</option>
+                                @foreach($stages as $st)
+                                    <option value="{{ $st['slug'] }}">
+                                        {{ $st['title'] }} ({{ $st['slug'] }})
+                                    </option>
+                                @endforeach
+                            </select>
+                            <button id="btn-discover" onclick="discoverStageStudents()"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-black text-white rounded-lg font-bold text-xs shadow-sm transition">
+                                <span id="discover-spinner" class="hidden">⏳</span>
+                                <span>🔄 Sync Portal</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="border border-slate-200 rounded-lg overflow-hidden max-h-56 overflow-y-auto">
                         <table class="w-full text-xs text-left">
-                            <thead class="bg-white text-slate-500 border-b border-slate-100 font-semibold sticky top-0">
+                            <thead class="bg-slate-50 text-slate-500 border-b border-slate-100 font-semibold sticky top-0">
                                 <tr>
                                     <th class="px-3 py-2">#</th>
                                     <th class="px-3 py-2">APAAR ID</th>
-                                    <th class="px-3 py-2">HPC Login ID *</th>
+                                    <th class="px-3 py-2">HPC Login ID</th>
                                     <th class="px-3 py-2">Student Name</th>
                                     <th class="px-3 py-2">Status</th>
                                     <th class="px-3 py-2">Stage</th>
-                                    <th class="px-3 py-2">Update Action</th>
                                 </tr>
                             </thead>
                             <tbody id="students-table-body" class="divide-y divide-slate-100 bg-white">
@@ -132,314 +351,136 @@
                                     @php
                                         $isCompleted = strcasecmp($st['status'] ?? '', 'HPC Completed') === 0;
                                     @endphp
-                                    <tr class="hover:bg-slate-50/80">
-                                        <td class="px-3 py-2 font-mono text-slate-400">{{ $st['row'] ?? '-' }}</td>
-                                        <td class="px-3 py-2 font-mono text-slate-600">{{ !empty($st['apaar_id']) ? $st['apaar_id'] : '—' }}</td>
-                                        <td class="px-3 py-2 font-mono font-bold text-slate-800">{{ $st['login_id'] }}</td>
-                                        <td class="px-3 py-2 font-bold text-slate-900">{{ $st['name'] }}</td>
-                                        <td class="px-3 py-2">
+                                    <tr class="hover:bg-slate-50/60">
+                                        <td class="px-3 py-1.5 font-mono text-slate-400">{{ $st['row'] ?? '-' }}</td>
+                                        <td class="px-3 py-1.5 font-mono text-slate-600">{{ !empty($st['apaar_id']) ? $st['apaar_id'] : '—' }}</td>
+                                        <td class="px-3 py-1.5 font-mono font-bold text-slate-800">{{ $st['login_id'] }}</td>
+                                        <td class="px-3 py-1.5 font-bold text-slate-900">{{ $st['name'] }}</td>
+                                        <td class="px-3 py-1.5">
                                             @if($isCompleted)
-                                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                                    ✓ HPC Completed (Protected)
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                    ✓ Completed
                                                 </span>
                                             @else
-                                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-                                                    ⏳ {{ $st['status'] ?? 'HPC Pending' }}
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                                    ⏳ Pending
                                                 </span>
                                             @endif
                                         </td>
-                                        <td class="px-3 py-2 text-slate-600 text-[11px] font-medium">
+                                        <td class="px-3 py-1.5 text-slate-500 text-[11px] font-medium">
                                             {{ $st['stage_title'] ?? $st['stage'] ?? 'Middle Stage' }}
-                                        </td>
-                                        <td class="px-3 py-2 font-mono text-[11px]">
-                                            @if($isCompleted)
-                                                <span class="text-slate-400 italic">Left untouched</span>
-                                            @else
-                                                <span class="text-indigo-600 font-semibold">Ready for update</span>
-                                            @endif
                                         </td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="7" class="px-4 py-6 text-center text-slate-400 italic">
-                                            No students loaded yet. Click "Sync Stage Students" above to fetch from Middle &amp; Preparatory stages.
+                                        <td colspan="6" class="px-4 py-6 text-center text-slate-400 italic">
+                                            No students loaded. Click "Sync Portal" to fetch students from the HPC portal.
                                         </td>
                                     </tr>
                                 @endforelse
                             </tbody>
                         </table>
                     </div>
+                    <span id="students-count" class="hidden">{{ count($students) }}</span>
                 </div>
-            </div>
 
-            <!-- SCHOOL WORKING DAYS CONFIGURATION (ACADEMIC CALENDAR) -->
-            @php
-                $calMonths = [
-                    'apr' => 'Apr', 'may' => 'May', 'jun' => 'Jun',
-                    'jul' => 'Jul', 'aug' => 'Aug', 'sep' => 'Sep',
-                    'oct' => 'Oct', 'nov' => 'Nov', 'dec' => 'Dec',
-                    'jan' => 'Jan', 'feb' => 'Feb', 'mar' => 'Mar',
-                ];
-            @endphp
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-                    <div>
-                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
-                            <span>📅 School Working Days Configuration</span>
-                            <span class="text-[11px] font-semibold uppercase tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-md">
-                                Academic Year {{ $workingDays->academic_year ?? '2025-2026' }}
-                            </span>
-                        </h3>
-                        <p class="text-xs text-slate-500 mt-0.5">
-                            Working days are identical for each school and all students. The monthly days configured below are set as default and automatically pre-populated into every student's evaluation row in the Excel template.
+                <!-- TAB PANEL 2: ACADEMIC CALENDAR (WORKING DAYS) -->
+                @php
+                    $calMonths = [
+                        'apr' => 'Apr', 'may' => 'May', 'jun' => 'Jun',
+                        'jul' => 'Jul', 'aug' => 'Aug', 'sep' => 'Sep',
+                        'oct' => 'Oct', 'nov' => 'Nov', 'dec' => 'Dec',
+                        'jan' => 'Jan', 'feb' => 'Feb', 'mar' => 'Mar',
+                    ];
+                @endphp
+                <div id="tab-panel-calendar" class="config-tab-panel p-4 hidden">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                        <p class="text-xs text-slate-500">
+                            Working days are auto-filled into all student rows in newly generated templates. Total: <strong id="wd-total-display" class="font-mono text-indigo-700">{{ $workingDays->total_days ?? 222 }}</strong> days.
                         </p>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
-                            <span class="text-xs text-slate-500 font-medium">Total Working Days:</span>
-                            <span id="wd-total-display" class="text-sm font-extrabold text-indigo-700 font-mono">{{ $workingDays->total_days ?? 222 }}</span>
-                            <span class="text-xs text-slate-400">days</span>
+                        <div class="flex items-center gap-2">
+                            <button onclick="resetWorkingDaysToStandard()"
+                                    class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-xs transition">
+                                ↺ Standard (222)
+                            </button>
+                            <button onclick="saveWorkingDays()" id="btn-save-wd"
+                                    class="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-sm transition">
+                                <span>💾 Set as Default</span>
+                            </button>
                         </div>
-                        <button onclick="saveWorkingDays()" id="btn-save-wd"
-                                class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition">
-                            <span>💾 Set as Default</span>
-                        </button>
-                        <button onclick="resetWorkingDaysToStandard()"
-                                class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs transition"
-                                title="Reset to standard academic 222 working days">
-                            <span>↺ Standard</span>
-                        </button>
                     </div>
-                </div>
 
-                <!-- 12 Monthly Grid -->
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-2">
-                    @foreach($calMonths as $mKey => $mLabel)
-                        <div class="bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl p-2.5 transition flex items-center justify-between">
-                            <div class="flex flex-col">
-                                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-700">{{ $mLabel }}</span>
-                                <span class="text-[10px] text-slate-400">Working Days</span>
+                    <!-- 12 Monthly Inputs in Compact Grid -->
+                    <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-12 gap-2">
+                        @foreach($calMonths as $mKey => $mLabel)
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-2 text-center">
+                                <span class="block text-[10px] font-bold text-slate-500 uppercase">{{ $mLabel }}</span>
+                                <input type="number" id="wd-{{ $mKey }}" min="0" max="31"
+                                       value="{{ $workingDays->{$mKey} ?? 20 }}"
+                                       oninput="recalcWorkingDaysTotal()"
+                                       class="w-full mt-1 text-center font-bold text-xs bg-white border border-slate-300 rounded px-1 py-1 text-slate-900 focus:outline-none focus:border-indigo-500 font-mono">
                             </div>
-                            <input type="number" id="wd-{{ $mKey }}" min="0" max="31"
-                                   value="{{ $workingDays->{$mKey} ?? 20 }}"
-                                   oninput="recalcWorkingDaysTotal()"
-                                   class="w-14 text-center font-bold text-sm bg-white border border-slate-300 rounded-lg px-1.5 py-1 text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono">
-                        </div>
-                    @endforeach
+                        @endforeach
+                    </div>
+                    <div id="wd-status-msg" class="mt-2 text-xs font-semibold hidden"></div>
                 </div>
 
-                <div id="wd-status-msg" class="mt-3 text-xs font-semibold hidden"></div>
-            </div>
-
-            <!-- CURRICULAR MAX MARKS CONFIGURATION (HPC CREDIT) -->
-            @php
-                $curricularSubjects = [
-                    'l1_max'  => ['name' => 'Lang 1 (R1)', 'full' => 'Language 1'],
-                    'l2_max'  => ['name' => 'Lang 2 (R2)', 'full' => 'Language 2'],
-                    'l3_max'  => ['name' => 'Lang 3 (R3)', 'full' => 'Language 3'],
-                    'm_max'   => ['name' => 'Maths',       'full' => 'Mathematics'],
-                    'sci_max' => ['name' => 'Science',     'full' => 'Science'],
-                    'soc_max' => ['name' => 'Soc Sci',     'full' => 'Social Science'],
-                    'art_max' => ['name' => 'Art Ed',      'full' => 'Art Education'],
-                    'pe_max'  => ['name' => 'Phys Ed',     'full' => 'PE & Well Being'],
-                ];
-            @endphp
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-                    <div>
-                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
-                            <span>🎯 Curricular Max Marks Configuration (HPC Credit)</span>
-                            <span class="text-[11px] font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md">
-                                Summative Assessment
-                            </span>
-                        </h3>
-                        <p class="text-xs text-slate-500 mt-0.5">
-                            Set default maximum marks per subject for your school (standard PARAKH Middle Stage is 50). These defaults are automatically pre-populated into every student's row in the Excel template.
+                <!-- TAB PANEL 3: CURRICULAR MAX MARKS -->
+                @php
+                    $curricularSubjects = [
+                        'l1_max'  => ['name' => 'Lang 1', 'full' => 'Language 1'],
+                        'l2_max'  => ['name' => 'Lang 2', 'full' => 'Language 2'],
+                        'l3_max'  => ['name' => 'Lang 3', 'full' => 'Language 3'],
+                        'm_max'   => ['name' => 'Maths',  'full' => 'Mathematics'],
+                        'sci_max' => ['name' => 'Science','full' => 'Science'],
+                        'soc_max' => ['name' => 'Soc Sci','full' => 'Social Science'],
+                        'art_max' => ['name' => 'Art Ed', 'full' => 'Art Education'],
+                        'pe_max'  => ['name' => 'PE',     'full' => 'PE & Well Being'],
+                    ];
+                @endphp
+                <div id="tab-panel-marks" class="config-tab-panel p-4 hidden">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                        <p class="text-xs text-slate-500">
+                            Subject maximum marks pre-filled in Excel. Standard PARAKH Middle Stage default is 50.
                         </p>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-600 font-medium">
-                            <span>Presets:</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-slate-400">Presets:</span>
                             <button type="button" onclick="presetMaxMarks(50)"
-                                    class="px-2 py-0.5 bg-white hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 rounded-md font-bold text-[11px] shadow-sm transition"
-                                    title="Set all subjects to 50 (PARAKH Standard)">
+                                    class="px-2 py-1 bg-white hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 rounded text-xs font-bold transition">
                                 All 50
                             </button>
                             <button type="button" onclick="presetMaxMarks(100)"
-                                    class="px-2 py-0.5 bg-white hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 rounded-md font-bold text-[11px] shadow-sm transition"
-                                    title="Set all subjects to 100">
+                                    class="px-2 py-1 bg-white hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 rounded text-xs font-bold transition">
                                 All 100
                             </button>
                             <button type="button" onclick="presetMaxMarks(40)"
-                                    class="px-2 py-0.5 bg-white hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 rounded-md font-bold text-[11px] shadow-sm transition"
-                                    title="Set all subjects to 40">
+                                    class="px-2 py-1 bg-white hover:bg-emerald-50 hover:text-emerald-700 border border-slate-200 rounded text-xs font-bold transition">
                                 All 40
                             </button>
+                            <button onclick="saveMaxMarks()" id="btn-save-mm"
+                                    class="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-sm transition">
+                                <span>💾 Set as Default</span>
+                            </button>
                         </div>
-                        <button onclick="saveMaxMarks()" id="btn-save-mm"
-                                class="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-sm transition">
-                            <span>💾 Set as Default</span>
-                        </button>
                     </div>
-                </div>
 
-                <!-- 8 Subjects Grid -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 pt-2">
-                    @foreach($curricularSubjects as $sKey => $sInfo)
-                        <div class="bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl p-2.5 transition flex items-center justify-between">
-                            <div class="flex flex-col">
-                                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-700">{{ $sInfo['name'] }}</span>
-                                <span class="text-[10px] text-slate-400">{{ $sInfo['full'] }}</span>
-                            </div>
-                            <input type="number" id="mm-{{ $sKey }}" min="1" max="100"
-                                   value="{{ $maxMarks->{$sKey} ?? 50 }}"
-                                   class="w-14 text-center font-bold text-sm bg-white border border-slate-300 rounded-lg px-1.5 py-1 text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-mono">
-                        </div>
-                    @endforeach
-                </div>
-
-                <div id="mm-status-msg" class="mt-3 text-xs font-semibold hidden"></div>
-            </div>
-
-            <!-- TWO COLUMNS: STEP 1 (TEMPLATE) & STEP 2 (UPLOAD) -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                <!-- STEP 1: Download Excel Template -->
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between">
-                    <div>
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">1</span>
-                            <h3 class="text-sm font-bold text-slate-900">Download Condensed Assessment Template (33 Columns Visible)</h3>
-                        </div>
-                        <p class="text-xs text-slate-500 mb-3">
-                            Opens in a compact <strong>33-column view</strong>. From Student Identity, <strong>only Student Name is visible</strong>. Empty cells are dynamically highlighted in red and turn to their respective colors once filled!
-                        </p>
-
-                        <!-- Simplification Features List -->
-                        <div class="space-y-2 mb-4">
-                            <div class="bg-indigo-50 rounded-xl p-2.5 border border-indigo-200 text-[11px] text-indigo-950 flex items-start gap-2">
-                                <span class="text-sm mt-0.5">👤</span>
-                                <div>
-                                    <strong class="text-indigo-900 font-bold">Only Student Name Visible:</strong> From Student Identity, only Student Name is displayed (frozen on the left). APAAR ID, HPC Login ID, and Status are collapsed with <code>[ + ]</code> expand buttons if you ever need to inspect them.
+                    <!-- 8 Subjects Grid -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+                        @foreach($curricularSubjects as $sKey => $sInfo)
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-2 flex items-center justify-between">
+                                <div class="flex flex-col">
+                                    <span class="text-[11px] font-bold text-slate-700">{{ $sInfo['name'] }}</span>
+                                    <span class="text-[9px] text-slate-400 truncate">{{ $sInfo['full'] }}</span>
                                 </div>
+                                <input type="number" id="mm-{{ $sKey }}" min="1" max="100"
+                                       value="{{ $maxMarks->{$sKey} ?? 50 }}"
+                                       class="w-12 text-center font-bold text-xs bg-white border border-slate-300 rounded px-1 py-1 text-slate-900 focus:outline-none focus:border-emerald-500 font-mono">
                             </div>
-
-                            <div class="bg-rose-50 rounded-xl p-2.5 border border-rose-200 text-[11px] text-rose-950 flex items-start gap-2">
-                                <span class="text-sm mt-0.5">🔴</span>
-                                <div>
-                                    <strong class="text-rose-900 font-bold">Empty Cells Highlighted in Red:</strong> All blank cells light up in soft red. Once you enter a mark, present day, or text, Excel automatically converts the cell back to its respective color!
-                                </div>
-                            </div>
-
-                            <div class="bg-amber-50 rounded-xl p-2.5 border border-amber-200 text-[11px] text-amber-950 flex items-start gap-2">
-                                <span class="text-sm mt-0.5">✏️</span>
-                                <div>
-                                    <strong class="text-amber-900 font-bold">Obtained Marks Focus:</strong> All 8 subject columns (<code>✏️ Lang 1 Marks Obtained</code> to <code>Physical Ed Marks Obt</code>) are highlighted in soft warm yellow with default max marks (50) already set.
-                                </div>
-                            </div>
-
-                            <div class="bg-slate-50 rounded-xl p-2.5 border border-slate-200 text-[11px] text-slate-800 flex items-start gap-2">
-                                <span class="text-sm mt-0.5">🔒</span>
-                                <div>
-                                    <strong class="text-slate-900 font-bold">Single Demo Guide (Row 4 Only):</strong> Only Row 4 has sample reference entries. Real students (Row 5+) have clean blank evaluation fields ready for entry.
-                                </div>
-                            </div>
-                        </div>
+                        @endforeach
                     </div>
-                    <a href="{{ route('hpc.teacher.template.download') }}"
-                       class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow">
-                        📥 Download Condensed Assessment Template (.xlsx)
-                    </a>
+                    <div id="mm-status-msg" class="mt-2 text-xs font-semibold hidden"></div>
                 </div>
 
-                <!-- STEP 2: Upload Filled Excel -->
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col justify-between">
-                    <div>
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">2</span>
-                            <h3 class="text-sm font-bold text-slate-900">Upload Filled Assessment Excel</h3>
-                        </div>
-                        <p class="text-xs text-slate-500 mb-3">
-                            Upload your completed spreadsheet. Rows will be validated instantly before submission.
-                        </p>
-
-                        <div id="drop-zone" onclick="document.getElementById('file-input').click()"
-                             class="border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-xl p-4 text-center cursor-pointer transition bg-slate-50/60 hover:bg-indigo-50/30">
-                            <input type="file" id="file-input" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleFileUpload(this.files[0])">
-                            <div class="text-2xl mb-1">📤</div>
-                            <div class="text-xs font-bold text-slate-700">Click to upload or drag &amp; drop</div>
-                            <div class="text-[10px] text-slate-400 mt-0.5">XLSX, XLS (up to 10MB)</div>
-                        </div>
-                    </div>
-
-                    <div id="upload-status" class="mt-3 text-xs font-medium text-slate-500 hidden"></div>
-                </div>
-            </div>
-
-            <!-- STEP 3: Preview & Execution Engine -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                    <div class="flex items-center gap-2">
-                        <span class="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">3</span>
-                        <div>
-                            <h3 class="text-sm font-bold text-slate-900">Execute Bulk HPC Assessment</h3>
-                            <p class="text-xs text-slate-500">Auto-submits evaluation forms across all stages for each validated student.</p>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-3">
-                        <button id="btn-reset" onclick="resetRun()"
-                                class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition">
-                            Reset Run
-                        </button>
-                        <button id="btn-run" onclick="startRun()"
-                                class="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow">
-                            🚀 Start Bulk Evaluation
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Progress Bar -->
-                <div id="progress-container" class="space-y-2 mb-6 hidden">
-                    <div class="flex justify-between text-xs font-bold text-slate-700">
-                        <span id="progress-text">Processing...</span>
-                        <span id="progress-percent">0%</span>
-                    </div>
-                    <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
-                        <div id="progress-bar" class="bg-gradient-to-r from-emerald-500 to-indigo-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
-                    </div>
-                </div>
-
-                <!-- Live Results Table -->
-                <div class="border border-slate-200 rounded-xl overflow-hidden">
-                    <div class="bg-slate-50 px-4 py-2.5 border-b border-slate-200 text-xs font-bold text-slate-700 flex justify-between">
-                        <span>Execution Results</span>
-                        <span id="results-count" class="font-normal text-slate-500">0 evaluated</span>
-                    </div>
-                    <div class="max-h-72 overflow-y-auto">
-                        <table class="w-full text-xs text-left">
-                            <thead class="bg-white text-slate-500 border-b border-slate-100 font-semibold sticky top-0">
-                                <tr>
-                                    <th class="px-3 py-2">Row</th>
-                                    <th class="px-3 py-2">APAAR ID</th>
-                                    <th class="px-3 py-2">HPC Login ID *</th>
-                                    <th class="px-3 py-2">Student Name</th>
-                                    <th class="px-3 py-2">Status</th>
-                                    <th class="px-3 py-2">Outcome / Remarks</th>
-                                </tr>
-                            </thead>
-                            <tbody id="results-table-body" class="divide-y divide-slate-100 bg-white">
-                                <tr>
-                                    <td colspan="6" class="px-4 py-6 text-center text-slate-400 italic">
-                                        Upload an Excel file and start the evaluation to see live progress here.
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
             </div>
 
         </div>
@@ -448,6 +489,23 @@
     <!-- JavaScript Controllers -->
     <script>
         const csrfToken = '{{ csrf_token() }}';
+
+        // ── Config Tabs Switcher ──────────────────────────────────────────────
+        function switchConfigTab(tabId) {
+            document.querySelectorAll('.config-tab-btn').forEach(b => {
+                b.classList.remove('border-indigo-600', 'text-indigo-600');
+                b.classList.add('border-transparent', 'text-slate-500');
+            });
+            document.querySelectorAll('.config-tab-panel').forEach(p => p.classList.add('hidden'));
+
+            const btn = document.getElementById('tab-btn-' + tabId);
+            const panel = document.getElementById('tab-panel-' + tabId);
+            if (btn) {
+                btn.classList.remove('border-transparent', 'text-slate-500');
+                btn.classList.add('border-indigo-600', 'text-indigo-600');
+            }
+            if (panel) panel.classList.remove('hidden');
+        }
 
         // ── Teacher Profile Switcher ──────────────────────────────────────────
         async function handleTeacherChange(val) {
@@ -576,17 +634,17 @@
                 let remarks = '';
 
                 if (p.is_demo) {
-                    badge = '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">📖 Demo Guide (Skipped)</span>';
-                    remarks = '<span class="text-amber-700 font-semibold italic">Sample student guide demonstrating all 65 filled fields (skipped in run)</span>';
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">📖 Demo Guide</span>';
+                    remarks = '<span class="text-amber-700 italic">Sample student guide row (skipped during evaluation run)</span>';
                 } else if (p.is_completed) {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✓ HPC Completed (Protected)</span>';
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✓ Completed</span>';
                     remarks = '<span class="text-slate-400 italic">Will be left untouched during bulk run</span>';
                 } else if (p.errors && p.errors.length) {
                     badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">✕ Invalid</span>';
                     remarks = '<span class="text-rose-600 font-semibold">' + p.errors.join(', ') + '</span>';
                 } else {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">● Ready to Update</span>';
-                    remarks = '<span class="text-slate-600">Grade: ' + p.grade + ' | Mother Tongue: ' + p.mother_tongue + ' | Approach: ' + p.act_approach + '</span>';
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">● Ready</span>';
+                    remarks = '<span class="text-slate-600">Grade: ' + (p.grade || 'Grade 6') + ' | Section: ' + (p.section || 'A') + '</span>';
                 }
 
                 tr.innerHTML = `
@@ -599,6 +657,8 @@
                 `;
                 tbody.appendChild(tr);
             });
+            const rCount = document.getElementById('results-count');
+            if (rCount) rCount.innerText = `${preview.length} loaded`;
         }
 
         // ── Execution Runner ──────────────────────────────────────────────────
@@ -671,7 +731,8 @@
                 `;
                 tbody.appendChild(tr);
             });
-            document.getElementById('results-count').innerText = `${results.length} processed`;
+            const rCount = document.getElementById('results-count');
+            if (rCount) rCount.innerText = `${results.length} processed`;
         }
 
         async function resetRun() {
@@ -750,7 +811,7 @@
         function showWdStatus(msg, classes) {
             const el = document.getElementById('wd-status-msg');
             if (!el) return;
-            el.className = 'mt-3 text-xs font-semibold ' + classes;
+            el.className = 'mt-2 text-xs font-semibold ' + classes;
             el.innerText = msg;
             el.classList.remove('hidden');
         }
@@ -805,7 +866,7 @@
         function showMmStatus(msg, classes) {
             const el = document.getElementById('mm-status-msg');
             if (!el) return;
-            el.className = 'mt-3 text-xs font-semibold ' + classes;
+            el.className = 'mt-2 text-xs font-semibold ' + classes;
             el.innerText = msg;
             el.classList.remove('hidden');
         }

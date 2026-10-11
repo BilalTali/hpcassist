@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\SchoolWorkingDay;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -39,6 +40,8 @@ class HpcTeacherController extends Controller
         $resultsFile = $storagePath . '/teacher_run_results.json';
         $lastRun = file_exists($resultsFile) ? json_decode(file_get_contents($resultsFile), true) : null;
 
+        $workingDays = SchoolWorkingDay::getDefault();
+
         return view('hpc.teacher-dashboard', compact(
             'schoolsData',
             'activeSchool',
@@ -47,7 +50,8 @@ class HpcTeacherController extends Controller
             'stages',
             'students',
             'preview',
-            'lastRun'
+            'lastRun',
+            'workingDays'
         ));
     }
 
@@ -184,7 +188,10 @@ class HpcTeacherController extends Controller
         $evalSheet->getRowDimension(3)->setRowHeight(24);
 
 
-        // ─── Rows 4 onwards: REAL ENROLLED STUDENTS (ALL EVAL FIELDS BLANK) ──
+        // ─── Rows 4 onwards: REAL ENROLLED STUDENTS ───────────────────────────
+        $defaultWd = SchoolWorkingDay::getDefault();
+        $defaultWorkMap = $defaultWd->toMonthMap();
+
         foreach ($students as $sIdx => $st) {
             $rowNum = $sIdx + 4; // Starts at Row 4 below Demo Student
 
@@ -192,11 +199,15 @@ class HpcTeacherController extends Controller
                 $colLetter = $this->indexToColumnLetter($cIdx);
                 $val = '';
 
-                // Only pre-fill metadata fetched from the portal
+                // Pre-fill metadata fetched from portal and default school working days
                 if ($cIdx === 0) $val = $st['apaar_id'] ?? '';
                 elseif ($cIdx === 1) $val = $st['login_id'] ?? '';
                 elseif ($cIdx === 2) $val = $st['name'] ?? '';
                 elseif ($cIdx === 3) $val = $st['status'] ?? 'HPC Pending';
+                elseif (str_starts_with($col['key'], 'work_')) {
+                    $mKey = substr($col['key'], 5);
+                    $val = $defaultWorkMap[$mKey] ?? 20;
+                }
                 elseif ($col['key'] === 'total_work') $val = "=SUM(M{$rowNum}:X{$rowNum})";
                 elseif ($col['key'] === 'total_pres') $val = "=SUM(Z{$rowNum}:AK{$rowNum})";
                 elseif ($col['key'] === 'attendance_pct') $val = "=IF(Y{$rowNum}>0, ROUND((AL{$rowNum}/Y{$rowNum})*100, 1) & \"%\", \"\")";
@@ -424,6 +435,53 @@ class HpcTeacherController extends Controller
             'total'    => count($students),
             'students' => $students,
             'output'   => implode("\n", $output)
+        ]);
+    }
+
+    // ─── School Working Days Defaults Management ──────────────────────────────
+
+    public function getWorkingDays(Request $request)
+    {
+        $wd = SchoolWorkingDay::getDefault();
+        return response()->json([
+            'ok'   => true,
+            'data' => $wd,
+        ]);
+    }
+
+    public function updateWorkingDays(Request $request)
+    {
+        $data = $request->validate([
+            'academic_year' => 'nullable|string|max:20',
+            'apr'           => 'required|integer|min:0|max:31',
+            'may'           => 'required|integer|min:0|max:31',
+            'jun'           => 'required|integer|min:0|max:31',
+            'jul'           => 'required|integer|min:0|max:31',
+            'aug'           => 'required|integer|min:0|max:31',
+            'sep'           => 'required|integer|min:0|max:31',
+            'oct'           => 'required|integer|min:0|max:31',
+            'nov'           => 'required|integer|min:0|max:31',
+            'dec'           => 'required|integer|min:0|max:31',
+            'jan'           => 'required|integer|min:0|max:31',
+            'feb'           => 'required|integer|min:0|max:31',
+            'mar'           => 'required|integer|min:0|max:31',
+            'remarks'       => 'nullable|string|max:255',
+        ]);
+
+        $wd = SchoolWorkingDay::getDefault();
+        $data['academic_year'] = $data['academic_year'] ?? $wd->academic_year ?? '2025-2026';
+        $data['total_days'] = array_sum([
+            $data['apr'], $data['may'], $data['jun'], $data['jul'], $data['aug'], $data['sep'],
+            $data['oct'], $data['nov'], $data['dec'], $data['jan'], $data['feb'], $data['mar']
+        ]);
+        $data['is_default'] = true;
+
+        $wd->update($data);
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Default school working days updated successfully!',
+            'data'    => $wd->fresh(),
         ]);
     }
 
@@ -725,6 +783,9 @@ class HpcTeacherController extends Controller
 
     public function getDemoStudentRow(): array
     {
+        $wd = SchoolWorkingDay::getDefault();
+        $m = $wd->toMonthMap();
+
         return [
             // Metadata
             'SAMPLE999',
@@ -741,10 +802,13 @@ class HpcTeacherController extends Controller
             'Father',
             'Mohammad Ahmad Wani',
             // Monthly Working Days (12 Months: Apr - Mar)
-            20, 22, 10, 20, 22, 21, 19, 20, 15, 15, 20, 18,
+            $m['apr'], $m['may'], $m['jun'], $m['jul'], $m['aug'], $m['sep'],
+            $m['oct'], $m['nov'], $m['dec'], $m['jan'], $m['feb'], $m['mar'],
             '=SUM(M3:X3)',
             // Monthly Present Days (12 Months: Apr - Mar)
-            19, 21, 10, 18, 20, 20, 18, 17, 14, 13, 19, 17,
+            min(19, $m['apr']), min(21, $m['may']), min(10, $m['jun']), min(18, $m['jul']),
+            min(20, $m['aug']), min(20, $m['sep']), min(18, $m['oct']), min(17, $m['nov']),
+            min(14, $m['dec']), min(13, $m['jan']), min(19, $m['feb']), min(17, $m['mar']),
             '=SUM(Z3:AK3)',
             // Attendance % & Absence
             '=IF(Y3>0, ROUND((AL3/Y3)*100, 1) & "%", "")',

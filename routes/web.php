@@ -35,6 +35,8 @@ Route::post('/hpc/teacher/session/end',          [HpcTeacherController::class, '
 Route::post('/hpc/teacher/switch',               [HpcTeacherController::class, 'switchTeacher'])->name('hpc.teacher.switch');
 Route::post('/hpc/teacher/add',                  [HpcTeacherController::class, 'addTeacher'])->name('hpc.teacher.add');
 Route::post('/hpc/teacher/delete',               [HpcTeacherController::class, 'deleteTeacher'])->name('hpc.teacher.delete');
+Route::get('/hpc/teacher/working-days',          [HpcTeacherController::class, 'getWorkingDays'])->name('hpc.teacher.working_days.get');
+Route::post('/hpc/teacher/working-days/update',  [HpcTeacherController::class, 'updateWorkingDays'])->name('hpc.teacher.working_days.update');
 
 // ── Main app ──────────────────────────────────────────────────────────────────
 Route::get('/dashboard', fn() => view('dashboard'))

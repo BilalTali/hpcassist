@@ -174,6 +174,65 @@
                 </div>
             </div>
 
+            <!-- SCHOOL WORKING DAYS CONFIGURATION (ACADEMIC CALENDAR) -->
+            @php
+                $calMonths = [
+                    'apr' => 'Apr', 'may' => 'May', 'jun' => 'Jun',
+                    'jul' => 'Jul', 'aug' => 'Aug', 'sep' => 'Sep',
+                    'oct' => 'Oct', 'nov' => 'Nov', 'dec' => 'Dec',
+                    'jan' => 'Jan', 'feb' => 'Feb', 'mar' => 'Mar',
+                ];
+            @endphp
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <span>📅 School Working Days Configuration</span>
+                            <span class="text-[11px] font-semibold uppercase tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-md">
+                                Academic Year {{ $workingDays->academic_year ?? '2025-2026' }}
+                            </span>
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-0.5">
+                            Working days are identical for each school and all students. The monthly days configured below are set as default and automatically pre-populated into every student's evaluation row in the Excel template.
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
+                            <span class="text-xs text-slate-500 font-medium">Total Working Days:</span>
+                            <span id="wd-total-display" class="text-sm font-extrabold text-indigo-700 font-mono">{{ $workingDays->total_days ?? 222 }}</span>
+                            <span class="text-xs text-slate-400">days</span>
+                        </div>
+                        <button onclick="saveWorkingDays()" id="btn-save-wd"
+                                class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition">
+                            <span>💾 Set as Default</span>
+                        </button>
+                        <button onclick="resetWorkingDaysToStandard()"
+                                class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs transition"
+                                title="Reset to standard academic 222 working days">
+                            <span>↺ Standard</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 12 Monthly Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-2">
+                    @foreach($calMonths as $mKey => $mLabel)
+                        <div class="bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl p-2.5 transition flex items-center justify-between">
+                            <div class="flex flex-col">
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-700">{{ $mLabel }}</span>
+                                <span class="text-[10px] text-slate-400">Working Days</span>
+                            </div>
+                            <input type="number" id="wd-{{ $mKey }}" min="0" max="31"
+                                   value="{{ $workingDays->{$mKey} ?? 20 }}"
+                                   oninput="recalcWorkingDaysTotal()"
+                                   class="w-14 text-center font-bold text-sm bg-white border border-slate-300 rounded-lg px-1.5 py-1 text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono">
+                        </div>
+                    @endforeach
+                </div>
+
+                <div id="wd-status-msg" class="mt-3 text-xs font-semibold hidden"></div>
+            </div>
+
             <!-- TWO COLUMNS: STEP 1 (TEMPLATE) & STEP 2 (UPLOAD) -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
@@ -185,7 +244,7 @@
                             <h3 class="text-sm font-bold text-slate-900">Download Assessment Template (All 7 Pages)</h3>
                         </div>
                         <p class="text-xs text-slate-500 mb-3">
-                            Generates an Excel workbook covering all 65 evaluation fields across all 7 pages (Part-A1 through HPC Credit) with interactive dropdowns.
+                            Generates an Excel workbook covering all 129 evaluation columns across all 7 pages (Part-A1 through HPC Credit) with interactive dropdowns.
                         </p>
                         <div class="bg-amber-50 rounded-xl p-3 border border-amber-200 text-[11px] text-amber-900 space-y-1 mb-3">
                             <div class="font-bold flex items-center gap-1.5">
@@ -197,10 +256,10 @@
                         </div>
                         <div class="bg-indigo-50/60 rounded-xl p-3 border border-indigo-100 text-[11px] text-indigo-900 space-y-1 mb-4">
                             <div class="font-bold flex items-center gap-1.5">
-                                <span>📋 Row 4+: Enrolled Students (Ready for Evaluation)</span>
+                                <span>📋 Row 4+: Enrolled Students (Pre-Filled Working Days &amp; Formulas)</span>
                             </div>
                             <div class="text-indigo-700">
-                                Pre-fills only APAAR ID, Login ID, Name, and Status. <strong>All evaluation fields (Cols E–BM) are left blank</strong> for the teacher to complete. Completed students are protected and untouched.
+                                Pre-fills student metadata and standard <strong>School Working Days (Apr–Mar)</strong> with active Excel formulas for Total Working, Total Present, and Attendance %. Student evaluation responses and present days are left blank for the teacher to complete. Completed students remain protected.
                             </div>
                         </div>
                     </div>
@@ -537,6 +596,78 @@
                 headers: { 'X-CSRF-TOKEN': csrfToken }
             });
             window.location.reload();
+        }
+
+        // ─── Working Days Defaults Management ─────────────────────────────────────
+        const wdMonthKeys = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
+
+        function recalcWorkingDaysTotal() {
+            let total = 0;
+            wdMonthKeys.forEach(m => {
+                const inp = document.getElementById('wd-' + m);
+                const val = inp ? parseInt(inp.value, 10) : 0;
+                total += (isNaN(val) ? 0 : val);
+            });
+            const disp = document.getElementById('wd-total-display');
+            if (disp) disp.innerText = total;
+            return total;
+        }
+
+        function resetWorkingDaysToStandard() {
+            const standard = {
+                apr: 20, may: 22, jun: 10, jul: 20, aug: 22, sep: 21,
+                oct: 19, nov: 20, dec: 15, jan: 15, feb: 20, mar: 18
+            };
+            wdMonthKeys.forEach(m => {
+                const inp = document.getElementById('wd-' + m);
+                if (inp) inp.value = standard[m];
+            });
+            recalcWorkingDaysTotal();
+            showWdStatus('Reset to standard calendar (222 days). Click "Set as Default" to save changes.', 'text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg inline-block');
+        }
+
+        async function saveWorkingDays() {
+            const btn = document.getElementById('btn-save-wd');
+            const oldHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳ Saving...</span>';
+
+            const payload = {};
+            wdMonthKeys.forEach(m => {
+                const inp = document.getElementById('wd-' + m);
+                payload[m] = inp ? parseInt(inp.value, 10) : 0;
+            });
+
+            try {
+                const res = await fetch('{{ route('hpc.teacher.working_days.update') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showWdStatus('✓ ' + data.message + ' Total: ' + (data.data.total_days || recalcWorkingDaysTotal()) + ' Days.', 'text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg inline-block');
+                } else {
+                    showWdStatus('✕ ' + (data.error || 'Failed to save working days.'), 'text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg inline-block');
+                }
+            } catch (err) {
+                showWdStatus('✕ Network error: ' + err.message, 'text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg inline-block');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = oldHtml;
+            }
+        }
+
+        function showWdStatus(msg, classes) {
+            const el = document.getElementById('wd-status-msg');
+            if (!el) return;
+            el.className = 'mt-3 text-xs font-semibold ' + classes;
+            el.innerText = msg;
+            el.classList.remove('hidden');
         }
     </script>
 </x-app-layout>

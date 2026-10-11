@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Services\HpcBrowserManager;
+use App\Models\SchoolWorkingDay;
 
 class HpcTeacherRun extends Command
 {
@@ -312,6 +313,8 @@ class HpcTeacherRun extends Command
 
         // 12 Monthly Working Days (Apr - Mar)
         $monthKeys = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
+        $defaultWd = SchoolWorkingDay::getDefault();
+        $defaultWorkMap = $defaultWd->toMonthMap();
         $defaultWork = [20, 22, 10, 20, 22, 21, 19, 20, 15, 15, 20, 18];
         $defaultPres = [19, 21, 10, 18, 20, 20, 18, 17, 14, 13, 19, 17];
 
@@ -319,7 +322,7 @@ class HpcTeacherRun extends Command
         $monthlyPres = [];
         foreach ($monthKeys as $mIdx => $mKey) {
             $wVal = $s["work_{$mKey}"] ?? '';
-            $monthlyWork[] = ($wVal !== '' && is_numeric($wVal)) ? intval($wVal) : $defaultWork[$mIdx];
+            $monthlyWork[] = ($wVal !== '' && is_numeric($wVal)) ? intval($wVal) : ($defaultWorkMap[$mKey] ?? $defaultWork[$mIdx]);
 
             $pVal = $s["pres_{$mKey}"] ?? '';
             $monthlyPres[] = ($pVal !== '' && is_numeric($pVal)) ? intval($pVal) : $defaultPres[$mIdx];

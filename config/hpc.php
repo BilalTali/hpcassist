@@ -33,4 +33,10 @@ return [
     // Absolute path to ChromeDriver binary.
     'chromedriver_path' => base_path('drivers/chromedriver'),
 
+    // HPC Portal Assessment Home URL
+    'hpc_home_url' => env('HPC_HOME_URL', 'https://hpc.parakh.ncert.gov.in/en/hpc'),
+
+    // Teacher Profile Base Directory
+    'teacher_profile_dir' => env('HPC_TEACHER_PROFILE_DIR', 'storage/app/hpc/teacher-profiles'),
+
 ];

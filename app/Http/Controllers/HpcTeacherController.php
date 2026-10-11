@@ -158,17 +158,36 @@ class HpcTeacherController extends Controller
             ]);
         }
 
-        // ─── Contiguous Collapsible Column Outlines (Student Identity: Only Name Visible) ──
+        // ─── Part-by-Part Independent Collapsible Column Outlines ───────────────
+        // Each major Part in Row 1 has its own isolated outline bracket so teachers can:
+        // 1. Expand [+] any part to fill student records
+        // 2. Collapse [-] that part when completed and proceed to the next part
+        // 3. Keep Student Name (Col C) locked & visible at all times
+        // 4. Expand [+] any part at any time to inspect or edit!
         $collapsibleRanges = [
-            [0, 1],    // A:B - Student Identity (APAAR ID, HPC Login ID) -> Collapsed! Only Name (Col C) visible
-            [3, 3],    // D:D - Student Identity (Status) -> Collapsed!
-            [7, 10],   // H:K - Profile secondary (Location, Medium, Mother Tongue, Relation)
-            [12, 35],  // M:AJ - Monthly Attendance (Apr-Mar neck to neck)
-            [39, 40],  // AN:AO - Absence count & Reason
-            [42, 67],  // AQ:BP - Part-A2 All About Me & Goals
-            [69, 77],  // BR:BZ - Part-A3 Ambition Guidance Details
-            [78, 103], // CA:CZ - Part-A4 Parent Partnership & Support Plan (Sections 8, 9, 10, 11)
-            [107, 126],// DD:DW - Part-B Activity Reflections, Peer Review & Support Plan
+            // Part 1: Student Identity (cols 0..3) -> APAAR & Login ID (A-B) & Status (D) collapsed; Name (Col C) locked & visible
+            [0, 1],
+            [3, 3],
+            // Part 2: Part-A1 Basic Profile (cols 4..11) -> Secondary fields (Cols F-K) collapsible; Admission No (Col E) & Parent Name (Col L) anchor
+            [5, 10],
+            // Part 3: Monthly Attendance (cols 12..35) -> All 24 monthly attendance cols (Cols M-AJ) collapsible into Attendance Summary (Cols AK-AM)
+            [12, 35],
+            // Part 5: Absence & Hobby (cols 39..41) -> Absent count & reason (Cols AN-AO) collapsible; Hobby (Col AP) anchor
+            [39, 40],
+            // Part 6: Part-A2 Goals & Reflections (cols 42..67) -> 25 goals/strengths cols (Cols AQ-BO) collapsible; Teacher note (Col BP) anchor
+            [42, 66],
+            // Part 7: Part-A3 Ambition Card (cols 68..77) -> 8 ambition cols (Cols BR-BY) collapsible; Ambition (Col BQ) & Parent feeling (Col BZ) anchor
+            [69, 76],
+            // Part 8: Part-A4 Home Resources (cols 78..87) -> 9 resources checklist cols (Cols CA-CI) collapsible; Other specify (Col CJ) anchor
+            [78, 86],
+            // Part 9: Part-A4 Motivation & Progress (cols 88..91) -> 3 motivation cols (Cols CK-CM) collapsible; Progress (Col CN) anchor
+            [88, 90],
+            // Part 10: Part-A4 School Support Needed (cols 92..102) -> 10 support cols (Cols CO-CX) collapsible; Other specify (Col CY) anchor
+            [92, 101],
+            // Part 12: Part-B Activity Profile (cols 104..126) -> 22 activity & review cols (Cols DA-DV) collapsible; Support plan (Col DW) anchor
+            [104, 125],
+            // Part 14: HPC Credit Curricular Marks (cols 129..144) -> All 16 marks cols (Cols DZ-EO) collapsible; Declaration (Col EP) anchor
+            [129, 144],
         ];
 
         foreach ($collapsibleRanges as [$startIdx, $endIdx]) {
@@ -754,21 +773,21 @@ class HpcTeacherController extends Controller
     public function getEvaluationSections(): array
     {
         return [
-            ['title' => '🔒 1. STUDENT IDENTITY (LOCKED)',              'start' => 0,   'end' => 3,   'bg' => 'FF0F172A'],
-            ['title' => '👤 2. PART-A1: BASIC PROFILE',                 'start' => 4,   'end' => 11,  'bg' => 'FF1E40AF'],
-            ['title' => '📅 3. PART-A1: MONTHLY ATTENDANCE (APR–MAR)',  'start' => 12,  'end' => 35,  'bg' => 'FF0369A1', 'collapsible' => true],
-            ['title' => '📈 4. ATTENDANCE SUMMARY (AUTO)',              'start' => 36,  'end' => 38,  'bg' => 'FF0D9488'],
-            ['title' => '🌟 5. ABSENCE & HOBBY',                        'start' => 39,  'end' => 41,  'bg' => 'FF4338CA'],
-            ['title' => '🌱 6. PART-A2: ALL ABOUT ME & GOALS',          'start' => 42,  'end' => 67,  'bg' => 'FF6D28D9'],
-            ['title' => '🚀 7. PART-A3: MY AMBITION CARD',              'start' => 68,  'end' => 77,  'bg' => 'FF7C3AED'],
-            ['title' => '🏡 8. PART-A4: HOME RESOURCES',                'start' => 78,  'end' => 87,  'bg' => 'FFBE185D', 'collapsible' => true],
-            ['title' => '😊 9. PART-A4: MOTIVATION & PROGRESS',         'start' => 88,  'end' => 91,  'bg' => 'FF9D174D'],
-            ['title' => '🤝 10. PART-A4: SCHOOL SUPPORT NEEDED',        'start' => 92,  'end' => 102, 'bg' => 'FFB91C1C', 'collapsible' => true],
-            ['title' => '📝 11. PART-A4: PARENT HOME SUPPORT PLAN',     'start' => 103, 'end' => 103, 'bg' => 'FFC2410C'],
-            ['title' => '🎨 12. PART-B: HOLISTIC ACTIVITY PROFILE',     'start' => 104, 'end' => 126, 'bg' => 'FFD97706'],
-            ['title' => '📊 13. PART-C: CURRICULAR PROGRESS LEVELS',    'start' => 127, 'end' => 128, 'bg' => 'FF059669'],
-            ['title' => '🎯 14. HPC CREDIT: CURRICULAR MARKS (8 SUBJ)', 'start' => 129, 'end' => 144, 'bg' => 'FF047857'],
-            ['title' => '✍️ 15. FINAL DECLARATION & REMARKS',           'start' => 145, 'end' => 146, 'bg' => 'FF334155'],
+            ['title' => '🔒 Part 1: Student Identity (Locked)',          'start' => 0,   'end' => 3,   'bg' => 'FF0F172A'],
+            ['title' => '👤 Part 2: Part-A1 Basic Profile',             'start' => 4,   'end' => 11,  'bg' => 'FF1E40AF'],
+            ['title' => '📅 Part 3: Monthly Attendance (Apr–Mar)',      'start' => 12,  'end' => 35,  'bg' => 'FF0369A1'],
+            ['title' => '📈 Part 4: Attendance Summary (Auto)',          'start' => 36,  'end' => 38,  'bg' => 'FF0D9488'],
+            ['title' => '🌟 Part 5: Absence & Hobby',                    'start' => 39,  'end' => 41,  'bg' => 'FF4338CA'],
+            ['title' => '🌱 Part 6: Part-A2 All About Me & Goals',      'start' => 42,  'end' => 67,  'bg' => 'FF6D28D9'],
+            ['title' => '🚀 Part 7: Part-A3 My Ambition Card',          'start' => 68,  'end' => 77,  'bg' => 'FF7C3AED'],
+            ['title' => '🏡 Part 8: Part-A4 Home Resources',            'start' => 78,  'end' => 87,  'bg' => 'FFBE185D'],
+            ['title' => '😊 Part 9: Part-A4 Motivation & Progress',     'start' => 88,  'end' => 91,  'bg' => 'FF9D174D'],
+            ['title' => '🤝 Part 10: Part-A4 School Support Needed',    'start' => 92,  'end' => 102, 'bg' => 'FFB91C1C'],
+            ['title' => '📝 Part 11: Parent Home Support Plan',         'start' => 103, 'end' => 103, 'bg' => 'FFC2410C'],
+            ['title' => '🎨 Part 12: Part-B Holistic Activity Profile', 'start' => 104, 'end' => 126, 'bg' => 'FFD97706'],
+            ['title' => '📊 Part 13: Part-C Curricular Progress Levels','start' => 127, 'end' => 128, 'bg' => 'FF059669'],
+            ['title' => '🎯 Part 14: HPC Credit Subject Marks (8 Subj)','start' => 129, 'end' => 144, 'bg' => 'FF047857'],
+            ['title' => '✍️ Part 15: Final Declaration & Remarks',       'start' => 145, 'end' => 146, 'bg' => 'FF334155'],
         ];
     }
 

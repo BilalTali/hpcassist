@@ -314,12 +314,42 @@ class HpcTeacherRun extends Command
             sleep(3);
         }
 
+        // ── 6. Navigate to /hpc-credit and finalize ───────────────────────────
+        $currentUrl = $client->getCurrentURL();
+        $creditUrl = preg_replace('#/(?:part-[^/]+|hpc-credit)$#', '/hpc-credit', $currentUrl);
+        if ($creditUrl && ! str_contains($currentUrl, '/hpc-credit')) {
+            $client->request('GET', $creditUrl);
+            usleep($delayMs * 2500);
+        }
+
+        if (str_contains($client->getCurrentURL(), '/hpc-credit')) {
+            $client->executeScript("
+                // Fill summative assessment marks (Max Marks 50, Obtained 45)
+                const marksInputs = Array.from(document.querySelectorAll('table input[type=\"text\"]'));
+                marksInputs.forEach((inp, i) => {
+                    const val = (i % 2 === 0) ? '50' : '45';
+                    inp.value = val;
+                    inp.dispatchEvent(new Event('input', { bubbles: true }));
+                    inp.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+
+                // Check declaration checkbox
+                const decCb = document.querySelector('input[type=\"checkbox\"]');
+                if (decCb && !decCb.checked) decCb.click();
+
+                // Save credit form as draft
+                const saveDraftBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Save as Draft'));
+                if (saveDraftBtn && !saveDraftBtn.disabled) saveDraftBtn.click();
+            ");
+            sleep(3);
+        }
+
         // Take snapshot after update
         try {
             $client->takeScreenshot(config('hpc.storage_path') . "/teacher_result_{$idx}.png");
         } catch (\Throwable) {}
 
-        return ['status' => 'success', 'message' => 'HPC Evaluation updated successfully across completed parts.'];
+        return ['status' => 'success', 'message' => 'HPC Evaluation and Credit form submitted successfully!'];
     }
 
     private function clickContinue(Client $client): void

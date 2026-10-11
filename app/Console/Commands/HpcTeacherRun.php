@@ -483,36 +483,94 @@ class HpcTeacherRun extends Command
             sleep(3);
         }
 
-        // ── 5. Fill Part-A4 (Smileys, Multi-selects & Textareas) ───────────────
+        // ── 5. Fill Part-A4 (Smileys, Checkboxes & Textareas) ─────────────────
         if (str_contains($client->getCurrentURL(), '/part-A4')) {
-            $parentFeedback  = $s['parent_feedback'] ?? 'Provide quiet study space, supervise 1.5 hours of evening revision, monitor screen time, and discuss daily learnings';
+            $parentFeedback = $s['parent_feedback'] ?? 'Provide quiet study space, supervise 1.5 hours of evening revision, monitor screen time, and discuss daily learnings';
             $pRatings = [
                 $s['p_motivated'] ?? 'Yes',
                 $s['p_schedule'] ?? 'Yes',
                 $s['p_curriculum_diff'] ?? 'No',
                 $s['p_progress'] ?? 'Yes',
             ];
-            $homeRes = $s['home_resources'] ?? 'Books and Magazines, Newspaper, Phone and Computer, Internet, T.V.';
-            $childSupp = $s['child_needs_support'] ?? 'Mathematics, Science, Developing effective study skills like time management';
+
+            // 1. Home Resources Checkbox Map
+            $homeResMap = [
+                'books'     => strcasecmp($s['res_books'] ?? '', 'Yes') === 0,
+                'news'      => strcasecmp($s['res_news'] ?? '', 'Yes') === 0,
+                'toy'       => strcasecmp($s['res_toys'] ?? '', 'Yes') === 0,
+                'phone'     => strcasecmp($s['res_phone'] ?? '', 'Yes') === 0,
+                'internet'  => strcasecmp($s['res_internet'] ?? '', 'Yes') === 0,
+                'radio'     => strcasecmp($s['res_radio'] ?? '', 'Yes') === 0,
+                'broadcast' => strcasecmp($s['res_broadcast'] ?? '', 'Yes') === 0,
+                't.v'       => strcasecmp($s['res_tv'] ?? '', 'Yes') === 0,
+                'cwd'       => strcasecmp($s['res_cwd'] ?? '', 'Yes') === 0,
+            ];
+            // Backward-compat fallback if old single-column home_resources was uploaded
+            if (!isset($s['res_books']) && !empty($s['home_resources'])) {
+                $hrStr = strtolower($s['home_resources']);
+                foreach ($homeResMap as $k => $v) {
+                    $homeResMap[$k] = str_contains($hrStr, $k);
+                }
+            }
+            $resOther = $s['res_other'] ?? '';
+
+            // 2. School Support Needs Checkbox Map
+            $suppMap = [
+                'language'   => strcasecmp($s['supp_lang'] ?? '', 'Yes') === 0,
+                'mathemat'   => strcasecmp($s['supp_math'] ?? '', 'Yes') === 0,
+                'science'    => strcasecmp($s['supp_sci'] ?? '', 'Yes') === 0,
+                'social'     => strcasecmp($s['supp_soc'] ?? '', 'Yes') === 0,
+                'self-belief'=> strcasecmp($s['supp_self_belief'] ?? '', 'Yes') === 0,
+                'social skil'=> strcasecmp($s['supp_social_skills'] ?? '', 'Yes') === 0,
+                'emotion'    => strcasecmp($s['supp_emotions'] ?? '', 'Yes') === 0,
+                'study skil' => strcasecmp($s['supp_study_skills'] ?? '', 'Yes') === 0,
+                'digital'    => strcasecmp($s['supp_skill_guidance'] ?? '', 'Yes') === 0,
+                'any other'  => strcasecmp($s['supp_other'] ?? '', 'Yes') === 0,
+            ];
+            // Backward-compat fallback if old single-column child_needs_support was uploaded
+            if (!isset($s['supp_math']) && !empty($s['child_needs_support'])) {
+                $csStr = strtolower($s['child_needs_support']);
+                foreach ($suppMap as $k => $v) {
+                    $suppMap[$k] = str_contains($csStr, substr($k, 0, 4));
+                }
+            }
+            $suppOtherSpecify = $s['supp_other_specify'] ?? '';
 
             $client->executeScript("
                 const pFeedback = " . json_encode($parentFeedback) . ";
                 const ratings = " . json_encode($pRatings) . ";
-                const homeResStr = " . json_encode(strtolower($homeRes)) . ";
-                const childSuppStr = " . json_encode(strtolower($childSupp)) . ";
+                const homeMap = " . json_encode($homeResMap) . ";
+                const resOther = " . json_encode($resOther) . ";
+                const suppMap = " . json_encode($suppMap) . ";
+                const suppOther = " . json_encode($suppOtherSpecify) . ";
 
-                // 1. Home Resources Available Checkboxes (Multi-select)
+                // 1. Tick Home Resources Checkboxes
                 document.querySelectorAll('.childrens-resources li').forEach(li => {
                     const lbl = (li.querySelector('label')?.innerText || '').toLowerCase();
                     const cb = li.querySelector('input[type=\"checkbox\"]');
                     if (cb && lbl) {
-                        const shouldCheck = homeResStr ? (homeResStr.includes(lbl.slice(0, 4)) || homeResStr.includes('all')) : true;
+                        let shouldCheck = false;
+                        for (const key in homeMap) {
+                            if (lbl.includes(key)) {
+                                shouldCheck = homeMap[key];
+                                break;
+                            }
+                        }
                         if (shouldCheck !== cb.checked) {
                             cb.click();
                             cb.dispatchEvent(new Event('change', { bubbles: true }));
                         }
                     }
                 });
+
+                // Other home resources text
+                const otherHomeInput = document.querySelector('.children-specific-box input');
+                if (otherHomeInput && resOther) {
+                    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                    if (setter) setter.call(otherHomeInput, resOther); else otherHomeInput.value = resOther;
+                    otherHomeInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    otherHomeInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
 
                 // 2. Select radio smileys for 'Understanding of my Child' (Q1 - Q4)
                 const table = document.querySelector('.hpc-table-part-b table, table');
@@ -528,12 +586,18 @@ class HpcTeacherRun extends Command
                     });
                 }
 
-                // 3. Child Support Needs Checkboxes (Multi-select)
+                // 3. Child Support Needs Checkboxes
                 document.querySelectorAll('.need-children-support-check input[type=\"checkbox\"]').forEach(cb => {
                     const p = cb.closest('label')?.querySelector('p') || cb.closest('li')?.querySelector('p');
                     const txt = (p?.innerText || '').toLowerCase();
                     if (txt) {
-                        const shouldCheck = childSuppStr ? (childSuppStr.includes(txt.slice(0, 4)) || childSuppStr.includes('all')) : true;
+                        let shouldCheck = false;
+                        for (const key in suppMap) {
+                            if (txt.includes(key)) {
+                                shouldCheck = suppMap[key];
+                                break;
+                            }
+                        }
                         if (shouldCheck !== cb.checked) {
                             cb.click();
                             cb.dispatchEvent(new Event('change', { bubbles: true }));

@@ -92,11 +92,11 @@ class HpcTeacherController extends Controller
             ['Rule #', 'Section / Page', 'Field Type', 'Rule Description', 'Permitted Values / Dragdown Options'],
             ['1', 'Student Metadata', 'Locked String', 'APAAR ID, HPC Login ID, Student Name, and Status. HPC Login ID is the unique identifier on the PARAKH portal.', 'Pre-filled from school portal roster.'],
             ['2', 'Status Protection', 'System Rule', 'Students with status "HPC Completed" will be protected and left untouched during update runs.', 'HPC Completed (skipped), HPC Pending / In Progress (updated)'],
-            ['3', 'Row 3 Guide Row', 'Guide Reference', 'Row 3 (DEMO_SAMPLE) provides a complete, realistic model of teacher evaluation for guidance. Do not delete or alter.', 'All 127 fields pre-filled for visual demonstration.'],
+            ['3', 'Row 3 Guide Row', 'Guide Reference', 'Row 3 (DEMO_SAMPLE) provides a complete, realistic model of teacher evaluation for guidance. Do not delete or alter.', 'All 146 fields pre-filled for visual demonstration.'],
             ['4', 'Part-A(1) Monthly Attendance', 'Integer & Formulas', 'Working Days and Present Days are arranged neck-to-neck for each month (Apr to Mar). Total Working, Total Present, and Attendance % calculate automatically via Excel formulas.', 'Monthly Working (0-31), Monthly Present (0-Working). Present <= Working.'],
             ['5', 'Part-A(2) All About Me', 'Text & Dragdown', 'Living arrangement, leisure activities, self-responsibility, improvement areas, friend info, academic & personal goals with rationale & steps, learnings in/outside school.', 'Responsibility: all the time, most times, sometimes.'],
             ['6', 'Part-A(3) Ambition Card', 'Text & Dragdown', 'Student career ambition, path to achieve, 5 key skills, focus subjects, habits to cultivate, teacher mentor name & guidance, emotional reflections.', 'Mentor guidance and structured skill acquisition.'],
-            ['7', 'Part-A(4) Parent Partnership', 'Radio & Multi-Select', 'Tick resources available at home (multi-select), Understanding of child Q1-Q4 (Radio smileys: Yes, Sometimes, No, Not Sure), Support needs (multi-select), and Home support plan text.', 'Multi-select: pick or comma-separate; Radio: Yes, Sometimes, No, Not Sure.'],
+            ['7', 'Part-A(4) Parent Partnership', 'Checkbox (Yes/No) & Radio', 'Home resources (individual Yes/No columns), Understanding of child Q1-Q4 (Radio smileys: Yes, Sometimes, No, Not Sure), Support needs (individual Yes/No columns), and Home support plan text.', 'Checkboxes: Yes / No; Radio: Yes, Sometimes, No, Not Sure; Specify text.'],
             ['8', 'Part-B Holistic Activities', 'Dragdown & Text', 'Pedagogical approach, activity title, description, rubric ratings (Awareness, Sensitivity, Creativity), student self-reflection, peer review, teacher strength/barrier areas & support plan.', 'Approach: Art-Integrated, Sports-Integrated...; Rubrics: Beginner, Proficient, Advanced.'],
             ['9', 'Part-C Curricular Assessment', 'Dragdown (Level)', 'Year-end formative and summative performance levels across curricular domains.', 'Beginner, Proficient, Advanced'],
             ['10', 'HPC Credit (Marks Grid)', 'Integer (0-50)', 'Summative Assessment marks for each of the 8 curricular subjects.', 'Max Marks (default 50), Marks Obtained (0 to Max Marks).'],
@@ -716,13 +716,39 @@ class HpcTeacherController extends Controller
             ['key' => 'feel_when_achieve',      'label' => 'I will feel ... when I achieve my ambition (A3) *',        'width' => 34, 'type' => 'string',  'note' => 'e.g. Proud, happy, fulfilled, and motivated to contribute to society'],
             ['key' => 'parents_feel',           'label' => 'My parents will feel ... when I achieve my ambition (A3) *', 'width' => 36, 'type' => 'string',  'note' => 'e.g. Immensely joyful, honored, and proud'],
 
-            // ── Part-A(4) Parent-Teacher Partnership Card (Cols CA to CG) ─────────────
-            ['key' => 'home_resources',         'label' => 'Tick the resources available to your child at home (A4) *', 'width' => 44, 'type' => 'list', 'options' => '"Books and Magazines,Newspaper,Toys Games and Sports,Phone and Computer,Internet,Radio,Broadcast,T.V.,Resources for CWD,Any Other"', 'note' => 'Multi-select: Pick from dropdown or comma-separated: Books and Magazines, Newspaper, Toys Games and Sports, Phone and Computer, Internet, Radio, Broadcast, T.V., Resources for CWD'],
-            ['key' => 'p_motivated',            'label' => '1. My child seems motivated to learn and engage with new concepts (A4) *', 'width' => 40, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio option: Yes, Sometimes, No, Not Sure'],
-            ['key' => 'p_schedule',             'label' => '2. My child follows a schedule at home for curriculum and screen time (A4) *', 'width' => 42, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio option: Yes, Sometimes, No, Not Sure'],
-            ['key' => 'p_curriculum_diff',      'label' => '3. My child finds the grade-level curriculum difficult and needs support (A4) *', 'width' => 42, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio option: Yes, Sometimes, No, Not Sure'],
-            ['key' => 'p_progress',             'label' => '4. My child is making good progress as per the grade (A4) *', 'width' => 36, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio option: Yes, Sometimes, No, Not Sure'],
-            ['key' => 'child_needs_support',    'label' => 'At school, my child needs support with (A4) *', 'width' => 40, 'type' => 'list', 'options' => '"Languages,Mathematics,Science,Social Science,Building self-belief,Social skills,Managing emotions,Study skills,Skill Guidance,Any Other"', 'note' => 'Multi-select: Pick from dropdown or comma-separated: Languages (R1 R2 R3), Mathematics, Science, Social Science, Building self-belief, Social skills, Managing emotions, Study skills, Skill Guidance'],
+            // ── Part-A(4) Parent-Teacher Partnership Card (Cols CA onwards) ───────────
+            // 1. Tick the resources available to your child at home (Checkboxes - Yes/No)
+            ['key' => 'res_books',              'label' => 'Home: Books and Magazines (A4)',          'width' => 26, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'res_news',               'label' => 'Home: Newspaper (A4)',                    'width' => 22, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'res_toys',               'label' => 'Home: Toys, Games and Sports (A4)',       'width' => 26, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'res_phone',              'label' => 'Home: Phone and Computer (A4)',           'width' => 26, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'res_internet',           'label' => 'Home: Internet (A4)',                     'width' => 22, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'res_radio',              'label' => 'Home: Radio (A4)',                        'width' => 20, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'res_broadcast',          'label' => 'Home: Broadcast (A4)',                    'width' => 22, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'res_tv',                 'label' => 'Home: T.V. (A4)',                         'width' => 20, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'res_cwd',                'label' => 'Home: Resources for CWD (A4)',            'width' => 26, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'res_other',              'label' => 'Home: Any other (please specify) (A4)',   'width' => 32, 'type' => 'string',  'note' => 'Specify other home resources if any'],
+
+            // 2. Understanding of my Child (Radio buttons - Single select)
+            ['key' => 'p_motivated',            'label' => '1. My child seems motivated to learn (A4) *', 'width' => 38, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio smiley: Yes, Sometimes, No, Not Sure'],
+            ['key' => 'p_schedule',             'label' => '2. Follows a schedule at home for curriculum & screen time (A4) *', 'width' => 42, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio smiley: Yes, Sometimes, No, Not Sure'],
+            ['key' => 'p_curriculum_diff',      'label' => '3. Finds the grade-level curriculum difficult (A4) *', 'width' => 38, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio smiley: Yes, Sometimes, No, Not Sure'],
+            ['key' => 'p_progress',             'label' => '4. Making good progress as per the grade (A4) *', 'width' => 34, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio smiley: Yes, Sometimes, No, Not Sure'],
+
+            // 3. At school, my child needs support with (Checkboxes - Yes/No)
+            ['key' => 'supp_lang',              'label' => 'Support: Languages (R1, R2, R3) (A4)',    'width' => 28, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'supp_math',              'label' => 'Support: Mathematics (A4)',               'width' => 24, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'supp_sci',               'label' => 'Support: Science (A4)',                   'width' => 22, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'supp_soc',               'label' => 'Support: Social Science (A4)',            'width' => 24, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'supp_self_belief',       'label' => 'Support: Building self-belief (A4)',      'width' => 28, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'supp_social_skills',     'label' => 'Support: Developing social skills (A4)',  'width' => 28, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'supp_emotions',          'label' => 'Support: Managing difficult emotions (A4)', 'width' => 28, 'type' => 'list',  'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'supp_study_skills',      'label' => 'Support: Developing effective study skills (A4)', 'width' => 32, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'supp_skill_guidance',    'label' => 'Support: Skill Guidance / Digital Literacy (A4)', 'width' => 32, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'supp_other',             'label' => 'Support: Any Other (A4)',                 'width' => 22, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
+            ['key' => 'supp_other_specify',     'label' => 'Support: Any Other Specify (A4)',         'width' => 28, 'type' => 'string',  'note' => 'Specify details if Any Other is Yes'],
+
+            // 4. Support Plan at Home (Textarea)
             ['key' => 'parent_feedback',        'label' => 'Based on my discussion with teacher, I will support my child at home by (A4) *', 'width' => 48, 'type' => 'string', 'note' => 'Parent home support plan (max 700 chars)'],
 
             // ── Part-B Holistic Activities ─────────────────────────────────────────────
@@ -856,13 +882,36 @@ class HpcTeacherController extends Controller
             'Scientific problem-solving strategies and computational simulations',
             'Immensely fulfilled, proud, and inspired to contribute to the nation space mission',
             'Overjoyed, deeply proud, and grateful',
-            // Part-A(4) (Cols CA to CG)
-            'Books and Magazines, Newspaper, Phone and Computer, Internet, T.V.',
-            'Yes',
-            'Yes',
-            'No',
-            'Yes',
-            'Mathematics, Science, Developing effective study skills like time management',
+            // Part-A(4) Parent-Teacher Partnership Card (Cols CA onwards)
+            // 1. Home Resources Available Checkboxes (Yes/No)
+            'Yes', // Books and Magazines
+            'Yes', // Newspaper
+            'Yes', // Toys, Games and Sports
+            'Yes', // Phone and Computer
+            'Yes', // Internet
+            'No',  // Radio
+            'No',  // Broadcast
+            'Yes', // T.V.
+            'No',  // Resources for CWD
+            '',    // Any other specify
+            // 2. Understanding of my Child (Radio)
+            'Yes', // Motivated to learn
+            'Yes', // Follows schedule
+            'No',  // Curriculum difficult
+            'Yes', // Making good progress
+            // 3. Child Needs Support With Checkboxes (Yes/No)
+            'No',  // Languages
+            'Yes', // Mathematics
+            'Yes', // Science
+            'No',  // Social Science
+            'No',  // Building self-belief
+            'No',  // Developing social skills
+            'No',  // Managing emotions
+            'Yes', // Developing study skills
+            'No',  // Skill Guidance
+            'No',  // Any Other
+            '',    // Any Other Specify
+            // 4. Support Plan at Home
             'Provide quiet study space, supervise 1.5 hours of evening revision, monitor screen time, and discuss daily learnings',
             // Part-B
             'Art-Integrated',

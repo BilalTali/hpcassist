@@ -262,20 +262,50 @@ class HpcTeacherRun extends Command
 
         // ── 3. Fill Part-A2 ───────────────────────────────────────────────────
         if (str_contains($client->getCurrentURL(), '/part-A2')) {
+            $goal = $s['goal'] ?? 'Improve in Science and Mathematics';
             $client->executeScript("
-                function setVal(el, val) {
-                    if (!el) return;
-                    try {
-                        const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
-                        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-                        if (setter) setter.call(el, val); else el.value = val;
-                    } catch(e) { el.value = val; }
+                const setNativeValue = (el, val) => {
+                    const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+                    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+                    if (setter) setter.call(el, val); else el.value = val;
                     el.dispatchEvent(new Event('input', { bubbles: true }));
                     el.dispatchEvent(new Event('change', { bubbles: true }));
-                }
+                    el.dispatchEvent(new Event('blur', { bubbles: true }));
+                };
 
-                document.querySelectorAll('input[type=\"text\"], textarea').forEach(el => {
-                    if (!el.value) setVal(el, 'Good progress and active participation');
+                const inputs = Array.from(document.querySelectorAll('input:not([type=\"hidden\"]):not([type=\"checkbox\"]):not([type=\"radio\"]), textarea'));
+                inputs.forEach((inp, idx) => {
+                    if (inp.value && inp.value.trim().length > 1) return;
+                    const container = inp.closest('.form-group, div');
+                    const lbl = (container?.querySelector('label, p, strong')?.innerText || inp.placeholder || '').trim();
+
+                    let val = 'Learning new skills and actively participating in class';
+                    if (lbl.includes('live with')) val = 'Family';
+                    else if (lbl.includes('stay at')) val = 'Sugin, Budgam';
+                    else if (lbl.includes('free time')) val = 'Reading books and drawing';
+                    else if (lbl.includes('very well')) val = 'Sketch and Cricket';
+                    else if (lbl.includes('responsible')) val = " . json_encode($s['responsible'] ?? 'Most times') . ";
+                    else if (lbl.includes('could do better')) val = 'Time management in exams';
+                    else if (lbl.includes('care about')) val = 'Helping peers with notes';
+                    else if (lbl.includes('feel proud')) val = 'When solving mathematics problems';
+                    else if (lbl.includes('Name')) val = " . json_encode($goal) . ";
+                    else if (lbl.includes('Age')) val = '12';
+                    else if (lbl.includes('Academic Goal') && inp.tagName === 'TEXTAREA') val = " . json_encode($goal) . ";
+                    else if (lbl.includes('Personal Goal') && inp.tagName === 'TEXTAREA') val = 'Read one informative book every month';
+                    else if (lbl.includes('Step 1')) val = 'Daily formula revision';
+                    else if (lbl.includes('Step 2')) val = 'Weekly mock test practice';
+                    else if (lbl.includes('important to me')) val = 'Helps achieve career ambition';
+                    else if (lbl.includes('Three new things I learnt at school')) {
+                        val = (idx % 2 === 0) ? 'Algebra concepts and equations' : 'Botanical parts of plants';
+                    } else if (lbl.includes('Three new things I learnt outside school')) {
+                        val = (idx % 2 === 0) ? 'Gardening techniques' : 'First aid basics';
+                    } else if (lbl.includes('help me with')) {
+                        val = 'Understanding complex numericals in Science';
+                    } else if (lbl.includes('teacher to know')) {
+                        val = 'I enjoy hands-on practical experiments';
+                    }
+
+                    setNativeValue(inp, val);
                 });
             ");
             usleep($delayMs * 1000);
@@ -285,28 +315,53 @@ class HpcTeacherRun extends Command
 
         // ── 4. Fill Part-A3 ───────────────────────────────────────────────────
         if (str_contains($client->getCurrentURL(), '/part-A3')) {
+            $ambition = $s['ambition'] ?? 'Teacher';
             $client->executeScript("
-                document.querySelectorAll('input[type=\"text\"], textarea').forEach(el => {
-                    if (!el.value) el.value = 'Teacher';
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                document.querySelectorAll('input:not([type=\"hidden\"]):not([type=\"checkbox\"]):not([type=\"radio\"]), textarea').forEach(el => {
+                    if (!el.value) {
+                        el.value = " . json_encode($ambition) . ";
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
                 });
+                // Check 5 skill checkboxes if not checked
+                const skillCbs = Array.from(document.querySelectorAll('input[type=\"checkbox\"]'));
+                skillCbs.slice(0, 5).forEach(cb => { if (!cb.checked) cb.click(); });
             ");
             usleep($delayMs * 1000);
             $this->clickContinue($client);
             sleep(3);
         }
 
-        // ── 5. Fill Part-A4 ───────────────────────────────────────────────────
+        // ── 5. Fill Part-A4 (Smileys, Multi-selects & Textareas) ───────────────
         if (str_contains($client->getCurrentURL(), '/part-A4')) {
             $client->executeScript("
-                const radioGroups = {};
-                document.querySelectorAll('input[type=\"radio\"]').forEach(r => {
-                    const name = r.name || 'default';
-                    if (!radioGroups[name]) radioGroups[name] = [];
-                    radioGroups[name].push(r);
+                // 1. Select Yes smiley for all 4 'Understanding of my Child' questions
+                const table = document.querySelector('table');
+                if (table) {
+                    const rows = Array.from(table.querySelectorAll('tr')).slice(2);
+                    rows.forEach(r => {
+                        const yesLi = Array.from(r.querySelectorAll('li')).find(li => (li.innerText || '').trim() === 'Yes');
+                        if (yesLi) yesLi.click();
+                    });
+                }
+
+                // 2. Multi-select checkboxes
+                document.querySelectorAll('input[type=\"checkbox\"]').forEach(cb => {
+                    if (!cb.checked) {
+                        cb.click();
+                        cb.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
                 });
-                Object.values(radioGroups).forEach(group => {
-                    if (group.length > 0 && !group.some(r => r.checked)) group[0].click();
+
+                // 3. Fill textareas
+                document.querySelectorAll('textarea').forEach(ta => {
+                    const proto = window.HTMLTextAreaElement.prototype;
+                    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+                    const val = 'Regular evening study routine and encouragement for holistic activities.';
+                    if (setter) setter.call(ta, val); else ta.value = val;
+                    ta.dispatchEvent(new Event('input', { bubbles: true }));
+                    ta.dispatchEvent(new Event('change', { bubbles: true }));
                 });
             ");
             usleep($delayMs * 1000);

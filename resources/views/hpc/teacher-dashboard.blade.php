@@ -311,10 +311,10 @@
                     <div>
                         <div class="flex items-center gap-2 mb-2">
                             <span class="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">1</span>
-                            <h3 class="text-sm font-bold text-slate-900">Download Simplified Assessment Template</h3>
+                            <h3 class="text-sm font-bold text-slate-900">Download Condensed Assessment Template (36 Columns Visible)</h3>
                         </div>
                         <p class="text-xs text-slate-500 mb-3">
-                            Covers all 7 evaluation pages (147 columns) structured with <strong>Category Color Banners</strong> and <strong>Collapsible Outlines</strong> for effortless editing by non-technical teachers.
+                            Opens in a compact <strong>36-column default view</strong> with zero horizontal dragging. 111 detailed secondary columns are collapsed into 7 groups ready to expand with <code>[ + ]</code>.
                         </p>
 
                         <!-- Simplification Features List -->
@@ -322,35 +322,35 @@
                             <div class="bg-emerald-50 rounded-xl p-2.5 border border-emerald-200 text-[11px] text-emerald-950 flex items-start gap-2">
                                 <span class="text-sm mt-0.5">⚡</span>
                                 <div>
-                                    <strong class="text-emerald-900 font-bold">Smart Auto-Fill Baseline Profiles:</strong> Every student row (Row 5+) comes pre-filled with high-quality, authentic starter responses, ~92% attendance, and realistic marks. <em>You only need to review and adjust Obtained Marks!</em>
+                                    <strong class="text-emerald-900 font-bold">Zero Horizontal Dragging:</strong> Non-essential columns are collapsed by default. You see Identity, Attendance Summary, Ambition, Activity Title, and all 8 Subject Marks right on screen!
                                 </div>
                             </div>
 
                             <div class="bg-amber-50 rounded-xl p-2.5 border border-amber-200 text-[11px] text-amber-950 flex items-start gap-2">
                                 <span class="text-sm mt-0.5">✏️</span>
                                 <div>
-                                    <strong class="text-amber-900 font-bold">Yellow Highlighted Headers:</strong> Key action columns that need your marks input (e.g. <code>✏️ Lang 1 Marks Obtained</code>) are highlighted in bright yellow so you can locate and edit them instantly.
+                                    <strong class="text-amber-900 font-bold">Obtained Marks Focus:</strong> All 8 subject columns (<code>✏️ Lang 1 Marks Obtained</code> to <code>Physical Ed Marks Obt</code>) are highlighted in soft yellow with default max marks (50) already set.
                                 </div>
                             </div>
 
                             <div class="bg-indigo-50/70 rounded-xl p-2.5 border border-indigo-100 text-[11px] text-indigo-950 flex items-start gap-2">
                                 <span class="text-sm mt-0.5">📁</span>
                                 <div>
-                                    <strong class="text-indigo-900 font-bold">Collapsible Column Groups:</strong> Excel native <code>[ - ]</code> outline buttons above Monthly Attendance and Checkboxes allow collapsing 40+ columns into a clean, compact view.
+                                    <strong class="text-indigo-900 font-bold">One-Click Group Expansion [ + ]:</strong> Monthly Attendance (24 cols), Part-A2 (26 cols), Part-A3 (9 cols), Part-A4 (26 cols), and Part-B reflections (20 cols) expand instantly whenever needed.
                                 </div>
                             </div>
 
                             <div class="bg-slate-50 rounded-xl p-2.5 border border-slate-200 text-[11px] text-slate-800 flex items-start gap-2">
                                 <span class="text-sm mt-0.5">🔒</span>
                                 <div>
-                                    <strong class="text-slate-900 font-bold">Row 4 Demo Guide &amp; Locked Metadata:</strong> Student IDs, names, and attendance totals calculate automatically. Row 4 provides a complete demo reference.
+                                    <strong class="text-slate-900 font-bold">Single Demo Guide (Row 4 Only):</strong> Only Row 4 has sample reference entries. Real students (Row 5+) have clean blank evaluation fields—no dummy text or dummy marks to erase!
                                 </div>
                             </div>
                         </div>
                     </div>
                     <a href="{{ route('hpc.teacher.template.download') }}"
                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow">
-                        📥 Download Simplified Pre-Filled Template (.xlsx)
+                        📥 Download Condensed Assessment Template (.xlsx)
                     </a>
                 </div>
 

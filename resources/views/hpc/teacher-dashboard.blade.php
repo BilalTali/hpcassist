@@ -182,17 +182,25 @@
                     <div>
                         <div class="flex items-center gap-2 mb-2">
                             <span class="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">1</span>
-                            <h3 class="text-sm font-bold text-slate-900">Download Assessment Template</h3>
+                            <h3 class="text-sm font-bold text-slate-900">Download Assessment Template (All 7 Pages)</h3>
                         </div>
-                        <p class="text-xs text-slate-500 mb-4">
-                            Generates an Excel workbook with your students' names and HPC Login IDs pre-filled in rows, along with dropdowns for attendance, goals, ambitions, and subject evaluations.
+                        <p class="text-xs text-slate-500 mb-3">
+                            Generates an Excel workbook covering all 65 evaluation fields across all 7 pages (Part-A1 through HPC Credit) with interactive dropdowns.
                         </p>
+                        <div class="bg-amber-50 rounded-xl p-3 border border-amber-200 text-[11px] text-amber-900 space-y-1 mb-3">
+                            <div class="font-bold flex items-center gap-1.5">
+                                <span>📖 Row 3: Pre-Filled Demo Student Guide</span>
+                            </div>
+                            <div class="text-amber-800">
+                                Row 3 contains a complete sample dummy student with every textbox, dropdown, activity, and mark pre-filled to show teachers exactly what and how to fill.
+                            </div>
+                        </div>
                         <div class="bg-indigo-50/60 rounded-xl p-3 border border-indigo-100 text-[11px] text-indigo-900 space-y-1 mb-4">
                             <div class="font-bold flex items-center gap-1.5">
-                                <span>📋 Included Columns:</span>
+                                <span>📋 Row 4+: Enrolled Students (Ready for Evaluation)</span>
                             </div>
                             <div class="text-indigo-700">
-                                Student Name, Login ID, Mother Tongue, Parent Relation, Parent Name, Attendance Days, Interests, Goals, Ambitions, Self &amp; Peer Ratings, Progress Levels.
+                                Pre-fills only APAAR ID, Login ID, Name, and Status. <strong>All evaluation fields (Cols E–BM) are left blank</strong> for the teacher to complete. Completed students are protected and untouched.
                             </div>
                         </div>
                     </div>
@@ -421,20 +429,19 @@
             preview.forEach(p => {
                 const tr = document.createElement('tr');
                 let badge = '';
-                if (p.is_completed) {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✓ HPC Completed (Protected)</span>';
-                } else if (p.errors && p.errors.length) {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">✕ Invalid</span>';
-                } else {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">● Ready to Update</span>';
-                }
-
                 let remarks = '';
-                if (p.is_completed) {
+
+                if (p.is_demo) {
+                    badge = '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">📖 Demo Guide (Skipped)</span>';
+                    remarks = '<span class="text-amber-700 font-semibold italic">Sample student guide demonstrating all 65 filled fields (skipped in run)</span>';
+                } else if (p.is_completed) {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">✓ HPC Completed (Protected)</span>';
                     remarks = '<span class="text-slate-400 italic">Will be left untouched during bulk run</span>';
                 } else if (p.errors && p.errors.length) {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">✕ Invalid</span>';
                     remarks = '<span class="text-rose-600 font-semibold">' + p.errors.join(', ') + '</span>';
                 } else {
+                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">● Ready to Update</span>';
                     remarks = '<span class="text-slate-600">Grade: ' + p.grade + ' | Mother Tongue: ' + p.mother_tongue + ' | Approach: ' + p.act_approach + '</span>';
                 }
 

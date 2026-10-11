@@ -116,7 +116,30 @@ class HpcTeacherRun extends Command
             $status  = trim($st['status'] ?? '');
             $apaarId = trim($st['apaar_id'] ?? '');
 
-            // RULE: If status is 'HPC Completed', leave untouched / skip!
+            // RULE 1: If demo sample guide row, skip immediately!
+            if (!empty($st['is_demo']) || ($st['login_id'] ?? '') === 'DEMO_SAMPLE' || stripos($name, 'SAMPLE') !== false || stripos($name, 'DEMO') !== false) {
+                $this->info("Skipping demo sample guide row: {$name}.");
+                $results[] = [
+                    'row'      => $st['row'] ?? ($idx + 1),
+                    'apaar_id' => $apaarId,
+                    'name'     => $name,
+                    'login_id' => $loginId,
+                    'status'   => 'skipped',
+                    'message'  => 'Demo Sample (Guide only - skipped)',
+                ];
+
+                $this->writeStatus([
+                    'started'    => true,
+                    'done'       => false,
+                    'login_done' => true,
+                    'total'      => $total,
+                    'processed'  => $idx + 1,
+                    'results'    => $results,
+                ], $resultsFile);
+                continue;
+            }
+
+            // RULE 2: If status is 'HPC Completed', leave untouched / skip!
             if (!empty($st['is_completed']) || strcasecmp($status, 'HPC Completed') === 0) {
                 $this->info("Skipping student [{$loginId}] {$name}: Already HPC Completed (left untouched).");
                 $results[] = [
@@ -280,10 +303,12 @@ class HpcTeacherRun extends Command
         }
 
         // ── 2. Fill Part-A1 ───────────────────────────────────────────────────
-        $motherTongue = $s['mother_tongue'] ?? 'Kashmiri';
-        $parentName   = $s['parent_name'] ?? 'Parent';
-        $workingDays  = $s['working_days'] ?? '22';
-        $presentDays  = $s['present_days'] ?? '20';
+        $motherTongue  = $s['mother_tongue'] ?? 'Kashmiri';
+        $parentName    = $s['parent_name'] ?? 'Parent';
+        $workingDays   = $s['working_days'] ?? '220';
+        $presentDays   = $s['present_days'] ?? '204';
+        $absenceReason = $s['absence_reason'] ?? 'Illness / fever';
+        $interest      = $s['interest'] ?? 'Reading';
 
         $client->executeScript("
             function setVal(el, val) {
@@ -303,16 +328,21 @@ class HpcTeacherRun extends Command
             if (pInp) setVal(pInp, " . json_encode($parentName) . ");
 
             // Attendance
-            document.querySelectorAll('table tbody tr:nth-child(1) td input').forEach(inp => setVal(inp, " . json_encode($workingDays) . "));
-            document.querySelectorAll('table tbody tr:nth-child(2) td input').forEach(inp => setVal(inp, " . json_encode($presentDays) . "));
+            document.querySelectorAll('table tbody tr:nth-child(1) td input').forEach(inp => setVal(inp, " . json_encode((string)$workingDays) . "));
+            document.querySelectorAll('table tbody tr:nth-child(2) td input').forEach(inp => setVal(inp, " . json_encode((string)$presentDays) . "));
 
-            // Absence frequency
+            // Absence frequency / reason
             const absInp = document.querySelector('input[placeholder=\"Write here\"]:last-of-type');
-            if (absInp) setVal(absInp, '2');
+            if (absInp) setVal(absInp, " . json_encode($absenceReason) . ");
 
             // Interests checkbox
-            const cb = document.querySelector('input[type=\"checkbox\"]:not(:checked)');
-            if (cb) cb.click();
+            const interestTarget = " . json_encode(strtolower($interest)) . ";
+            const cbs = Array.from(document.querySelectorAll('input[type=\"checkbox\"]'));
+            const matchingCb = cbs.find(c => {
+                const label = (c.closest('label')?.innerText || '').toLowerCase();
+                return label.includes(interestTarget);
+            }) || cbs[0];
+            if (matchingCb && !matchingCb.checked) matchingCb.click();
         ");
 
         usleep($delayMs * 1000);
@@ -321,8 +351,28 @@ class HpcTeacherRun extends Command
 
         // ── 3. Fill Part-A2 ───────────────────────────────────────────────────
         if (str_contains($client->getCurrentURL(), '/part-A2')) {
-            $goal = $s['goal'] ?? 'Improve in Science and Mathematics';
+            $a2Values = [
+                'live_with'       => $s['live_with'] ?? 'Parents and Grandparents',
+                'stay_at'         => $s['stay_at'] ?? 'Sugin, Budgam',
+                'free_time'       => $s['free_time'] ?? 'Reading books and cricket',
+                'do_well'         => $s['do_well'] ?? 'Solving puzzles and sketching',
+                'responsible'     => $s['responsible'] ?? 'Most times',
+                'could_improve'   => $s['could_improve'] ?? 'Time management in exams',
+                'care_about'      => $s['care_about'] ?? 'Helping classmates with notes',
+                'feel_proud'      => $s['feel_proud'] ?? 'When solving difficult math problems',
+                'academic_goal'   => $s['academic_goal'] ?? 'Excel in Science and Mathematics',
+                'goal_importance' => $s['goal_importance'] ?? 'Build strong conceptual foundations for engineering',
+                'goal_step1'      => $s['goal_step1'] ?? 'Daily formula revision and note making',
+                'goal_step2'      => $s['goal_step2'] ?? 'Weekly practice test solving',
+                'personal_goal'   => $s['personal_goal'] ?? 'Read one informative book every month',
+                'learnt_school'   => $s['learnt_school'] ?? 'Algebraic equations and botanical plant parts',
+                'learnt_outside'  => $s['learnt_outside'] ?? 'Kitchen gardening and basic cycling repair',
+                'teacher_help'    => $s['teacher_help'] ?? 'Guidance in laboratory practical experiments',
+                'teacher_know'    => $s['teacher_know'] ?? 'I learn best through hands-on practical activities',
+            ];
+
             $client->executeScript("
+                const a2 = " . json_encode($a2Values) . ";
                 const setNativeValue = (el, val) => {
                     const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
                     const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
@@ -336,33 +386,26 @@ class HpcTeacherRun extends Command
                 inputs.forEach((inp, idx) => {
                     if (inp.value && inp.value.trim().length > 1) return;
                     const container = inp.closest('.form-group, div');
-                    const lbl = (container?.querySelector('label, p, strong')?.innerText || inp.placeholder || '').trim();
+                    const lbl = (container?.querySelector('label, p, strong')?.innerText || inp.placeholder || '').toLowerCase();
 
-                    let val = 'Learning new skills and actively participating in class';
-                    if (lbl.includes('live with')) val = 'Family';
-                    else if (lbl.includes('stay at')) val = 'Sugin, Budgam';
-                    else if (lbl.includes('free time')) val = 'Reading books and drawing';
-                    else if (lbl.includes('very well')) val = 'Sketch and Cricket';
-                    else if (lbl.includes('responsible')) val = " . json_encode($s['responsible'] ?? 'Most times') . ";
-                    else if (lbl.includes('could do better')) val = 'Time management in exams';
-                    else if (lbl.includes('care about')) val = 'Helping peers with notes';
-                    else if (lbl.includes('feel proud')) val = 'When solving mathematics problems';
-                    else if (lbl.includes('Name')) val = " . json_encode($goal) . ";
-                    else if (lbl.includes('Age')) val = '12';
-                    else if (lbl.includes('Academic Goal') && inp.tagName === 'TEXTAREA') val = " . json_encode($goal) . ";
-                    else if (lbl.includes('Personal Goal') && inp.tagName === 'TEXTAREA') val = 'Read one informative book every month';
-                    else if (lbl.includes('Step 1')) val = 'Daily formula revision';
-                    else if (lbl.includes('Step 2')) val = 'Weekly mock test practice';
-                    else if (lbl.includes('important to me')) val = 'Helps achieve career ambition';
-                    else if (lbl.includes('Three new things I learnt at school')) {
-                        val = (idx % 2 === 0) ? 'Algebra concepts and equations' : 'Botanical parts of plants';
-                    } else if (lbl.includes('Three new things I learnt outside school')) {
-                        val = (idx % 2 === 0) ? 'Gardening techniques' : 'First aid basics';
-                    } else if (lbl.includes('help me with')) {
-                        val = 'Understanding complex numericals in Science';
-                    } else if (lbl.includes('teacher to know')) {
-                        val = 'I enjoy hands-on practical experiments';
-                    }
+                    let val = a2.academic_goal;
+                    if (lbl.includes('live with')) val = a2.live_with;
+                    else if (lbl.includes('stay at')) val = a2.stay_at;
+                    else if (lbl.includes('free time')) val = a2.free_time;
+                    else if (lbl.includes('very well') || lbl.includes('do well')) val = a2.do_well;
+                    else if (lbl.includes('responsible')) val = a2.responsible;
+                    else if (lbl.includes('could do better') || lbl.includes('improve')) val = a2.could_improve;
+                    else if (lbl.includes('care about')) val = a2.care_about;
+                    else if (lbl.includes('feel proud')) val = a2.feel_proud;
+                    else if (lbl.includes('personal goal')) val = a2.personal_goal;
+                    else if (lbl.includes('academic goal') || lbl.includes('goal')) val = a2.academic_goal;
+                    else if (lbl.includes('step 1')) val = a2.goal_step1;
+                    else if (lbl.includes('step 2')) val = a2.goal_step2;
+                    else if (lbl.includes('important to me') || lbl.includes('importance')) val = a2.goal_importance;
+                    else if (lbl.includes('learnt at school')) val = a2.learnt_school;
+                    else if (lbl.includes('learnt outside school')) val = a2.learnt_outside;
+                    else if (lbl.includes('help me with') || lbl.includes('help')) val = a2.teacher_help;
+                    else if (lbl.includes('teacher to know') || lbl.includes('teacher know')) val = a2.teacher_know;
 
                     setNativeValue(inp, val);
                 });
@@ -374,17 +417,49 @@ class HpcTeacherRun extends Command
 
         // ── 4. Fill Part-A3 ───────────────────────────────────────────────────
         if (str_contains($client->getCurrentURL(), '/part-A3')) {
-            $ambition = $s['ambition'] ?? 'Teacher';
+            $a3Values = [
+                'ambition'       => $s['ambition'] ?? 'Teacher',
+                'ambition_how'   => $s['ambition_how'] ?? 'Consistent daily study and active curiosity',
+                'skill'          => $s['skill'] ?? 'Critical Thinking',
+                'focus_subjects' => $s['focus_subjects'] ?? 'Mathematics and Physical Sciences',
+                'habits_build'   => $s['habits_build'] ?? 'Disciplined reading and punctual routine',
+                'mentor'         => $s['mentor'] ?? 'Bilal Ahmad Tali',
+            ];
+
             $client->executeScript("
-                document.querySelectorAll('input:not([type=\"hidden\"]):not([type=\"checkbox\"]):not([type=\"radio\"]), textarea').forEach(el => {
-                    if (!el.value) {
-                        el.value = " . json_encode($ambition) . ";
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
+                const a3 = " . json_encode($a3Values) . ";
+                const setNativeValue = (el, val) => {
+                    const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+                    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+                    if (setter) setter.call(el, val); else el.value = val;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                };
+
+                const inputs = Array.from(document.querySelectorAll('input:not([type=\"hidden\"]):not([type=\"checkbox\"]):not([type=\"radio\"]), textarea'));
+                inputs.forEach(inp => {
+                    if (inp.value && inp.value.trim().length > 1) return;
+                    const container = inp.closest('.form-group, div');
+                    const lbl = (container?.querySelector('label, p, strong')?.innerText || inp.placeholder || '').toLowerCase();
+
+                    let val = a3.ambition;
+                    if (lbl.includes('ambition') || lbl.includes('want to become')) val = a3.ambition;
+                    else if (lbl.includes('how') || lbl.includes('achieve')) val = a3.ambition_how;
+                    else if (lbl.includes('subject') || lbl.includes('focus')) val = a3.focus_subjects;
+                    else if (lbl.includes('habit')) val = a3.habits_build;
+                    else if (lbl.includes('mentor') || lbl.includes('role model')) val = a3.mentor;
+
+                    setNativeValue(inp, val);
                 });
-                // Check 5 skill checkboxes if not checked
+
+                // Check skill checkboxes matching skill name or first 5
+                const targetSkill = a3.skill.toLowerCase();
                 const skillCbs = Array.from(document.querySelectorAll('input[type=\"checkbox\"]'));
+                const matchedCb = skillCbs.find(cb => {
+                    const label = (cb.closest('label')?.innerText || '').toLowerCase();
+                    return label.includes(targetSkill);
+                });
+                if (matchedCb && !matchedCb.checked) matchedCb.click();
                 skillCbs.slice(0, 5).forEach(cb => { if (!cb.checked) cb.click(); });
             ");
             usleep($delayMs * 1000);
@@ -394,14 +469,21 @@ class HpcTeacherRun extends Command
 
         // ── 5. Fill Part-A4 (Smileys, Multi-selects & Textareas) ───────────────
         if (str_contains($client->getCurrentURL(), '/part-A4')) {
+            $parentFeedback = $s['parent_feedback'] ?? 'Regular evening study observed; keen interest in science activities';
+            $pMotivation    = $s['p_motivation'] ?? 'Yes';
+
             $client->executeScript("
-                // 1. Select Yes smiley for all 4 'Understanding of my Child' questions
+                const pFeedback = " . json_encode($parentFeedback) . ";
+                const targetRating = " . json_encode($pMotivation) . ";
+
+                // 1. Select smiley for 'Understanding of my Child' questions
                 const table = document.querySelector('table');
                 if (table) {
                     const rows = Array.from(table.querySelectorAll('tr')).slice(2);
                     rows.forEach(r => {
-                        const yesLi = Array.from(r.querySelectorAll('li')).find(li => (li.innerText || '').trim() === 'Yes');
-                        if (yesLi) yesLi.click();
+                        const targetLi = Array.from(r.querySelectorAll('li')).find(li => (li.innerText || '').trim().toLowerCase() === targetRating.toLowerCase())
+                                      || Array.from(r.querySelectorAll('li')).find(li => (li.innerText || '').trim() === 'Yes');
+                        if (targetLi) targetLi.click();
                     });
                 }
 
@@ -417,8 +499,7 @@ class HpcTeacherRun extends Command
                 document.querySelectorAll('textarea').forEach(ta => {
                     const proto = window.HTMLTextAreaElement.prototype;
                     const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-                    const val = 'Regular evening study routine and encouragement for holistic activities.';
-                    if (setter) setter.call(ta, val); else ta.value = val;
+                    if (setter) setter.call(ta, pFeedback); else ta.value = pFeedback;
                     ta.dispatchEvent(new Event('input', { bubbles: true }));
                     ta.dispatchEvent(new Event('change', { bubbles: true }));
                 });
@@ -430,6 +511,10 @@ class HpcTeacherRun extends Command
 
         // ── 6. Fill Part-B (All 11 Domain Activities) ───────────────────────
         if (str_contains($client->getCurrentURL(), '/part-B')) {
+            $actTitle    = $s['act_title'] ?? '';
+            $actDesc     = $s['act_desc'] ?? 'Comprehensive practical project and engagement.';
+            $actLevel    = strtolower($s['act_level'] ?? 'proficient');
+
             $domainsConfig = [
                 ['code' => 'SL1', 'id' => 269, 'name' => 'Language 1 (R1)', 'gl' => 'L1CG1', 'cpt' => 'L1C1.1'],
                 ['code' => 'SL2', 'id' => 270, 'name' => 'Language 2 (R2)', 'gl' => 'L2CG1', 'cpt' => 'L2C1.1'],
@@ -446,6 +531,8 @@ class HpcTeacherRun extends Command
 
             foreach ($domainsConfig as $dom) {
                 $domName = $dom['name'];
+                $currTitle = $actTitle ? "{$domName} - {$actTitle}" : "{$domName} Practical Project";
+
                 $client->executeScript("
                     const addBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Add Activity'));
                     if (addBtn) addBtn.click();
@@ -465,7 +552,7 @@ class HpcTeacherRun extends Command
                     const nameInp = document.querySelector('.acivity-name-updates input');
                     if (nameInp) {
                         const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-                        if (setter) setter.call(nameInp, " . json_encode($domName . ' Practical Project') . ");
+                        if (setter) setter.call(nameInp, " . json_encode($currTitle) . ");
                         nameInp.dispatchEvent(new Event('input', { bubbles: true }));
                         nameInp.dispatchEvent(new Event('change', { bubbles: true }));
                     }
@@ -500,6 +587,8 @@ class HpcTeacherRun extends Command
 
                 // Dispatch complete valid state
                 $client->executeScript("
+                    const actLevelVal = " . json_encode($actLevel) . ";
+                    const actDescVal = " . json_encode($actDesc) . ";
                     const btn = document.querySelector('.hpc-finish-activity-btn');
                     let f = btn ? btn[Object.keys(btn).find(k => k.startsWith('__reactFiber'))] : null;
                     while (f && f.type?.name !== 'S') f = f.return;
@@ -513,10 +602,10 @@ class HpcTeacherRun extends Command
                                 any_other: ['', '', ''],
                                 ast: [1, 2, 3],
                                 bar: [9],
-                                awr: ['Demonstrates good awareness', 'Demonstrates strong awareness', 'Demonstrates exceptional awareness', 'proficient'],
-                                sen: ['Shows sensitivity', 'Shows great sensitivity', 'Shows excellent sensitivity', 'proficient'],
-                                cre: ['Displays creative thinking', 'Displays innovative creativity', 'Displays high creativity', 'proficient'],
-                                desc: ['Comprehensive practical project and engagement.', 'Achieved all learning objectives successfully.'],
+                                awr: ['Demonstrates good awareness', 'Demonstrates strong awareness', 'Demonstrates exceptional awareness', actLevelVal],
+                                sen: ['Shows sensitivity', 'Shows great sensitivity', 'Shows excellent sensitivity', actLevelVal],
+                                cre: ['Displays creative thinking', 'Displays innovative creativity', 'Displays high creativity', actLevelVal],
+                                desc: [actDescVal, 'Achieved all learning objectives successfully.'],
                                 ml: ['Learned fundamental principles.', 'Developed practical confidence.', 'Collaborated actively.', 'Summary.'],
                                 slr: ['Student actively engaged throughout.', 'Exhibited clear understanding.', 'Completed assignments joyfully.'],
                                 spt: ['Provide further challenging exercises.', 'Continue encouragement.'],
@@ -595,8 +684,11 @@ class HpcTeacherRun extends Command
                 $marksList[] = (string) ($m[$k]['obt'] ?? '42');
             }
 
+            $remarks = $s['remarks'] ?? 'Consistent performer with excellent curiosity and strong analytical reasoning';
+
             $client->executeScript("
                 const marks = " . json_encode($marksList) . ";
+                const teacherRemarks = " . json_encode($remarks) . ";
                 const table = document.querySelectorAll('table')[1] || document.querySelector('table');
                 const marksInputs = Array.from(table.querySelectorAll('input[type=\"text\"], input[type=\"number\"]'));
                 marksInputs.forEach((inp, i) => {
@@ -612,6 +704,15 @@ class HpcTeacherRun extends Command
                 if (decCb && !decCb.checked) {
                     decCb.click();
                     decCb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
+                // Remarks if textarea exists
+                const remTa = document.querySelector('textarea');
+                if (remTa) {
+                    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+                    if (setter) setter.call(remTa, teacherRemarks); else remTa.value = teacherRemarks;
+                    remTa.dispatchEvent(new Event('input', { bubbles: true }));
+                    remTa.dispatchEvent(new Event('change', { bubbles: true }));
                 }
 
                 // Click Mark as Complete

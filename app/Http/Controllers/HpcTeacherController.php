@@ -92,12 +92,12 @@ class HpcTeacherController extends Controller
             ['Rule #', 'Section / Page', 'Field Type', 'Rule Description', 'Permitted Values / Dragdown Options'],
             ['1', 'Student Metadata', 'Locked String', 'APAAR ID, HPC Login ID, Student Name, and Status. HPC Login ID is the unique identifier on the PARAKH portal.', 'Pre-filled from school portal roster.'],
             ['2', 'Status Protection', 'System Rule', 'Students with status "HPC Completed" will be protected and left untouched during update runs.', 'HPC Completed (skipped), HPC Pending / In Progress (updated)'],
-            ['3', 'Row 3 Guide Row', 'Guide Reference', 'Row 3 (DEMO_SAMPLE) provides a complete, realistic model of teacher evaluation for guidance. Do not delete or alter.', 'All 146 fields pre-filled for visual demonstration.'],
+            ['3', 'Row 3 Guide Row', 'Guide Reference', 'Row 3 (DEMO_SAMPLE) provides a complete, realistic model of teacher evaluation for guidance. Do not delete or alter.', 'All 147 fields pre-filled for visual demonstration.'],
             ['4', 'Part-A(1) Monthly Attendance', 'Integer & Formulas', 'Working Days and Present Days are arranged neck-to-neck for each month (Apr to Mar). Total Working, Total Present, and Attendance % calculate automatically via Excel formulas.', 'Monthly Working (0-31), Monthly Present (0-Working). Present <= Working.'],
             ['5', 'Part-A(2) All About Me', 'Text & Dragdown', 'Living arrangement, leisure activities, self-responsibility, improvement areas, friend info, academic & personal goals with rationale & steps, learnings in/outside school.', 'Responsibility: all the time, most times, sometimes.'],
             ['6', 'Part-A(3) Ambition Card', 'Text & Dragdown', 'Student career ambition, path to achieve, 5 key skills, focus subjects, habits to cultivate, teacher mentor name & guidance, emotional reflections.', 'Mentor guidance and structured skill acquisition.'],
             ['7', 'Part-A(4) Parent Partnership', 'Checkbox (Yes/No) & Radio', 'Home resources (individual Yes/No columns), Understanding of child Q1-Q4 (Radio smileys: Yes, Sometimes, No, Not Sure), Support needs (individual Yes/No columns), and Home support plan text.', 'Checkboxes: Yes / No; Radio: Yes, Sometimes, No, Not Sure; Specify text.'],
-            ['8', 'Part-B Holistic Activities', 'Dragdown & Text', 'Pedagogical approach, activity title, description, rubric ratings (Awareness, Sensitivity, Creativity), student self-reflection, peer review, teacher strength/barrier areas & support plan.', 'Approach: Art-Integrated, Sports-Integrated...; Rubrics: Beginner, Proficient, Advanced.'],
+            ['8', 'Part-B Holistic Activities', 'Dragdown & Text', 'Choose activity subject/domain (Science, Maths, Languages, Social Sci, Art, PE, Skill, etc.), pedagogical approach, activity title, description, rubric ratings (Awareness, Sensitivity, Creativity), student reflection, peer review, teacher strength/barrier areas & support plan.', 'Subject: Science, Maths, Languages...; Approach: Art-Integrated...; Rubrics: Beginner, Proficient, Advanced.'],
             ['9', 'Part-C Curricular Assessment', 'Dragdown (Level)', 'Year-end formative and summative performance levels across curricular domains.', 'Beginner, Proficient, Advanced'],
             ['10', 'HPC Credit (Marks Grid)', 'Integer (0-50)', 'Summative Assessment marks for each of the 8 curricular subjects.', 'Max Marks (default 50), Marks Obtained (0 to Max Marks).'],
             ['11', 'Declaration & Remarks', 'Dragdown & Text', 'Teacher declaration certifying entered evaluation and holistic summary observation.', 'Declaration: Yes, No; Holistic remarks.'],
@@ -752,8 +752,9 @@ class HpcTeacherController extends Controller
             ['key' => 'parent_feedback',        'label' => 'Based on my discussion with teacher, I will support my child at home by (A4) *', 'width' => 48, 'type' => 'string', 'note' => 'Parent home support plan (max 700 chars)'],
 
             // ── Part-B Holistic Activities ─────────────────────────────────────────────
+            ['key' => 'act_subject',            'label' => 'Activity Subject / Domain (B) *',        'width' => 32, 'type' => 'list',    'options' => '"Science,Mathematics,Language 1 (R1),Language 2 (R2),Language 3 (R3),Social Science,Art Education,Physical Education & Well Being,Skill Education,Other Learning Activities,Bagless days for vocational Experience"', 'note' => 'Select Curricular Subject / Domain for this activity'],
             ['key' => 'act_approach',           'label' => 'Activity Approach (B) *',                'width' => 24, 'type' => 'list',    'options' => '"Art-Integrated,Sports-Integrated,Toy-Based,Technology-Integrated,Experiential Learning,Any Other"', 'note' => 'Pedagogical approach from Doc 29'],
-            ['key' => 'act_title',              'label' => 'Activity Title (B)',                     'width' => 28, 'type' => 'string',  'note' => 'e.g. Solar System 3D Model & Daily Life Geometry'],
+            ['key' => 'act_title',              'label' => 'Activity Title (B) *',                   'width' => 30, 'type' => 'string',  'note' => 'e.g. Solar System 3D Model & Daily Life Geometry'],
             ['key' => 'act_desc',               'label' => 'Activity Description (B)',                'width' => 34, 'type' => 'string',  'note' => 'e.g. Created scale planetary orbits and verified ratios'],
             ['key' => 'act_rubric_awareness',   'label' => 'Rubric: Awareness (B) *',                'width' => 22, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Doc 29 rubric level'],
             ['key' => 'act_rubric_sensitivity', 'label' => 'Rubric: Sensitivity (B) *',              'width' => 22, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Doc 29 rubric level'],
@@ -913,7 +914,8 @@ class HpcTeacherController extends Controller
             '',    // Any Other Specify
             // 4. Support Plan at Home
             'Provide quiet study space, supervise 1.5 hours of evening revision, monitor screen time, and discuss daily learnings',
-            // Part-B
+            // Part-B (Subject, Approach, Title, Rubrics, Reflection, Feedback)
+            'Science',
             'Art-Integrated',
             'Solar System 3D Model & Daily Life Geometry',
             'Constructed scale models of planetary orbits, computed relative ratios, and demonstrated to class',

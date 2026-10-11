@@ -619,9 +619,11 @@ class HpcTeacherRun extends Command
             sleep(3);
         }
 
-        // ── 6. Fill Part-B (All 11 Domain Activities) ───────────────────────
+        // ── 6. Fill Part-B (Holistic Activity Evaluation) ───────────────────
         if (str_contains($client->getCurrentURL(), '/part-B')) {
-            $actTitle       = $s['act_title'] ?? '';
+            $actSubject     = $s['act_subject'] ?? 'Science';
+            $actTitle       = $s['act_title'] ?? ($actSubject . ' Project');
+            $actApproach    = $s['act_approach'] ?? 'Art-Integrated';
             $actDesc        = $s['act_desc'] ?? 'Constructed scale models of planetary orbits, computed relative ratios, and demonstrated to class';
             $actLevel       = strtolower($s['act_level'] ?? 'proficient');
             $actAwr         = strtolower($s['act_rubric_awareness'] ?? $actLevel);
@@ -633,6 +635,17 @@ class HpcTeacherRun extends Command
             $actPeerName    = $s['act_peer_name'] ?? 'Ayaan Ahmad';
             $actPeerFeedback= $s['act_peer_feedback'] ?? 'Very supportive and collaborative teammate; explained difficult astronomical concepts clearly';
             $actSupportPlan = $s['act_support_plan'] ?? 'Encourage participation in inter-school science competitions, provide advanced telescope observation sessions, and recommend for student mentorship roles';
+
+            // Select subject-matching activity if activities already exist on student card
+            $client->executeScript("
+                const sSub = " . json_encode(strtolower($actSubject)) . ";
+                const actButtons = Array.from(document.querySelectorAll('.hpc-forms button')).filter(b => /^\d+\s*\n/.test(b.innerText.trim()));
+                if (actButtons.length > 0) {
+                    const target = actButtons.find(b => b.innerText.toLowerCase().includes(sSub.slice(0, 5))) || actButtons[0];
+                    if (target) target.click();
+                }
+            ");
+            usleep(500000);
 
             $domainsConfig = [
                 ['code' => 'SL1', 'id' => 269, 'name' => 'Language 1 (R1)', 'gl' => 'L1CG1', 'cpt' => 'L1C1.1'],
@@ -647,6 +660,15 @@ class HpcTeacherRun extends Command
                 ['code' => 'SLA', 'id' => 278, 'name' => 'Other Learning Activities (Participation in Cultural, Sports, Reading and other activities)', 'gl' => 'OLACG1', 'cpt' => 'OLA1.1'],
                 ['code' => 'SVE', 'id' => 279, 'name' => 'Bagless days for vocational Experience', 'gl' => 'VCG1', 'cpt' => 'BVE1.1'],
             ];
+
+            // Reorder domains to put chosen subject first
+            usort($domainsConfig, function($a, $b) use ($actSubject) {
+                $matchA = stripos($a['name'], substr($actSubject, 0, 5)) !== false;
+                $matchB = stripos($b['name'], substr($actSubject, 0, 5)) !== false;
+                if ($matchA && !$matchB) return -1;
+                if (!$matchA && $matchB) return 1;
+                return 0;
+            });
 
             foreach ($domainsConfig as $dom) {
                 $domName = $dom['name'];

@@ -187,10 +187,17 @@ class HpcTeacherController extends Controller
             ['key' => 'peer_rating',     'label' => 'Peer Review Rating (A4) *',     'width' => 22, 'type' => 'list',    'options' => '"All the time,Most times,Sometimes"', 'note' => 'Classroom collaboration'],
 
             // Part-B Holistic Activities
-            ['key' => 'act_approach',    'label' => 'Activity Approach (B) *',       'width' => 24, 'type' => 'list',    'options' => '"Art-Integrated,Sports-Integrated,Toy-Based,Technology-Integrated,Experiential Learning,Any Other"', 'note' => 'Pedagogical approach'],
-            ['key' => 'act_title',       'label' => 'Activity Title (B)',            'width' => 28, 'type' => 'string',  'note' => 'e.g. Solar System 3D Model & Daily Life Geometry'],
-            ['key' => 'act_desc',        'label' => 'Activity Description (B)',       'width' => 32, 'type' => 'string',  'note' => 'e.g. Creating scale planetary models'],
-            ['key' => 'act_level',       'label' => 'Activity Level (B) *',          'width' => 20, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Holistic activity level'],
+            ['key' => 'act_approach',      'label' => 'Activity Approach (B) *',       'width' => 24, 'type' => 'list',    'options' => '"Art-Integrated,Sports-Integrated,Toy-Based,Technology-Integrated,Experiential Learning,Any Other"', 'note' => 'Pedagogical approach'],
+            ['key' => 'act_title',         'label' => 'Activity Title (B)',            'width' => 28, 'type' => 'string',  'note' => 'e.g. Solar System 3D Model & Daily Life Geometry'],
+            ['key' => 'act_desc',          'label' => 'Activity Description (B)',       'width' => 32, 'type' => 'string',  'note' => 'e.g. Creating scale planetary models'],
+            ['key' => 'act_level',         'label' => 'Activity Level (B) *',          'width' => 20, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Holistic activity level'],
+            ['key' => 'act_learnt',        'label' => 'Student Learnt (B)',            'width' => 32, 'type' => 'string',  'note' => 'Student self-reflection on learnings'],
+            ['key' => 'act_interesting',   'label' => 'Most Interesting Aspect (B)',   'width' => 28, 'type' => 'string',  'note' => 'What student enjoyed most'],
+            ['key' => 'act_practice',      'label' => 'Need Help / Practice (B)',      'width' => 28, 'type' => 'string',  'note' => 'Areas needing extra practice'],
+            ['key' => 'act_peer_name',     'label' => 'Peer Reviewer Name (B)',        'width' => 22, 'type' => 'string',  'note' => 'Peer student name'],
+            ['key' => 'act_peer_feedback', 'label' => 'Peer Review Feedback (B)',      'width' => 32, 'type' => 'string',  'note' => 'Peer observation / remarks'],
+            ['key' => 'act_strength',      'label' => 'Teacher Strength Area (B) *',   'width' => 24, 'type' => 'list',    'options' => '"Critical Thinking,Problem Solving,Collaboration,Communication,Creativity,Persistence,Active Curiosity"', 'note' => 'Dominant observed strength'],
+            ['key' => 'act_support_plan',  'label' => 'Teacher Support Plan (B)',      'width' => 32, 'type' => 'string',  'note' => 'How teacher will support student'],
 
             // Part-C Curricular Domains
             ['key' => 'c_formative',     'label' => 'Formative Level (C) *',         'width' => 20, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Curricular progress'],
@@ -290,11 +297,18 @@ class HpcTeacherController extends Controller
             'Yes',
             'Regular evening study observed; keen interest in science activities',
             'Most times',
-            // Part-B
+            // Part-B Holistic Activities
             'Art-Integrated',
             'Solar System 3D Model & Daily Life Geometry',
             'Creating scale planetary models and identifying geometric shapes in nature',
             'Proficient',
+            'Learned fundamental scientific principles, geometric symmetry, and practical modeling',
+            'Collaborating with peers on 3D planetary models and interactive presentations',
+            'Time management and drawing complex scientific diagrams',
+            'Ayaan',
+            'Cooperative and helpful team member; explains difficult concepts clearly',
+            'Critical Thinking',
+            'Provide advanced problem-solving challenges and continuous lab exploration',
             // Part-C
             'Proficient',
             'Proficient',
@@ -491,32 +505,39 @@ class HpcTeacherController extends Controller
                 $actTitle       = trim((string) $ws->getCell("AQ{$r}")->getValue());
                 $actDesc        = trim((string) $ws->getCell("AR{$r}")->getValue());
                 $actLevel       = trim((string) $ws->getCell("AS{$r}")->getValue());
+                $actLearnt      = trim((string) $ws->getCell("AT{$r}")->getValue());
+                $actInteresting = trim((string) $ws->getCell("AU{$r}")->getValue());
+                $actPractice    = trim((string) $ws->getCell("AV{$r}")->getValue());
+                $actPeerName    = trim((string) $ws->getCell("AW{$r}")->getValue());
+                $actPeerFeedback= trim((string) $ws->getCell("AX{$r}")->getValue());
+                $actStrength    = trim((string) $ws->getCell("AY{$r}")->getValue());
+                $actSupportPlan = trim((string) $ws->getCell("AZ{$r}")->getValue());
 
                 // Part-C Curricular Domains
-                $cFormative     = trim((string) $ws->getCell("AT{$r}")->getValue());
-                $cSummative     = trim((string) $ws->getCell("AU{$r}")->getValue());
+                $cFormative     = trim((string) $ws->getCell("BA{$r}")->getValue());
+                $cSummative     = trim((string) $ws->getCell("BB{$r}")->getValue());
 
                 // HPC Credit (Marks)
-                $l1Max          = trim((string) $ws->getCell("AV{$r}")->getValue());
-                $l1Obt          = trim((string) $ws->getCell("AW{$r}")->getValue());
-                $l2Max          = trim((string) $ws->getCell("AX{$r}")->getValue());
-                $l2Obt          = trim((string) $ws->getCell("AY{$r}")->getValue());
-                $l3Max          = trim((string) $ws->getCell("AZ{$r}")->getValue());
-                $l3Obt          = trim((string) $ws->getCell("BA{$r}")->getValue());
-                $mMax           = trim((string) $ws->getCell("BB{$r}")->getValue());
-                $mObt           = trim((string) $ws->getCell("BC{$r}")->getValue());
-                $sciMax         = trim((string) $ws->getCell("BD{$r}")->getValue());
-                $sciObt         = trim((string) $ws->getCell("BE{$r}")->getValue());
-                $socMax         = trim((string) $ws->getCell("BF{$r}")->getValue());
-                $socObt         = trim((string) $ws->getCell("BG{$r}")->getValue());
-                $artMax         = trim((string) $ws->getCell("BH{$r}")->getValue());
-                $artObt         = trim((string) $ws->getCell("BI{$r}")->getValue());
-                $peMax          = trim((string) $ws->getCell("BJ{$r}")->getValue());
-                $peObt          = trim((string) $ws->getCell("BK{$r}")->getValue());
+                $l1Max          = trim((string) $ws->getCell("BC{$r}")->getValue());
+                $l1Obt          = trim((string) $ws->getCell("BD{$r}")->getValue());
+                $l2Max          = trim((string) $ws->getCell("BE{$r}")->getValue());
+                $l2Obt          = trim((string) $ws->getCell("BF{$r}")->getValue());
+                $l3Max          = trim((string) $ws->getCell("BG{$r}")->getValue());
+                $l3Obt          = trim((string) $ws->getCell("BH{$r}")->getValue());
+                $mMax           = trim((string) $ws->getCell("BI{$r}")->getValue());
+                $mObt           = trim((string) $ws->getCell("BJ{$r}")->getValue());
+                $sciMax         = trim((string) $ws->getCell("BK{$r}")->getValue());
+                $sciObt         = trim((string) $ws->getCell("BL{$r}")->getValue());
+                $socMax         = trim((string) $ws->getCell("BM{$r}")->getValue());
+                $socObt         = trim((string) $ws->getCell("BN{$r}")->getValue());
+                $artMax         = trim((string) $ws->getCell("BO{$r}")->getValue());
+                $artObt         = trim((string) $ws->getCell("BP{$r}")->getValue());
+                $peMax          = trim((string) $ws->getCell("BQ{$r}")->getValue());
+                $peObt          = trim((string) $ws->getCell("BR{$r}")->getValue());
 
                 // HPC Credit (Declaration & Remarks)
-                $declaration    = trim((string) $ws->getCell("BL{$r}")->getValue());
-                $remarks        = trim((string) $ws->getCell("BM{$r}")->getValue());
+                $declaration    = trim((string) $ws->getCell("BS{$r}")->getValue());
+                $remarks        = trim((string) $ws->getCell("BT{$r}")->getValue());
 
                 if ($name === '' && $loginId === '') continue;
 
@@ -578,6 +599,13 @@ class HpcTeacherController extends Controller
                     'act_title'       => $actTitle ?: 'Holistic Concept Project',
                     'act_desc'        => $actDesc ?: 'Interactive domain model and conceptual learning exercise',
                     'act_level'       => $actLevel ?: 'Proficient',
+                    'act_learnt'      => $actLearnt ?: 'Learned fundamental concepts and practical application',
+                    'act_interesting' => $actInteresting ?: 'Collaborative experiments and model making',
+                    'act_practice'    => $actPractice ?: 'Further numerical practice and time management',
+                    'act_peer_name'   => $actPeerName ?: 'Ayaan',
+                    'act_peer_feedback'=> $actPeerFeedback ?: 'Cooperative, helpful, and explains concepts clearly',
+                    'act_strength'    => $actStrength ?: 'Critical Thinking',
+                    'act_support_plan'=> $actSupportPlan ?: 'Provide challenging tasks and continuous encouragement',
                     'c_formative'     => $cFormative ?: 'Proficient',
                     'c_summative'     => $cSummative ?: 'Proficient',
                     'marks' => [

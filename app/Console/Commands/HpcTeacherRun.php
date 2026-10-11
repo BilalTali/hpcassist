@@ -511,9 +511,15 @@ class HpcTeacherRun extends Command
 
         // ── 6. Fill Part-B (All 11 Domain Activities) ───────────────────────
         if (str_contains($client->getCurrentURL(), '/part-B')) {
-            $actTitle    = $s['act_title'] ?? '';
-            $actDesc     = $s['act_desc'] ?? 'Comprehensive practical project and engagement.';
-            $actLevel    = strtolower($s['act_level'] ?? 'proficient');
+            $actTitle       = $s['act_title'] ?? '';
+            $actDesc        = $s['act_desc'] ?? 'Comprehensive practical project and engagement.';
+            $actLevel       = strtolower($s['act_level'] ?? 'proficient');
+            $actLearnt      = $s['act_learnt'] ?? 'Learned fundamental concepts and practical application';
+            $actInteresting = $s['act_interesting'] ?? 'Collaborative experiments and model making';
+            $actPractice    = $s['act_practice'] ?? 'Further numerical practice and time management';
+            $actPeerName    = $s['act_peer_name'] ?? 'Ayaan';
+            $actPeerFeedback= $s['act_peer_feedback'] ?? 'Cooperative, helpful, and explains concepts clearly';
+            $actSupportPlan = $s['act_support_plan'] ?? 'Provide challenging tasks and continuous encouragement';
 
             $domainsConfig = [
                 ['code' => 'SL1', 'id' => 269, 'name' => 'Language 1 (R1)', 'gl' => 'L1CG1', 'cpt' => 'L1C1.1'],
@@ -589,6 +595,13 @@ class HpcTeacherRun extends Command
                 $client->executeScript("
                     const actLevelVal = " . json_encode($actLevel) . ";
                     const actDescVal = " . json_encode($actDesc) . ";
+                    const actLearntVal = " . json_encode($actLearnt) . ";
+                    const actInterestingVal = " . json_encode($actInteresting) . ";
+                    const actPracticeVal = " . json_encode($actPractice) . ";
+                    const actPeerNameVal = " . json_encode($actPeerName) . ";
+                    const actPeerFeedbackVal = " . json_encode($actPeerFeedback) . ";
+                    const actSupportPlanVal = " . json_encode($actSupportPlan) . ";
+
                     const btn = document.querySelector('.hpc-finish-activity-btn');
                     let f = btn ? btn[Object.keys(btn).find(k => k.startsWith('__reactFiber'))] : null;
                     while (f && f.type?.name !== 'S') f = f.return;
@@ -606,9 +619,9 @@ class HpcTeacherRun extends Command
                                 sen: ['Shows sensitivity', 'Shows great sensitivity', 'Shows excellent sensitivity', actLevelVal],
                                 cre: ['Displays creative thinking', 'Displays innovative creativity', 'Displays high creativity', actLevelVal],
                                 desc: [actDescVal, 'Achieved all learning objectives successfully.'],
-                                ml: ['Learned fundamental principles.', 'Developed practical confidence.', 'Collaborated actively.', 'Summary.'],
-                                slr: ['Student actively engaged throughout.', 'Exhibited clear understanding.', 'Completed assignments joyfully.'],
-                                spt: ['Provide further challenging exercises.', 'Continue encouragement.'],
+                                ml: [actLearntVal, 'Developed practical confidence.', 'Collaborated actively.', actInterestingVal],
+                                slr: ['Student actively engaged throughout.', actPracticeVal, 'Completed assignments joyfully.'],
+                                spt: [actSupportPlanVal, 'Continue encouragement.'],
                                 tf: ['2', '2', '2'],
                                 mpa: [0, 1],
                                 mps: [0, 1],
@@ -616,7 +629,7 @@ class HpcTeacherRun extends Command
                                 ppa: [0],
                                 pps: [0],
                                 ppc: [0],
-                                pf: ['Ayaan', '8', 'A', 'Great peer collaborator', 'Cooperative and helpful', 'Positive']
+                                pf: [actPeerNameVal, '8', 'A', actPeerFeedbackVal, 'Cooperative and helpful', 'Positive']
                             };
                             cur.queue.dispatch(next);
                             break;

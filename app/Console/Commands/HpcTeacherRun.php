@@ -389,76 +389,53 @@ class HpcTeacherRun extends Command
 
         // ── 3. Fill Part-A2 ───────────────────────────────────────────────────
         if (str_contains($client->getCurrentURL(), '/part-A2')) {
-            $a2Values = [
-                'live_with'       => $s['live_with'] ?? 'Parents and Grandparents',
-                'stay_at'         => $s['stay_at'] ?? 'Sugin, Budgam',
-                'free_time'       => $s['free_time'] ?? 'Reading storybooks, science experiments & playing cricket',
-                'do_well'         => $s['do_well'] ?? 'Mental arithmetic, pencil sketching and recitation',
-                'responsible'     => $s['responsible'] ?? 'most times',
-                'do_better'       => $s['do_better'] ?? ($s['could_improve'] ?? 'Public speaking and cursive handwriting speed'),
-                'care_others'     => $s['care_others'] ?? ($s['care_about'] ?? 'Sharing study notes and helping classmates with difficulties'),
-                'feel_proud'      => $s['feel_proud'] ?? 'Solving challenging geometry problems and helping peers',
-                'friend_name'     => $s['friend_name'] ?? 'Ayaan Ahmad',
-                'friend_age'      => $s['friend_age'] ?? '12',
-                'acad_goal'       => $s['acad_goal'] ?? ($s['academic_goal'] ?? 'Score above 90% in Mathematics and Science'),
-                'acad_goal_why'   => $s['acad_goal_why'] ?? ($s['goal_importance'] ?? 'Builds solid foundation for pursuing higher studies in Engineering'),
-                'acad_step1'      => $s['acad_step1'] ?? ($s['goal_step1'] ?? 'Dedicate 45 minutes daily to numerical problem solving and formula revision'),
-                'acad_step2'      => $s['acad_step2'] ?? ($s['goal_step2'] ?? 'Clarify doubts with subject teachers immediately and practice weekly mock tests'),
-                'pers_goal'       => $s['pers_goal'] ?? ($s['personal_goal'] ?? 'Develop regular physical exercise and disciplined reading habits'),
-                'pers_goal_why'   => $s['pers_goal_why'] ?? 'Keeps mind alert, improves stamina, and enhances daily concentration',
-                'pers_step1'      => $s['pers_step1'] ?? 'Wake up at 6:00 AM every morning and do 30 minutes of yoga and jogging',
-                'pers_step2'      => $s['pers_step2'] ?? 'Read at least 15 pages of non-academic literature before bedtime',
-                'sch_learn1'      => $s['sch_learn1'] ?? ($s['learnt_school'] ?? 'Laws of reflection and refraction in science laboratory'),
-                'sch_learn2'      => $s['sch_learn2'] ?? 'Formulating and solving linear equations in single variable',
-                'sch_learn3'      => $s['sch_learn3'] ?? 'Constitutional preamble and fundamental rights in Social Science',
-                'out_learn1'      => $s['out_learn1'] ?? ($s['learnt_outside'] ?? 'Organic kitchen gardening, composting, and soil preparation'),
-                'out_learn2'      => $s['out_learn2'] ?? 'Bicycle maintenance, tire inflation, and chain lubrication',
-                'out_learn3'      => $s['out_learn3'] ?? 'Basic household budgeting and grocery calculation',
-                'help_with'       => $s['help_with'] ?? ($s['teacher_help'] ?? 'Hands-on science experiments and advanced mathematical puzzles'),
-                'teacher_know'    => $s['teacher_know'] ?? 'I am enthusiastic about collaborative group projects and active discussions',
+            $orderedA2 = [
+                1  => $s['live_with']     ?: 'Family',
+                2  => $s['stay_at']       ?: 'Sugin, Budgam',
+                3  => $s['free_time']     ?: 'Reading books and drawing',
+                4  => $s['do_well']       ?: 'Learning new skills and actively participating',
+                5  => $s['responsible']   ?: 'most times',
+                6  => $s['do_better']     ?: ($s['could_improve'] ?? 'Time management in exams'),
+                7  => $s['care_others']   ?: ($s['care_about'] ?? 'Helping peers with notes'),
+                8  => $s['feel_proud']    ?: 'Solving challenging problems independently',
+                9  => $s['student_name']   ?: 'Ayaan Ahmad',
+                10 => $s['student_age']    ?: '12',
+                11 => $s['acad_goal']     ?: ($s['academic_goal'] ?? 'Score above 90% in Mathematics and Science'),
+                12 => $s['acad_goal_why'] ?: ($s['goal_importance'] ?? 'Builds solid foundation for pursuing higher studies in Engineering'),
+                13 => $s['acad_step1']    ?: ($s['goal_step1'] ?? 'Dedicate 45 minutes daily to numerical problem solving and formula revision'),
+                14 => $s['acad_step2']    ?: ($s['goal_step2'] ?? 'Clarify doubts with subject teachers immediately and practice weekly mock tests'),
+                15 => $s['pers_goal_why'] ?: 'Keeps mind alert, improves stamina, and enhances daily concentration',
+                16 => $s['pers_step1']    ?: 'Wake up at 6:00 AM every morning and do 30 minutes of yoga and jogging',
+                17 => $s['pers_step2']    ?: 'Read at least 15 pages of non-academic literature before bedtime',
+                18 => $s['pers_goal']     ?: ($s['personal_goal'] ?? 'Develop regular physical exercise and disciplined reading routine'),
+                19 => $s['sch_learn1']    ?: ($s['learnt_school'] ?? 'Laws of reflection and refraction in science laboratory'),
+                20 => $s['sch_learn2']    ?: 'Formulating and solving linear equations in single variable',
+                21 => $s['sch_learn3']    ?: 'Constitutional preamble and fundamental rights in Social Science',
+                22 => $s['out_learn1']    ?: ($s['learnt_outside'] ?? 'Organic kitchen gardening, composting, and soil preparation'),
+                23 => $s['out_learn2']    ?: 'Bicycle maintenance, tire inflation, and chain lubrication',
+                24 => $s['out_learn3']    ?: 'Basic household budgeting and grocery calculation',
+                25 => $s['help_with']     ?: ($s['teacher_help'] ?? 'Hands-on science experiments and advanced mathematical puzzles'),
+                26 => $s['teacher_know']  ?: 'I am enthusiastic about collaborative group projects and active discussions',
             ];
 
             $client->executeScript("
-                const a2 = " . json_encode($a2Values) . ";
+                const orderedMap = " . json_encode($orderedA2) . ";
                 const setNativeValue = (el, val) => {
+                    if (!el) return;
                     const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
                     const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-                    if (setter) setter.call(el, val); else el.value = val;
+                    if (setter) setter.call(el, val.toString()); else el.value = val.toString();
                     el.dispatchEvent(new Event('input', { bubbles: true }));
                     el.dispatchEvent(new Event('change', { bubbles: true }));
                     el.dispatchEvent(new Event('blur', { bubbles: true }));
                 };
 
-                const inputs = Array.from(document.querySelectorAll('input:not([type=\"hidden\"]):not([type=\"checkbox\"]):not([type=\"radio\"]), textarea'));
-                inputs.forEach(inp => {
-                    if (inp.value && inp.value.trim().length > 1) return;
-                    const container = inp.closest('.form-group, div');
-                    const lbl = (container?.querySelector('label, p, strong')?.innerText || inp.placeholder || '').toLowerCase();
-
-                    let val = a2.acad_goal;
-                    if (lbl.includes('live with')) val = a2.live_with;
-                    else if (lbl.includes('stay at')) val = a2.stay_at;
-                    else if (lbl.includes('free time')) val = a2.free_time;
-                    else if (lbl.includes('very well') || lbl.includes('do well')) val = a2.do_well;
-                    else if (lbl.includes('responsible')) val = a2.responsible;
-                    else if (lbl.includes('could do better') || lbl.includes('better') || lbl.includes('improve')) val = a2.do_better;
-                    else if (lbl.includes('care about') || lbl.includes('care others')) val = a2.care_others;
-                    else if (lbl.includes('feel proud')) val = a2.feel_proud;
-                    else if (lbl.includes('friend name') || lbl.includes('friend\'s name')) val = a2.friend_name;
-                    else if (lbl.includes('friend age') || lbl.includes('age')) val = a2.friend_age;
-                    else if (lbl.includes('personal goal') && lbl.includes('why')) val = a2.pers_goal_why;
-                    else if (lbl.includes('personal goal')) val = a2.pers_goal;
-                    else if (lbl.includes('academic goal') && lbl.includes('why')) val = a2.acad_goal_why;
-                    else if (lbl.includes('academic goal') || lbl.includes('goal')) val = a2.acad_goal;
-                    else if (lbl.includes('step 1')) val = a2.acad_step1;
-                    else if (lbl.includes('step 2')) val = a2.acad_step2;
-                    else if (lbl.includes('important to me') || lbl.includes('importance')) val = a2.acad_goal_why;
-                    else if (lbl.includes('learnt at school') || lbl.includes('school learn')) val = a2.sch_learn1;
-                    else if (lbl.includes('learnt outside school') || lbl.includes('outside learn')) val = a2.out_learn1;
-                    else if (lbl.includes('help me with') || lbl.includes('help')) val = a2.help_with;
-                    else if (lbl.includes('teacher to know') || lbl.includes('teacher know')) val = a2.teacher_know;
-
-                    setNativeValue(inp, val);
+                const elements = Array.from(document.querySelectorAll('input, textarea, select'));
+                Object.keys(orderedMap).forEach(idxStr => {
+                    const idx = parseInt(idxStr, 10);
+                    if (elements[idx]) {
+                        setNativeValue(elements[idx], orderedMap[idxStr]);
+                    }
                 });
             ");
             usleep($delayMs * 1000);

@@ -40,15 +40,12 @@ Route::post('/hpc/teacher/working-days/update',  [HpcTeacherController::class, '
 Route::get('/hpc/teacher/max-marks',             [HpcTeacherController::class, 'getMaxMarks'])->name('hpc.teacher.max_marks.get');
 Route::post('/hpc/teacher/max-marks/update',     [HpcTeacherController::class, 'updateMaxMarks'])->name('hpc.teacher.max_marks.update');
 
-Route::get('/udise/students/download', function () {
-    $file = storage_path('app/hpc/01041800702_Students_Full_Details_with_Unmasked_APAAR.xlsx');
-    if (!file_exists($file)) {
-        abort(404, 'UDISE student export not found.');
-    }
-    return response()->download($file, '01041800702_Students_Full_Details_with_Unmasked_APAAR.xlsx', [
-        'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    ]);
-})->name('udise.students.download');
+// ── UDISE+ SDMS Automation Routes ─────────────────────────────────────────
+Route::post('/udise/session/start',             [\App\Http\Controllers\UdiseController::class, 'startSession'])->name('udise.session.start');
+Route::post('/udise/students/fetch',            [\App\Http\Controllers\UdiseController::class, 'fetchStudents'])->name('udise.students.fetch');
+Route::match(['GET', 'POST'], '/udise/session/check-and-fetch', [\App\Http\Controllers\UdiseController::class, 'checkLoginAndFetch'])->name('udise.session.check_fetch');
+Route::get('/udise/status',                     [\App\Http\Controllers\UdiseController::class, 'status'])->name('udise.status');
+Route::get('/udise/students/download',          [\App\Http\Controllers\UdiseController::class, 'download'])->name('udise.students.download');
 
 // ── Main app ──────────────────────────────────────────────────────────────────
 Route::get('/dashboard', fn() => view('dashboard'))

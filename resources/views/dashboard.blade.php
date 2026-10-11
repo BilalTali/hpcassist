@@ -44,19 +44,34 @@
                                 Standard SDMS Home ↗
                             </a>
                         </div>
+                        <div class="mt-3.5 pt-3 border-t border-gray-100 flex items-center gap-3 flex-wrap">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                📊 Extracted: <strong>129 Students</strong>
+                            </span>
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-teal-50 text-teal-800 border border-teal-200">
+                                🆔 <strong>83 Unmasked APAAR IDs</strong>
+                            </span>
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-200">
+                                🎓 <strong>129 National PENs</strong>
+                            </span>
+                        </div>
                     </div>
-                    <div class="shrink-0">
-                        <a href="https://auth.udiseplus.gov.in/login?response_type=code&client_id=udise-sdms-g0&scope=read%20user_info&state=a046b7da-5f29-44e4-9d90-58662138fe1f&redirect_uri=https://sdms.udiseplus.gov.in/p0/oauth2/callback&loginTxnId=09ea0bcb-5a81-4ca5-a9c2-b869c4349046"
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           class="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold text-white
+                    <div class="shrink-0 flex flex-col gap-2.5 sm:items-end">
+                        <a href="{{ route('udise.students.download') }}"
+                           class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold text-white
                                   bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800
                                   transition-all shadow-md hover:shadow-emerald-200 hover:-translate-y-0.5">
                             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
-                            <span>Login to UDISE+ & Download Data</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <span>📥 Download Master Excel (129 Students)</span>
+                        </a>
+                        <a href="https://auth.udiseplus.gov.in/login?response_type=code&client_id=udise-sdms-g0&scope=read%20user_info&state=a046b7da-5f29-44e4-9d90-58662138fe1f&redirect_uri=https://sdms.udiseplus.gov.in/p0/oauth2/callback&loginTxnId=09ea0bcb-5a81-4ca5-a9c2-b869c4349046"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 transition-colors">
+                            <span>Open UDISE+ Portal Live</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                             </svg>
                         </a>

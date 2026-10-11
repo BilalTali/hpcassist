@@ -14,7 +14,10 @@ return [
     */
 
     // The portal page that contains the login form.
-    'login_url' => env('HPC_LOGIN_URL', 'https://hpc.edu.pk/'),
+    'login_url' => env('HPC_LOGIN_URL', 'https://hpc.parakh.ncert.gov.in/en/login/SCHOOL,TEACHER'),
+
+    // The Add Student form URL — where hpc:discover and hpc:run navigate to.
+    'add_student_url' => env('HPC_ADD_STUDENT_URL', 'https://hpc.parakh.ncert.gov.in/en/students/add'),
 
     // Path to the Chrome profile folder, relative to the project root.
     // Storing cookies here keeps your session alive between runs.

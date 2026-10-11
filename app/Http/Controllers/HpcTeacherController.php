@@ -92,8 +92,8 @@ class HpcTeacherController extends Controller
             ['Rule #', 'Section / Page', 'Field Type', 'Rule Description', 'Permitted Values / Dragdown Options'],
             ['1', 'Student Metadata', 'Locked String', 'APAAR ID, HPC Login ID, Student Name, and Status. HPC Login ID is the unique identifier on the PARAKH portal.', 'Pre-filled from school portal roster.'],
             ['2', 'Status Protection', 'System Rule', 'Students with status "HPC Completed" will be protected and left untouched during update runs.', 'HPC Completed (skipped), HPC Pending / In Progress (updated)'],
-            ['3', 'Row 3 Guide Row', 'Guide Reference', 'Row 3 (DEMO_SAMPLE) provides a complete, realistic model of teacher evaluation for guidance. Do not delete or alter.', 'All 129 fields pre-filled for visual demonstration.'],
-            ['4', 'Part-A(1) Monthly Attendance', 'Integer & Formulas', 'Fill monthly Working Days (Apr-Mar) & Present Days (Apr-Mar). Total Working, Total Present, and Attendance % calculate automatically via Excel formulas.', 'Monthly Working (0-31), Monthly Present (0-Working). Present <= Working.'],
+            ['3', 'Row 3 Guide Row', 'Guide Reference', 'Row 3 (DEMO_SAMPLE) provides a complete, realistic model of teacher evaluation for guidance. Do not delete or alter.', 'All 128 fields pre-filled for visual demonstration.'],
+            ['4', 'Part-A(1) Monthly Attendance', 'Integer & Formulas', 'Working Days and Present Days are arranged neck-to-neck for each month (Apr to Mar). Total Working, Total Present, and Attendance % calculate automatically via Excel formulas.', 'Monthly Working (0-31), Monthly Present (0-Working). Present <= Working.'],
             ['5', 'Part-A(2) All About Me', 'Text & Dragdown', 'Living arrangement, leisure activities, self-responsibility, improvement areas, friend info, academic & personal goals with rationale & steps, learnings in/outside school.', 'Responsibility: all the time, most times, sometimes.'],
             ['6', 'Part-A(3) Ambition Card', 'Text & Dragdown', 'Student career ambition, path to achieve, 5 key skills, focus subjects, habits to cultivate, teacher mentor name & guidance, emotional reflections.', 'Mentor guidance and structured skill acquisition.'],
             ['7', 'Part-A(4) Parent Partnership', 'Dragdown & Text', 'Home resources, motivation level, routine/screen time schedule, curriculum difficulty, academic progress, support needs, parent home action plan, peer review.', 'Motivation/Schedule/Difficulty/Progress: Yes, Sometimes, No, Not Sure.'],
@@ -208,9 +208,9 @@ class HpcTeacherController extends Controller
                     $mKey = substr($col['key'], 5);
                     $val = $defaultWorkMap[$mKey] ?? 20;
                 }
-                elseif ($col['key'] === 'total_work') $val = "=SUM(M{$rowNum}:X{$rowNum})";
-                elseif ($col['key'] === 'total_pres') $val = "=SUM(Z{$rowNum}:AK{$rowNum})";
-                elseif ($col['key'] === 'attendance_pct') $val = "=IF(Y{$rowNum}>0, ROUND((AL{$rowNum}/Y{$rowNum})*100, 1) & \"%\", \"\")";
+                elseif ($col['key'] === 'total_work') $val = "=SUM(M{$rowNum},O{$rowNum},Q{$rowNum},S{$rowNum},U{$rowNum},W{$rowNum},Y{$rowNum},AA{$rowNum},AC{$rowNum},AE{$rowNum},AG{$rowNum},AI{$rowNum})";
+                elseif ($col['key'] === 'total_pres') $val = "=SUM(N{$rowNum},P{$rowNum},R{$rowNum},T{$rowNum},V{$rowNum},X{$rowNum},Z{$rowNum},AB{$rowNum},AD{$rowNum},AF{$rowNum},AH{$rowNum},AJ{$rowNum})";
+                elseif ($col['key'] === 'attendance_pct') $val = "=IF(AK{$rowNum}>0, ROUND((AL{$rowNum}/AK{$rowNum})*100, 1) & \"%\", \"\")";
 
                 $evalSheet->setCellValue("{$colLetter}{$rowNum}", $val);
 
@@ -642,38 +642,36 @@ class HpcTeacherController extends Controller
             ['key' => 'mother_tongue',          'label' => 'Mother Tongue *',                        'width' => 18, 'type' => 'list',    'options' => '"Kashmiri,Urdu,Hindi,English,Dogri,Punjabi,Other"', 'note' => 'Student mother tongue'],
             ['key' => 'relation',               'label' => 'Parent Relation *',                      'width' => 22, 'type' => 'list',    'options' => '"Father,Mother,Guardian (Other than Parents)"', 'note' => 'Select relation'],
             ['key' => 'parent_name',            'label' => 'Parent / Guardian Name *',               'width' => 24, 'type' => 'string',  'note' => 'Full parent / guardian name'],
-            // Monthly Working Days (12 Months: Apr - Mar)
+            // Monthly Attendance Neck-to-Neck (Working Days / Present Days per Month: Apr to Mar)
             ['key' => 'work_apr',               'label' => 'Working Days - Apr *',                   'width' => 16, 'type' => 'integer', 'note' => 'April working days (e.g. 20)'],
-            ['key' => 'work_may',               'label' => 'Working Days - May *',                   'width' => 16, 'type' => 'integer', 'note' => 'May working days (e.g. 22)'],
-            ['key' => 'work_jun',               'label' => 'Working Days - Jun *',                   'width' => 16, 'type' => 'integer', 'note' => 'June working days (e.g. 10)'],
-            ['key' => 'work_jul',               'label' => 'Working Days - Jul *',                   'width' => 16, 'type' => 'integer', 'note' => 'July working days (e.g. 20)'],
-            ['key' => 'work_aug',               'label' => 'Working Days - Aug *',                   'width' => 16, 'type' => 'integer', 'note' => 'August working days (e.g. 22)'],
-            ['key' => 'work_sep',               'label' => 'Working Days - Sep *',                   'width' => 16, 'type' => 'integer', 'note' => 'September working days (e.g. 21)'],
-            ['key' => 'work_oct',               'label' => 'Working Days - Oct *',                   'width' => 16, 'type' => 'integer', 'note' => 'October working days (e.g. 19)'],
-            ['key' => 'work_nov',               'label' => 'Working Days - Nov *',                   'width' => 16, 'type' => 'integer', 'note' => 'November working days (e.g. 20)'],
-            ['key' => 'work_dec',               'label' => 'Working Days - Dec *',                   'width' => 16, 'type' => 'integer', 'note' => 'December working days (e.g. 15)'],
-            ['key' => 'work_jan',               'label' => 'Working Days - Jan *',                   'width' => 16, 'type' => 'integer', 'note' => 'January working days (e.g. 15)'],
-            ['key' => 'work_feb',               'label' => 'Working Days - Feb *',                   'width' => 16, 'type' => 'integer', 'note' => 'February working days (e.g. 20)'],
-            ['key' => 'work_mar',               'label' => 'Working Days - Mar *',                   'width' => 16, 'type' => 'integer', 'note' => 'March working days (e.g. 18)'],
-            ['key' => 'total_work',             'label' => 'Total Working Days (Auto)',              'width' => 20, 'type' => 'calc',    'note' => 'Auto-calculated sum: =SUM(M:X)'],
-
-            // Monthly Present Days (12 Months: Apr - Mar)
             ['key' => 'pres_apr',               'label' => 'Present Days - Apr *',                   'width' => 16, 'type' => 'integer', 'note' => 'April present days (e.g. 19)'],
+            ['key' => 'work_may',               'label' => 'Working Days - May *',                   'width' => 16, 'type' => 'integer', 'note' => 'May working days (e.g. 22)'],
             ['key' => 'pres_may',               'label' => 'Present Days - May *',                   'width' => 16, 'type' => 'integer', 'note' => 'May present days (e.g. 21)'],
+            ['key' => 'work_jun',               'label' => 'Working Days - Jun *',                   'width' => 16, 'type' => 'integer', 'note' => 'June working days (e.g. 10)'],
             ['key' => 'pres_jun',               'label' => 'Present Days - Jun *',                   'width' => 16, 'type' => 'integer', 'note' => 'June present days (e.g. 10)'],
+            ['key' => 'work_jul',               'label' => 'Working Days - Jul *',                   'width' => 16, 'type' => 'integer', 'note' => 'July working days (e.g. 20)'],
             ['key' => 'pres_jul',               'label' => 'Present Days - Jul *',                   'width' => 16, 'type' => 'integer', 'note' => 'July present days (e.g. 18)'],
+            ['key' => 'work_aug',               'label' => 'Working Days - Aug *',                   'width' => 16, 'type' => 'integer', 'note' => 'August working days (e.g. 22)'],
             ['key' => 'pres_aug',               'label' => 'Present Days - Aug *',                   'width' => 16, 'type' => 'integer', 'note' => 'August present days (e.g. 20)'],
+            ['key' => 'work_sep',               'label' => 'Working Days - Sep *',                   'width' => 16, 'type' => 'integer', 'note' => 'September working days (e.g. 21)'],
             ['key' => 'pres_sep',               'label' => 'Present Days - Sep *',                   'width' => 16, 'type' => 'integer', 'note' => 'September present days (e.g. 20)'],
+            ['key' => 'work_oct',               'label' => 'Working Days - Oct *',                   'width' => 16, 'type' => 'integer', 'note' => 'October working days (e.g. 19)'],
             ['key' => 'pres_oct',               'label' => 'Present Days - Oct *',                   'width' => 16, 'type' => 'integer', 'note' => 'October present days (e.g. 18)'],
+            ['key' => 'work_nov',               'label' => 'Working Days - Nov *',                   'width' => 16, 'type' => 'integer', 'note' => 'November working days (e.g. 20)'],
             ['key' => 'pres_nov',               'label' => 'Present Days - Nov *',                   'width' => 16, 'type' => 'integer', 'note' => 'November present days (e.g. 17)'],
+            ['key' => 'work_dec',               'label' => 'Working Days - Dec *',                   'width' => 16, 'type' => 'integer', 'note' => 'December working days (e.g. 15)'],
             ['key' => 'pres_dec',               'label' => 'Present Days - Dec *',                   'width' => 16, 'type' => 'integer', 'note' => 'December present days (e.g. 14)'],
+            ['key' => 'work_jan',               'label' => 'Working Days - Jan *',                   'width' => 16, 'type' => 'integer', 'note' => 'January working days (e.g. 15)'],
             ['key' => 'pres_jan',               'label' => 'Present Days - Jan *',                   'width' => 16, 'type' => 'integer', 'note' => 'January present days (e.g. 13)'],
+            ['key' => 'work_feb',               'label' => 'Working Days - Feb *',                   'width' => 16, 'type' => 'integer', 'note' => 'February working days (e.g. 20)'],
             ['key' => 'pres_feb',               'label' => 'Present Days - Feb *',                   'width' => 16, 'type' => 'integer', 'note' => 'February present days (e.g. 19)'],
+            ['key' => 'work_mar',               'label' => 'Working Days - Mar *',                   'width' => 16, 'type' => 'integer', 'note' => 'March working days (e.g. 18)'],
             ['key' => 'pres_mar',               'label' => 'Present Days - Mar *',                   'width' => 16, 'type' => 'integer', 'note' => 'March present days (e.g. 17)'],
-            ['key' => 'total_pres',             'label' => 'Total Present Days (Auto)',              'width' => 20, 'type' => 'calc',    'note' => 'Auto-calculated sum: =SUM(Z:AK)'],
+            ['key' => 'total_work',             'label' => 'Total Working Days (Auto)',              'width' => 20, 'type' => 'calc',    'note' => 'Auto-calculated sum: =SUM(M,O,Q,S,U,W,Y,AA,AC,AE,AG,AI)'],
+            ['key' => 'total_pres',             'label' => 'Total Present Days (Auto)',              'width' => 20, 'type' => 'calc',    'note' => 'Auto-calculated sum: =SUM(N,P,R,T,V,X,Z,AB,AD,AF,AH,AJ)'],
 
             // Attendance % & Absence
-            ['key' => 'attendance_pct',         'label' => 'Attendance % (Auto)',                    'width' => 18, 'type' => 'calc',    'note' => 'Auto %: (Present/Working)*100'],
+            ['key' => 'attendance_pct',         'label' => 'Attendance % (Auto)',                    'width' => 18, 'type' => 'calc',    'note' => 'Auto %: =IF(AK>0, ROUND((AL/AK)*100, 1) & "%", "")'],
             ['key' => 'absent_count',           'label' => 'Absent Times Count',                     'width' => 18, 'type' => 'integer', 'note' => 'Total times remained absent (e.g. 16)'],
             ['key' => 'absence_reason',         'label' => 'Reason for Absence (A1)',                'width' => 26, 'type' => 'string',  'note' => 'e.g. Brief seasonal viral illness'],
             ['key' => 'interest',               'label' => 'Primary Interest / Hobby (A1) *',         'width' => 32, 'type' => 'list',    'options' => '"Reading,Dancing or Singing or Playing a musical instrument,Creative Writing,Gardening,Yoga,Art,Craft,Sports or Games,Cooking,Participation at home"', 'note' => 'Student hobby from Doc 29'],
@@ -707,17 +705,16 @@ class HpcTeacherController extends Controller
             ['key' => 'teacher_know',           'label' => 'I would like my teacher to know (A2)',    'width' => 36, 'type' => 'string',  'note' => 'e.g. I am enthusiastic about collaborative group projects and active discussions'],
 
             // ── Part-A(3) My Ambition Card ─────────────────────────────────────────────
-            ['key' => 'ambition',               'label' => 'My Ambition Is (A3) *',                  'width' => 24, 'type' => 'string',  'note' => 'e.g. Astrophysicist / Software Engineer / Doctor'],
-            ['key' => 'achieve_how',            'label' => 'Achieve Ambition By (A3) *',             'width' => 32, 'type' => 'string',  'note' => 'e.g. Deep conceptual study in Maths & Science'],
-            ['key' => 'skills_needed',          'label' => '5 Skills Needed (A3) *',                 'width' => 30, 'type' => 'string',  'note' => 'e.g. Critical Thinking, Coding, Persistence'],
-            ['key' => 'focus_subjects',         'label' => 'Subjects To Focus On (A3) *',            'width' => 28, 'type' => 'string',  'note' => 'e.g. Mathematics, Science, English, Computing'],
-            ['key' => 'habits_build',           'label' => 'Habits To Build (A3)',                   'width' => 28, 'type' => 'string',  'note' => 'e.g. Daily disciplined study & curious questioning'],
-            ['key' => 'i_will',                 'label' => 'I Will... (A3) *',                       'width' => 30, 'type' => 'string',  'note' => 'e.g. Maintain daily science journal and problem solving'],
-            ['key' => 'mentor',                 'label' => 'Guidance From Mentor (A3) *',            'width' => 24, 'type' => 'string',  'note' => 'Teacher Mentor name (e.g. Bilal Ahmad Tali)'],
-            ['key' => 'mentor_help',            'label' => 'Mentor Will Help By (A3) *',             'width' => 32, 'type' => 'string',  'note' => 'e.g. Recommending advanced reference books & Olympiads'],
-            ['key' => 'learn_new',              'label' => 'I Will Learn New... (A3) *',             'width' => 30, 'type' => 'string',  'note' => 'e.g. Scientific analysis and computer algorithms'],
-            ['key' => 'feel_when_achieve',      'label' => 'I Will Feel When Achieved (A3) *',       'width' => 30, 'type' => 'string',  'note' => 'e.g. Deeply fulfilled, proud, and inspired'],
-            ['key' => 'parents_feel',           'label' => 'Parents Will Feel (A3) *',               'width' => 28, 'type' => 'string',  'note' => 'e.g. Immensely joyful, proud, and grateful'],
+            ['key' => 'ambition',               'label' => 'My ambition is (A3) *',                                   'width' => 26, 'type' => 'string',  'note' => 'e.g. Doctor / Astrophysicist / Software Engineer'],
+            ['key' => 'achieve_how',            'label' => 'I will achieve my ambition by (A3) *',                    'width' => 36, 'type' => 'string',  'note' => 'e.g. Conceptual understanding and daily practice in Maths & Science'],
+            ['key' => 'skills_needed',          'label' => '5 skills I need to achieve my ambition (A3) *',           'width' => 36, 'type' => 'string',  'note' => 'e.g. Critical Thinking, Problem Solving, Communication, Coding, Curiosity'],
+            ['key' => 'focus_subjects',         'label' => 'Subjects I need to focus on (A3) *',                      'width' => 30, 'type' => 'string',  'note' => 'e.g. Mathematics, Science, English, Computing'],
+            ['key' => 'habits_i_will',          'label' => 'To achieve my ambition, I need my habits to be... I will... (A3) *', 'width' => 44, 'type' => 'string',  'note' => 'e.g. Disciplined daily study, 30 min morning exercise, and curious questioning'],
+            ['key' => 'mentor',                 'label' => 'I will take guidance from ... to achieve my ambition (A3) *', 'width' => 36, 'type' => 'string',  'note' => 'e.g. Bilal Ahmad Tali (Teacher Mentor)'],
+            ['key' => 'mentor_help',            'label' => 'I think this person will help me by (A3) *',              'width' => 36, 'type' => 'string',  'note' => 'e.g. Clarifying complex topics, recommending Olympiad books & guiding projects'],
+            ['key' => 'learn_new',              'label' => 'I will learn new (A3) *',                                 'width' => 32, 'type' => 'string',  'note' => 'e.g. Scientific techniques, coding algorithms & laboratory experiments'],
+            ['key' => 'feel_when_achieve',      'label' => 'I will feel ... when I achieve my ambition (A3) *',        'width' => 34, 'type' => 'string',  'note' => 'e.g. Proud, happy, fulfilled, and motivated to contribute to society'],
+            ['key' => 'parents_feel',           'label' => 'My parents will feel ... when I achieve my ambition (A3) *', 'width' => 36, 'type' => 'string',  'note' => 'e.g. Immensely joyful, honored, and proud'],
 
             // ── Part-A(4) Parent-Teacher Partnership Card ──────────────────────────────
             ['key' => 'home_resources',         'label' => 'Home Resources Available (A4) *',        'width' => 32, 'type' => 'string',  'note' => 'e.g. Books, Newspaper, Computer, Internet, TV'],
@@ -801,17 +798,24 @@ class HpcTeacherController extends Controller
             'Kashmiri',
             'Father',
             'Mohammad Ahmad Wani',
-            // Monthly Working Days (12 Months: Apr - Mar)
-            $m['apr'], $m['may'], $m['jun'], $m['jul'], $m['aug'], $m['sep'],
-            $m['oct'], $m['nov'], $m['dec'], $m['jan'], $m['feb'], $m['mar'],
-            '=SUM(M3:X3)',
-            // Monthly Present Days (12 Months: Apr - Mar)
-            min(19, $m['apr']), min(21, $m['may']), min(10, $m['jun']), min(18, $m['jul']),
-            min(20, $m['aug']), min(20, $m['sep']), min(18, $m['oct']), min(17, $m['nov']),
-            min(14, $m['dec']), min(13, $m['jan']), min(19, $m['feb']), min(17, $m['mar']),
-            '=SUM(Z3:AK3)',
-            // Attendance % & Absence
-            '=IF(Y3>0, ROUND((AL3/Y3)*100, 1) & "%", "")',
+            // Monthly Attendance Neck-to-Neck (12 Months: Apr to Mar - Cols M to AJ)
+            $m['apr'], min(19, $m['apr']),
+            $m['may'], min(21, $m['may']),
+            $m['jun'], min(10, $m['jun']),
+            $m['jul'], min(18, $m['jul']),
+            $m['aug'], min(20, $m['aug']),
+            $m['sep'], min(20, $m['sep']),
+            $m['oct'], min(18, $m['oct']),
+            $m['nov'], min(17, $m['nov']),
+            $m['dec'], min(14, $m['dec']),
+            $m['jan'], min(13, $m['jan']),
+            $m['feb'], min(19, $m['feb']),
+            $m['mar'], min(17, $m['mar']),
+            // Total Working Days (Col AK3) & Total Present Days (Col AL3)
+            '=SUM(M3,O3,Q3,S3,U3,W3,Y3,AA3,AC3,AE3,AG3,AI3)',
+            '=SUM(N3,P3,R3,T3,V3,X3,Z3,AB3,AD3,AF3,AH3,AJ3)',
+            // Attendance % (Col AM3) & Absence Info
+            '=IF(AK3>0, ROUND((AL3/AK3)*100, 1) & "%", "")',
             16,
             'Viral fever during seasonal change in November',
             'Reading',
@@ -847,8 +851,7 @@ class HpcTeacherController extends Controller
             'Deep conceptual focus in Mathematics, regular physics experiments, and continuous reading',
             'Critical Thinking, Problem Solving, Data Analysis, Scientific Curiosity, Persistence',
             'Mathematics, Physics, Chemistry, English, Computer Science',
-            'Consistent daily study routine, punctual time management, and inquisitive questioning',
-            'Maintain daily science journal and read monthly astronomy publications',
+            'Consistent daily study routine, punctual time management, curious questioning, and regular science reading',
             'Bilal Ahmad Tali',
             'Mentoring in Olympiad preparations and recommending advanced reference materials',
             'Scientific problem-solving strategies and computational simulations',

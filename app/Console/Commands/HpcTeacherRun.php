@@ -445,62 +445,38 @@ class HpcTeacherRun extends Command
 
         // ── 4. Fill Part-A3 ───────────────────────────────────────────────────
         if (str_contains($client->getCurrentURL(), '/part-A3')) {
-            $a3Values = [
-                'ambition'          => $s['ambition'] ?? 'Astrophysicist & Space Research Scientist',
-                'achieve_how'       => $s['achieve_how'] ?? ($s['ambition_how'] ?? 'Deep conceptual focus in Mathematics, regular physics experiments, and continuous reading'),
-                'skills_needed'     => $s['skills_needed'] ?? ($s['skill'] ?? 'Critical Thinking, Problem Solving, Data Analysis, Scientific Curiosity, Persistence'),
-                'focus_subjects'    => $s['focus_subjects'] ?? 'Mathematics, Physics, Chemistry, English, Computer Science',
-                'habits_build'      => $s['habits_build'] ?? 'Consistent daily study routine, punctual time management, and inquisitive questioning',
-                'i_will'            => $s['i_will'] ?? 'Maintain daily science journal and read monthly astronomy publications',
-                'mentor'            => $s['mentor'] ?? 'Bilal Ahmad Tali',
-                'mentor_help'       => $s['mentor_help'] ?? 'Mentoring in Olympiad preparations and recommending advanced reference materials',
-                'learn_new'         => $s['learn_new'] ?? 'Scientific problem-solving strategies and computational simulations',
-                'feel_when_achieve' => $s['feel_when_achieve'] ?? 'Immensely fulfilled, proud, and inspired to contribute to the nation space mission',
-                'parents_feel'      => $s['parents_feel'] ?? 'Overjoyed, deeply proud, and grateful',
+            $orderedA3 = [
+                1  => $s['ambition']          ?: 'Doctor / Astrophysicist',
+                2  => $s['achieve_how']       ?: 'Conceptual understanding in Maths & Science and dedicated daily practice',
+                3  => $s['skills_needed']     ?: 'Critical Thinking, Problem Solving, Communication, Coding, Curiosity',
+                4  => $s['focus_subjects']    ?: 'Mathematics, Science, English, Computing',
+                5  => $s['habits_i_will']     ?: ($s['habits_build'] ?? ($s['i_will'] ?? 'Disciplined daily study, 30 min morning exercise, and curious questioning')),
+                6  => $s['mentor']            ?: 'Bilal Ahmad Tali',
+                7  => $s['mentor_help']       ?: 'Recommending Olympiad reference books and laboratory guidance',
+                8  => $s['learn_new']         ?: 'Scientific problem solving and experimental techniques',
+                9  => $s['feel_when_achieve'] ?: 'Proud, fulfilled, and motivated to help others',
+                10 => $s['parents_feel']      ?: 'Immensely joyful, honored, and proud',
             ];
 
             $client->executeScript("
-                const a3 = " . json_encode($a3Values) . ";
+                const orderedMap = " . json_encode($orderedA3) . ";
                 const setNativeValue = (el, val) => {
+                    if (!el) return;
                     const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
                     const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-                    if (setter) setter.call(el, val); else el.value = val;
+                    if (setter) setter.call(el, val.toString()); else el.value = val.toString();
                     el.dispatchEvent(new Event('input', { bubbles: true }));
                     el.dispatchEvent(new Event('change', { bubbles: true }));
+                    el.dispatchEvent(new Event('blur', { bubbles: true }));
                 };
 
-                const inputs = Array.from(document.querySelectorAll('input:not([type=\"hidden\"]):not([type=\"checkbox\"]):not([type=\"radio\"]), textarea'));
-                inputs.forEach(inp => {
-                    if (inp.value && inp.value.trim().length > 1) return;
-                    const container = inp.closest('.form-group, div');
-                    const lbl = (container?.querySelector('label, p, strong')?.innerText || inp.placeholder || '').toLowerCase();
-
-                    let val = a3.ambition;
-                    if (lbl.includes('ambition') || lbl.includes('want to become')) val = a3.ambition;
-                    else if (lbl.includes('how') || lbl.includes('achieve')) val = a3.achieve_how;
-                    else if (lbl.includes('skills')) val = a3.skills_needed;
-                    else if (lbl.includes('subject') || lbl.includes('focus')) val = a3.focus_subjects;
-                    else if (lbl.includes('habit')) val = a3.habits_build;
-                    else if (lbl.includes('i will') || lbl.includes('i shall')) val = a3.i_will;
-                    else if (lbl.includes('mentor help') || lbl.includes('help by')) val = a3.mentor_help;
-                    else if (lbl.includes('mentor') || lbl.includes('role model')) val = a3.mentor;
-                    else if (lbl.includes('learn new')) val = a3.learn_new;
-                    else if (lbl.includes('parents')) val = a3.parents_feel;
-                    else if (lbl.includes('feel when') || lbl.includes('feel')) val = a3.feel_when_achieve;
-
-                    setNativeValue(inp, val);
-                });
-
-                // Check skill checkboxes matching skill name or first 5
-                const targetSkills = a3.skills_needed.toLowerCase();
-                const skillCbs = Array.from(document.querySelectorAll('input[type=\"checkbox\"]'));
-                skillCbs.forEach(cb => {
-                    const label = (cb.closest('label')?.innerText || '').toLowerCase();
-                    if (targetSkills.includes(label) || label.includes('critical') || label.includes('problem')) {
-                        if (!cb.checked) cb.click();
+                const elements = Array.from(document.querySelectorAll('input, textarea, select'));
+                Object.keys(orderedMap).forEach(idxStr => {
+                    const idx = parseInt(idxStr, 10);
+                    if (elements[idx]) {
+                        setNativeValue(elements[idx], orderedMap[idxStr]);
                     }
                 });
-                skillCbs.slice(0, 5).forEach(cb => { if (!cb.checked) cb.click(); });
             ");
             usleep($delayMs * 1000);
             $this->clickContinue($client);

@@ -562,8 +562,8 @@ class UdiseController extends Controller
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Connection: close']);
         curl_setopt($ch, CURLOPT_TIMEOUT, 2);
-        if ($method === 'PUT') {
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+        if (strtoupper($method) !== 'GET') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($method));
         }
         $res = curl_exec($ch);
         curl_close($ch);

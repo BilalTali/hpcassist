@@ -69,112 +69,207 @@ class HpcTeacherController extends Controller
             ];
         }
 
-        $sheet = new Spreadsheet();
-        $ws = $sheet->getActiveSheet();
-        $ws->setTitle('HPC Assessment');
+        $spreadsheet = new Spreadsheet();
+
+        // ─── Sheet 1: Instructions & Rules ────────────────────────────────────
+        $instructionSheet = $spreadsheet->getActiveSheet();
+        $instructionSheet->setTitle('Instructions & Rules');
+
+        $instructionSheet->setCellValue('A1', 'HPCAssist - Evaluation Template Instructions & Validation Rules');
+        $instructionSheet->mergeCells('A1:E1');
+        $instructionSheet->getStyle('A1')->applyFromArray([
+            'font'      => ['bold' => true, 'size' => 14, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF1E293B']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
+        ]);
+        $instructionSheet->getRowDimension(1)->setRowHeight(32);
+
+        $rules = [
+            ['Rule #', 'Section / Page', 'Field Type', 'Rule Description', 'Permitted Values / Dragdown Options'],
+            ['1', 'Student Metadata', 'Locked String', 'Student Name and HPC Login ID must not be altered.', 'Pre-filled from school portal roster.'],
+            ['2', 'Part-A(1) Profile', 'Dragdown (Select)', 'Select valid Class / Grade from dropdown.', 'Grade 6, Grade 7, Grade 8'],
+            ['3', 'Part-A(1) Profile', 'Dragdown (Select)', 'Select Medium of Instruction / Mother Tongue.', 'Kashmiri, Urdu, Hindi, English, Dogri, Punjabi, Other'],
+            ['4', 'Part-A(1) Profile', 'Dragdown (Select)', 'Select relationship of guardian.', 'Father, Mother, Guardian (Other than Parents)'],
+            ['5', 'Part-A(1) Attendance', 'Integer (Number)', 'Working and Present days must be numeric integers. Present days must be <= Working days.', 'Working: 150-260, Present: 0-260'],
+            ['6', 'Part-A(1) Interests', 'Dragdown (Select)', 'Select student primary hobby / interest.', 'Reading, Drawing, Sports, Music, Craft, Science, Mathematics...'],
+            ['7', 'Part-A(2) Habits', 'Dragdown (Select)', 'Student responsibility level in classroom.', 'All the time, Most times, Sometimes'],
+            ['8', 'Part-A(3) Ambition', 'String & Dragdown', 'Career ambition string and primary 21st Century skill.', 'Critical Thinking, Communication, Collaboration, Problem Solving...'],
+            ['9', 'Part-A(4) Home Feedback', 'Dragdown (Radio)', 'Parent observation ratings for motivation and progress.', 'Yes, Sometimes, No, Not Sure'],
+            ['10', 'Part-B Activities', 'Dragdown (Select)', 'Pedagogical approach for holistic activities.', 'Art-Integrated, Sports-Integrated, Toy-Based, Technology-Integrated...'],
+            ['11', 'Part-C Curricular', 'Dragdown (Radio)', 'Year-end formative and summative performance levels across domains.', 'Beginner, Proficient, Advanced'],
+            ['12', 'HPC Credit (Marks)', 'Integer (0-100)', 'Summative Assessment marks for each of the 8 subjects.', 'Max Marks (default 50), Marks Obtained (0 to Max Marks)'],
+            ['13', 'HPC Credit (Declaration)', 'Dragdown (Select)', 'Teacher declaration certifying entered evaluation.', 'Yes, No'],
+        ];
+
+        foreach ($rules as $rIdx => $row) {
+            $rowNum = $rIdx + 3;
+            foreach ($row as $cIdx => $val) {
+                $colLetter = chr(65 + $cIdx);
+                $instructionSheet->setCellValue("{$colLetter}{$rowNum}", $val);
+            }
+            if ($rIdx === 0) {
+                $instructionSheet->getStyle("A{$rowNum}:E{$rowNum}")->applyFromArray([
+                    'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+                    'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF334155']],
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                ]);
+                $instructionSheet->getRowDimension($rowNum)->setRowHeight(24);
+            } else {
+                $instructionSheet->getStyle("A{$rowNum}:E{$rowNum}")->applyFromArray([
+                    'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
+                    'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                ]);
+                $instructionSheet->getRowDimension($rowNum)->setRowHeight(22);
+            }
+        }
+
+        $instructionSheet->getColumnDimension('A')->setWidth(10);
+        $instructionSheet->getColumnDimension('B')->setWidth(24);
+        $instructionSheet->getColumnDimension('C')->setWidth(22);
+        $instructionSheet->getColumnDimension('D')->setWidth(50);
+        $instructionSheet->getColumnDimension('E')->setWidth(45);
+
+        // ─── Sheet 2: Student Evaluations ─────────────────────────────────────
+        $evalSheet = $spreadsheet->createSheet();
+        $evalSheet->setTitle('Student Evaluations');
 
         $columns = [
-            ['key' => 'name',         'label' => 'Student Name (Locked) *',  'width' => 24, 'note' => 'Pre-filled from portal records'],
-            ['key' => 'login_id',     'label' => 'HPC Login ID (Locked) *',  'width' => 22, 'note' => 'Portal Login ID (do not edit)'],
-            ['key' => 'mother_tongue','label' => 'Mother Tongue *',          'width' => 18, 'note' => 'e.g. Kashmiri, Urdu, Hindi'],
-            ['key' => 'relation',     'label' => 'Parent Relation *',        'width' => 18, 'note' => 'Select Father, Mother, Guardian'],
-            ['key' => 'parent_name',  'label' => 'Parent / Guardian Name *', 'width' => 24, 'note' => 'Father / Mother / Guardian full name'],
-            ['key' => 'working_days', 'label' => 'Avg Working Days/Mo *',    'width' => 20, 'note' => 'Monthly school working days (e.g. 22)'],
-            ['key' => 'present_days', 'label' => 'Avg Present Days/Mo *',    'width' => 20, 'note' => 'Monthly days student present (e.g. 20)'],
-            ['key' => 'interests',    'label' => 'Student Interests *',      'width' => 26, 'note' => 'Reading, Art, Craft, Sports, Music...'],
-            ['key' => 'academic_goal','label' => 'Academic Goal',            'width' => 26, 'note' => 'e.g. Excel in Science and Mathematics'],
-            ['key' => 'ambition',     'label' => 'Student Ambition',         'width' => 20, 'note' => 'e.g. Teacher, Engineer, Doctor'],
-            ['key' => 'self_rating',  'label' => 'Self Assessment Rating *', 'width' => 22, 'note' => 'Yes, To an extent, Sometimes, No'],
-            ['key' => 'peer_rating',  'label' => 'Peer Assessment Rating *', 'width' => 22, 'note' => 'Yes, Sometimes, No, Not Sure'],
-            ['key' => 'activity_name','label' => 'Activity Name (Part-B) *', 'width' => 26, 'note' => 'e.g. Science Fair Project, Art Model'],
-            ['key' => 'progress_lvl', 'label' => 'Progress Level (Part-C) *','width' => 22, 'note' => 'Proficient, Advanced, Developing'],
-            ['key' => 'remarks',      'label' => 'Teacher Remarks',          'width' => 30, 'note' => 'Overall holistic summary note'],
+            ['key' => 'name',         'label' => 'Student Name (Locked) *',  'width' => 24, 'type' => 'locked',  'note' => 'Locked name from portal'],
+            ['key' => 'login_id',     'label' => 'HPC Login ID (Locked) *',  'width' => 22, 'type' => 'locked',  'note' => 'Locked ID from portal'],
+            ['key' => 'grade',        'label' => 'Class / Grade *',          'width' => 16, 'type' => 'list',    'options' => '"Grade 6,Grade 7,Grade 8"', 'note' => 'Select grade'],
+            ['key' => 'section',      'label' => 'Section',                  'width' => 12, 'type' => 'list',    'options' => '"A,B,C,D,E"', 'note' => 'Select section'],
+            ['key' => 'location',     'label' => 'Area / Location',          'width' => 14, 'type' => 'list',    'options' => '"Rural,Urban"', 'note' => 'Rural or Urban'],
+            ['key' => 'mother_tongue','label' => 'Mother Tongue *',          'width' => 18, 'type' => 'list',    'options' => '"Kashmiri,Urdu,Hindi,English,Dogri,Punjabi,Other"', 'note' => 'Medium / Mother tongue'],
+            ['key' => 'relation',     'label' => 'Parent Relation *',        'width' => 22, 'type' => 'list',    'options' => '"Father,Mother,Guardian (Other than Parents)"', 'note' => 'Select relation'],
+            ['key' => 'parent_name',  'label' => 'Parent / Guardian Name *', 'width' => 24, 'type' => 'string',  'note' => 'Full name'],
+            ['key' => 'working_days', 'label' => 'School Working Days *',    'width' => 20, 'type' => 'integer', 'note' => 'Annual working days (e.g. 220)'],
+            ['key' => 'present_days', 'label' => 'Student Present Days *',   'width' => 20, 'type' => 'integer', 'note' => 'Annual present days (e.g. 204)'],
+            ['key' => 'interest',     'label' => 'Primary Interest *',       'width' => 20, 'type' => 'list',    'options' => '"Reading,Drawing,Sports,Music,Craft,Science,Mathematics,Drama,Dance,Social Service"', 'note' => 'Hobby / Interest'],
+            ['key' => 'responsible',  'label' => 'Responsibility (A2)',      'width' => 20, 'type' => 'list',    'options' => '"All the time,Most times,Sometimes"', 'note' => 'Self-discipline level'],
+            ['key' => 'academic_goal','label' => 'Academic Goal (A2)',       'width' => 26, 'type' => 'string',  'note' => 'e.g. Excel in Science and Mathematics'],
+            ['key' => 'ambition',     'label' => 'Student Ambition (A3)',    'width' => 20, 'type' => 'string',  'note' => 'e.g. Teacher, Engineer, Doctor'],
+            ['key' => 'skill',        'label' => 'Primary 21stC Skill (A3) *','width' => 22, 'type' => 'list',   'options' => '"Critical Thinking,Communication,Collaboration,Problem Solving,Creativity"', 'note' => 'Core skill'],
+            ['key' => 'mentor',       'label' => 'Teacher Mentor Name',      'width' => 22, 'type' => 'string',  'note' => 'Mentor full name'],
+            ['key' => 'p_motivation', 'label' => 'Parent Motivation (A4) *', 'width' => 22, 'type' => 'list',    'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Home engagement'],
+            ['key' => 'p_progress',   'label' => 'Parent Progress (A4) *',   'width' => 22, 'type' => 'list',    'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Grade progress'],
+            ['key' => 'act_approach', 'label' => 'Activity Approach (B) *',  'width' => 22, 'type' => 'list',    'options' => '"Art-Integrated,Sports-Integrated,Toy-Based,Technology-Integrated,Any Other"', 'note' => 'Pedagogical approach'],
+            ['key' => 'c_formative',  'label' => 'Formative Level (C) *',    'width' => 20, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Curricular progress'],
+            ['key' => 'c_summative',  'label' => 'Summative Level (C) *',    'width' => 20, 'type' => 'list',    'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Curricular progress'],
+            ['key' => 'l1_max',       'label' => 'Lang 1 Max Marks *',       'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'l1_obt',       'label' => 'Lang 1 Marks Obtained *',  'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'l2_max',       'label' => 'Lang 2 Max Marks *',       'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'l2_obt',       'label' => 'Lang 2 Marks Obtained *',  'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'l3_max',       'label' => 'Lang 3 Max Marks *',       'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'l3_obt',       'label' => 'Lang 3 Marks Obtained *',  'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'm_max',        'label' => 'Maths Max Marks *',        'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'm_obt',        'label' => 'Maths Marks Obtained *',   'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'sci_max',      'label' => 'Science Max Marks *',      'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'sci_obt',      'label' => 'Science Marks Obtained *', 'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'soc_max',      'label' => 'Soc Sci Max Marks *',      'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'soc_obt',      'label' => 'Soc Sci Marks Obtained *', 'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'art_max',      'label' => 'Art Ed Max Marks *',       'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'art_obt',      'label' => 'Art Ed Marks Obtained *',  'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'pe_max',       'label' => 'Physical Ed Max Marks *',  'width' => 20, 'type' => 'integer', 'note' => 'Default 50'],
+            ['key' => 'pe_obt',       'label' => 'Physical Ed Marks Obt *',  'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
+            ['key' => 'declaration',  'label' => 'Declaration Certified *',  'width' => 22, 'type' => 'list',    'options' => '"Yes,No"', 'note' => 'Confirm accurate evaluation'],
+            ['key' => 'remarks',      'label' => 'Teacher Remarks',          'width' => 32, 'type' => 'string',  'note' => 'Holistic summary observation'],
         ];
 
-        // ── Header row (Row 1) ────────────────────────────────────────────────
-        $headerStyle = [
-            'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 11],
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF1E293B']],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFCBD5E1']]],
-        ];
+        // Write Header (Row 1) & Notes (Row 2)
+        foreach ($columns as $idx => $col) {
+            $colLetter = $this->indexToColumnLetter($idx);
+            $evalSheet->setCellValue("{$colLetter}1", $col['label']);
+            $evalSheet->setCellValue("{$colLetter}2", $col['note']);
+            $evalSheet->getColumnDimension($colLetter)->setWidth($col['width']);
 
-        foreach ($columns as $i => $col) {
-            $letter = chr(65 + $i);
-            $ws->setCellValue("{$letter}1", $col['label']);
-            $ws->getColumnDimension($letter)->setWidth($col['width']);
-            $ws->getStyle("{$letter}1")->applyFromArray($headerStyle);
+            $evalSheet->getStyle("{$colLetter}1")->applyFromArray([
+                'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 10],
+                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF1E293B']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFCBD5E1']]],
+            ]);
+
+            $evalSheet->getStyle("{$colLetter}2")->applyFromArray([
+                'font'      => ['italic' => true, 'color' => ['argb' => 'FF64748B'], 'size' => 9],
+                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFF8FAFC']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
+            ]);
         }
-        $ws->getRowDimension(1)->setRowHeight(28);
+        $evalSheet->getRowDimension(1)->setRowHeight(28);
+        $evalSheet->getRowDimension(2)->setRowHeight(20);
 
-        // ── Notes row (Row 2) ─────────────────────────────────────────────────
-        $noteStyle = [
-            'font'      => ['italic' => true, 'color' => ['argb' => 'FF475569'], 'size' => 9],
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFF1F5F9']],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
-        ];
-        foreach ($columns as $i => $col) {
-            $letter = chr(65 + $i);
-            $ws->setCellValue("{$letter}2", $col['note']);
-            $ws->getStyle("{$letter}2")->applyFromArray($noteStyle);
+        // Pre-fill student rows
+        foreach ($students as $sIdx => $st) {
+            $rowNum = $sIdx + 3;
+
+            $defaults = [
+                $st['name'],
+                $st['login_id'],
+                'Grade 6',
+                'A',
+                'Rural',
+                'Kashmiri',
+                'Father',
+                'Mohammad Ahmad',
+                220,
+                204,
+                'Reading',
+                'Most times',
+                'Excel in Science and Mathematics',
+                'Teacher',
+                'Critical Thinking',
+                'Bilal Ahmad',
+                'Yes',
+                'Yes',
+                'Art-Integrated',
+                'Proficient',
+                'Proficient',
+                50, 42,
+                50, 40,
+                50, 41,
+                50, 44,
+                50, 43,
+                50, 42,
+                50, 46,
+                50, 47,
+                'Yes',
+                'Consistent performance and active classroom participation',
+            ];
+
+            foreach ($columns as $cIdx => $col) {
+                $colLetter = $this->indexToColumnLetter($cIdx);
+                $val = $defaults[$cIdx] ?? '';
+                $evalSheet->setCellValue("{$colLetter}{$rowNum}", $val);
+
+                if ($col['type'] === 'list') {
+                    $validation = $evalSheet->getCell("{$colLetter}{$rowNum}")->getDataValidation();
+                    $validation->setType(DataValidation::TYPE_LIST);
+                    $validation->setErrorStyle(DataValidation::STYLE_INFORMATION);
+                    $validation->setAllowBlank(false);
+                    $validation->setShowDropDown(true);
+                    $validation->setShowInputMessage(true);
+                    $validation->setPromptTitle('Select Option');
+                    $validation->setPrompt('Click the dropdown arrow to pick a valid option.');
+                    $validation->setFormula1($col['options']);
+                }
+
+                $isLocked = ($col['type'] === 'locked');
+                $evalSheet->getStyle("{$colLetter}{$rowNum}")->applyFromArray([
+                    'font'      => ['bold' => $isLocked, 'color' => ['argb' => $isLocked ? 'FF0F172A' : 'FF334155']],
+                    'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $isLocked ? 'FFF1F5F9' : 'FFFFFFFF']],
+                    'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
+                    'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                ]);
+            }
+
+            $evalSheet->getRowDimension($rowNum)->setRowHeight(22);
         }
-        $ws->getRowDimension(2)->setRowHeight(20);
 
-        // ── Pre-fill Student Rows (Starting Row 3) ────────────────────────────
-        $rowStyleLocked = [
-            'font'      => ['bold' => true, 'color' => ['argb' => 'FF0F172A'], 'size' => 10],
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFF8FAFC']],
-            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
-        ];
-        $rowStyleEditable = [
-            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFFFFF']],
-            'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
-        ];
-
-        $relationFormula = '"Father,Mother,Guardian"';
-        $selfFormula     = '"Yes,To an extent,Sometimes,No"';
-        $peerFormula     = '"Yes,Sometimes,No,Not Sure"';
-        $progressFormula = '"Proficient,Advanced,Developing"';
-
-        foreach ($students as $idx => $st) {
-            $r = $idx + 3;
-            $ws->setCellValueExplicit("A{$r}", $st['name'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->setCellValueExplicit("B{$r}", $st['login_id'], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->getStyle("A{$r}:B{$r}")->applyFromArray($rowStyleLocked);
-
-            // Default suggested values
-            $ws->setCellValueExplicit("C{$r}", 'Kashmiri', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->setCellValueExplicit("D{$r}", 'Father', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->setCellValueExplicit("E{$r}", 'Mohammad Ahmad', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->setCellValueExplicit("F{$r}", '22', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->setCellValueExplicit("G{$r}", '20', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->setCellValueExplicit("H{$r}", 'Reading, Art, Sports', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->setCellValueExplicit("I{$r}", 'Excel in Science and Mathematics', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->setCellValueExplicit("J{$r}", 'Teacher', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->setCellValueExplicit("K{$r}", 'Yes', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->setCellValueExplicit("L{$r}", 'Yes', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->setCellValueExplicit("M{$r}", 'Science Model Activity', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->setCellValueExplicit("N{$r}", 'Proficient', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->setCellValueExplicit("O{$r}", 'Consistent performance and active classroom participation', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-
-            $lastLetter = chr(64 + count($columns));
-            $ws->getStyle("C{$r}:{$lastLetter}{$r}")->applyFromArray($rowStyleEditable);
-
-            // Dropdown validations
-            $this->setValidation($ws, "D{$r}", $relationFormula);
-            $this->setValidation($ws, "K{$r}", $selfFormula);
-            $this->setValidation($ws, "L{$r}", $peerFormula);
-            $this->setValidation($ws, "N{$r}", $progressFormula);
-
-            $ws->getRowDimension($r)->setRowHeight(22);
-        }
-
-        $ws->freezePane('C3');
+        $evalSheet->freezePane('C3');
 
         $filename = 'hpc_teacher_assessment_template.xlsx';
-        $writer   = new Xlsx($sheet);
+        $writer   = new Xlsx($spreadsheet);
 
         return response()->stream(function () use ($writer) {
             $writer->save('php://output');
@@ -183,6 +278,16 @@ class HpcTeacherController extends Controller
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
             'Cache-Control'       => 'no-cache, no-store, must-revalidate',
         ]);
+    }
+
+    private function indexToColumnLetter(int $index): string
+    {
+        $letter = '';
+        while ($index >= 0) {
+            $letter = chr($index % 26 + 65) . $letter;
+            $index = intval($index / 26) - 1;
+        }
+        return $letter;
     }
 
     private function setValidation($ws, string $cell, string $formula): void
@@ -218,25 +323,52 @@ class HpcTeacherController extends Controller
 
         try {
             $ss  = \PhpOffice\PhpSpreadsheet\IOFactory::load($fullPath);
-            $ws  = $ss->getActiveSheet();
+            $ws  = $ss->getSheetByName('Student Evaluations') ?? $ss->getActiveSheet();
             $max = $ws->getHighestDataRow();
 
             for ($r = 3; $r <= $max; $r++) {
                 $name        = trim((string) $ws->getCell("A{$r}")->getValue());
                 $loginId     = trim((string) $ws->getCell("B{$r}")->getValue());
-                $motherTongue= trim((string) $ws->getCell("C{$r}")->getValue());
-                $relation    = trim((string) $ws->getCell("D{$r}")->getValue());
-                $parentName  = trim((string) $ws->getCell("E{$r}")->getValue());
-                $workingDays = trim((string) $ws->getCell("F{$r}")->getValue());
-                $presentDays = trim((string) $ws->getCell("G{$r}")->getValue());
-                $interests   = trim((string) $ws->getCell("H{$r}")->getValue());
-                $goal        = trim((string) $ws->getCell("I{$r}")->getValue());
-                $ambition    = trim((string) $ws->getCell("J{$r}")->getValue());
-                $selfRating  = trim((string) $ws->getCell("K{$r}")->getValue());
-                $peerRating  = trim((string) $ws->getCell("L{$r}")->getValue());
-                $activity    = trim((string) $ws->getCell("M{$r}")->getValue());
-                $progressLvl = trim((string) $ws->getCell("N{$r}")->getValue());
-                $remarks     = trim((string) $ws->getCell("O{$r}")->getValue());
+                $grade       = trim((string) $ws->getCell("C{$r}")->getValue());
+                $section     = trim((string) $ws->getCell("D{$r}")->getValue());
+                $location    = trim((string) $ws->getCell("E{$r}")->getValue());
+                $motherTongue= trim((string) $ws->getCell("F{$r}")->getValue());
+                $relation    = trim((string) $ws->getCell("G{$r}")->getValue());
+                $parentName  = trim((string) $ws->getCell("H{$r}")->getValue());
+                $workingDays = trim((string) $ws->getCell("I{$r}")->getValue());
+                $presentDays = trim((string) $ws->getCell("J{$r}")->getValue());
+                $interest    = trim((string) $ws->getCell("K{$r}")->getValue());
+                $responsible = trim((string) $ws->getCell("L{$r}")->getValue());
+                $goal        = trim((string) $ws->getCell("M{$r}")->getValue());
+                $ambition    = trim((string) $ws->getCell("N{$r}")->getValue());
+                $skill       = trim((string) $ws->getCell("O{$r}")->getValue());
+                $mentor      = trim((string) $ws->getCell("P{$r}")->getValue());
+                $pMotivation = trim((string) $ws->getCell("Q{$r}")->getValue());
+                $pProgress   = trim((string) $ws->getCell("R{$r}")->getValue());
+                $actApproach = trim((string) $ws->getCell("S{$r}")->getValue());
+                $cFormative  = trim((string) $ws->getCell("T{$r}")->getValue());
+                $cSummative  = trim((string) $ws->getCell("U{$r}")->getValue());
+
+                // Marks
+                $l1Max = trim((string) $ws->getCell("V{$r}")->getValue());
+                $l1Obt = trim((string) $ws->getCell("W{$r}")->getValue());
+                $l2Max = trim((string) $ws->getCell("X{$r}")->getValue());
+                $l2Obt = trim((string) $ws->getCell("Y{$r}")->getValue());
+                $l3Max = trim((string) $ws->getCell("Z{$r}")->getValue());
+                $l3Obt = trim((string) $ws->getCell("AA{$r}")->getValue());
+                $mMax  = trim((string) $ws->getCell("AB{$r}")->getValue());
+                $mObt  = trim((string) $ws->getCell("AC{$r}")->getValue());
+                $sciMax= trim((string) $ws->getCell("AD{$r}")->getValue());
+                $sciObt= trim((string) $ws->getCell("AE{$r}")->getValue());
+                $socMax= trim((string) $ws->getCell("AF{$r}")->getValue());
+                $socObt= trim((string) $ws->getCell("AG{$r}")->getValue());
+                $artMax= trim((string) $ws->getCell("AH{$r}")->getValue());
+                $artObt= trim((string) $ws->getCell("AI{$r}")->getValue());
+                $peMax = trim((string) $ws->getCell("AJ{$r}")->getValue());
+                $peObt = trim((string) $ws->getCell("AK{$r}")->getValue());
+
+                $declaration = trim((string) $ws->getCell("AL{$r}")->getValue());
+                $remarks     = trim((string) $ws->getCell("AM{$r}")->getValue());
 
                 if ($name === '' && $loginId === '') continue;
 
@@ -250,18 +382,36 @@ class HpcTeacherController extends Controller
                     'row'          => $r,
                     'name'         => $name,
                     'login_id'     => $loginId,
+                    'grade'        => $grade ?: 'Grade 6',
+                    'section'      => $section ?: 'A',
+                    'location'     => $location ?: 'Rural',
                     'mother_tongue'=> $motherTongue ?: 'Kashmiri',
                     'relation'     => $relation ?: 'Father',
                     'parent_name'  => $parentName ?: 'Parent',
-                    'working_days' => $workingDays ?: '22',
-                    'present_days' => $presentDays ?: '20',
-                    'interests'    => $interests ?: 'Reading, Art',
+                    'working_days' => $workingDays ?: '220',
+                    'present_days' => $presentDays ?: '204',
+                    'interest'     => $interest ?: 'Reading',
+                    'responsible'  => $responsible ?: 'Most times',
                     'goal'         => $goal ?: 'Academic improvement',
                     'ambition'     => $ambition ?: 'Teacher',
-                    'self_rating'  => $selfRating ?: 'Yes',
-                    'peer_rating'  => $peerRating ?: 'Yes',
-                    'activity'     => $activity ?: 'Science Project',
-                    'progress_lvl' => $progressLvl ?: 'Proficient',
+                    'skill'        => $skill ?: 'Critical Thinking',
+                    'mentor'       => $mentor ?: 'Teacher Mentor',
+                    'p_motivation' => $pMotivation ?: 'Yes',
+                    'p_progress'   => $pProgress ?: 'Yes',
+                    'act_approach' => $actApproach ?: 'Art-Integrated',
+                    'c_formative'  => $cFormative ?: 'Proficient',
+                    'c_summative'  => $cSummative ?: 'Proficient',
+                    'marks' => [
+                        'l1' => ['max' => $l1Max ?: '50', 'obt' => $l1Obt ?: '42'],
+                        'l2' => ['max' => $l2Max ?: '50', 'obt' => $l2Obt ?: '40'],
+                        'l3' => ['max' => $l3Max ?: '50', 'obt' => $l3Obt ?: '41'],
+                        'm'  => ['max' => $mMax  ?: '50', 'obt' => $mObt  ?: '44'],
+                        'sci'=> ['max' => $sciMax ?: '50', 'obt' => $sciObt ?: '43'],
+                        'soc'=> ['max' => $socMax ?: '50', 'obt' => $socObt ?: '42'],
+                        'art'=> ['max' => $artMax ?: '50', 'obt' => $artObt ?: '46'],
+                        'pe' => ['max' => $peMax ?: '50', 'obt' => $peObt ?: '47'],
+                    ],
+                    'declaration'  => $declaration ?: 'Yes',
                     'remarks'      => $remarks ?: 'Good progress',
                     'errors'       => $rowErrors,
                 ];

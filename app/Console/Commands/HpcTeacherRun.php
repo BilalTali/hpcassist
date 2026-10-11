@@ -323,19 +323,32 @@ class HpcTeacherRun extends Command
         }
 
         if (str_contains($client->getCurrentURL(), '/hpc-credit')) {
+            $marksList = [];
+            $m = $s['marks'] ?? [];
+            $keys = ['l1', 'l2', 'l3', 'm', 'sci', 'soc', 'art', 'pe'];
+            foreach ($keys as $k) {
+                $marksList[] = (string) ($m[$k]['max'] ?? '50');
+                $marksList[] = (string) ($m[$k]['obt'] ?? '42');
+            }
+
             $client->executeScript("
-                // Fill summative assessment marks (Max Marks 50, Obtained 45)
-                const marksInputs = Array.from(document.querySelectorAll('table input[type=\"text\"]'));
+                const marks = " . json_encode($marksList) . ";
+                const table = document.querySelectorAll('table')[1] || document.querySelector('table');
+                const marksInputs = Array.from(table.querySelectorAll('input[type=\"text\"], input[type=\"number\"]'));
                 marksInputs.forEach((inp, i) => {
-                    const val = (i % 2 === 0) ? '50' : '45';
-                    inp.value = val;
+                    const val = marks[i] || (i % 2 === 0 ? '50' : '42');
+                    const valSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                    if (valSetter) valSetter.call(inp, val); else inp.value = val;
                     inp.dispatchEvent(new Event('input', { bubbles: true }));
                     inp.dispatchEvent(new Event('change', { bubbles: true }));
                 });
 
                 // Check declaration checkbox
                 const decCb = document.querySelector('input[type=\"checkbox\"]');
-                if (decCb && !decCb.checked) decCb.click();
+                if (decCb && !decCb.checked) {
+                    decCb.click();
+                    decCb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
 
                 // Save credit form as draft
                 const saveDraftBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Save as Draft'));

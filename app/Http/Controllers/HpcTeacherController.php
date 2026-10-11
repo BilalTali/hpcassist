@@ -95,7 +95,7 @@ class HpcTeacherController extends Controller
             ['Rule #', 'Section / Page', 'Field Type', 'Rule Description', 'Permitted Values / Dragdown Options'],
             ['1', 'Student Metadata', 'Locked String', 'APAAR ID, HPC Login ID, Student Name, and Status. HPC Login ID is the unique identifier on the PARAKH portal.', 'Pre-filled from school portal roster.'],
             ['2', 'Status Protection', 'System Rule', 'Students with status "HPC Completed" will be protected and left untouched during update runs.', 'HPC Completed (skipped), HPC Pending / In Progress (updated)'],
-            ['3', 'Row 3 Guide Row', 'Guide Reference', 'Row 3 (DEMO_SAMPLE) provides a complete, realistic model of teacher evaluation for guidance. Do not delete or alter.', 'All 147 fields pre-filled for visual demonstration.'],
+            ['3', 'Row 4 Guide Row', 'Guide Reference', 'Row 4 (DEMO_SAMPLE) provides a complete, realistic model of teacher evaluation for guidance. Do not delete or alter.', 'All 147 fields pre-filled for visual demonstration.'],
             ['4', 'Part-A(1) Monthly Attendance', 'Integer & Formulas', 'Working Days and Present Days are arranged neck-to-neck for each month (Apr to Mar). Total Working, Total Present, and Attendance % calculate automatically via Excel formulas.', 'Monthly Working (0-31), Monthly Present (0-Working). Present <= Working.'],
             ['5', 'Part-A(2) All About Me', 'Text & Dragdown', 'Living arrangement, leisure activities, self-responsibility, improvement areas, friend info, academic & personal goals with rationale & steps, learnings in/outside school.', 'Responsibility: all the time, most times, sometimes.'],
             ['6', 'Part-A(3) Ambition Card', 'Text & Dragdown', 'Student career ambition, path to achieve, 5 key skills, focus subjects, habits to cultivate, teacher mentor name & guidance, emotional reflections.', 'Mentor guidance and structured skill acquisition.'],
@@ -138,42 +138,77 @@ class HpcTeacherController extends Controller
         $evalSheet = $spreadsheet->createSheet();
         $evalSheet->setTitle('Student Evaluations');
 
-        $columns = $this->getEvaluationColumns();
+        $columns  = $this->getEvaluationColumns();
+        $sections = $this->getEvaluationSections();
 
-        // Write Header (Row 1) & Notes (Row 2)
+        // ─── Row 1: Category Super-Headers (Color Banners) ─────────────────────
+        foreach ($sections as $sec) {
+            $startCol = $this->indexToColumnLetter($sec['start']);
+            $endCol   = $this->indexToColumnLetter($sec['end']);
+            $range    = "{$startCol}1:{$endCol}1";
+
+            $evalSheet->mergeCells($range);
+            $evalSheet->setCellValue("{$startCol}1", $sec['title']);
+            $evalSheet->getStyle($range)->applyFromArray([
+                'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 10],
+                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $sec['bg']]],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFFFFFFF']]],
+            ]);
+
+            // Set collapsible outline for large repetitive groups (Attendance, Checkboxes)
+            if (! empty($sec['collapsible'])) {
+                foreach (range($sec['start'], $sec['end']) as $cIdx) {
+                    $cLetter = $this->indexToColumnLetter($cIdx);
+                    $evalSheet->getColumnDimension($cLetter)->setOutlineLevel(1);
+                }
+            }
+        }
+        $evalSheet->setShowSummaryRight(true);
+        $evalSheet->getRowDimension(1)->setRowHeight(30);
+
+        // ─── Row 2: Field Names & Row 3: Guidance Notes ────────────────────────
         foreach ($columns as $idx => $col) {
             $colLetter = $this->indexToColumnLetter($idx);
-            $evalSheet->setCellValue("{$colLetter}1", $col['label']);
-            $evalSheet->setCellValue("{$colLetter}2", $col['note']);
+            $isObt    = str_ends_with($col['key'], '_obt');
+            $isLocked = in_array($col['type'], ['locked', 'calc']);
+
+            // Highlight Obtained Marks headers in Soft Yellow with icon
+            $label = $isObt ? '✏️ ' . $col['label'] : $col['label'];
+            $evalSheet->setCellValue("{$colLetter}2", $label);
+            $evalSheet->setCellValue("{$colLetter}3", $col['note']);
             $evalSheet->getColumnDimension($colLetter)->setWidth($col['width']);
 
-            $evalSheet->getStyle("{$colLetter}1")->applyFromArray([
-                'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 10],
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF1E293B']],
+            $headerBg    = $isObt ? 'FFFEF08A' : ($isLocked ? 'FFE2E8F0' : 'FF1E293B');
+            $headerColor = $isObt ? 'FF854D0E' : ($isLocked ? 'FF334155' : 'FFFFFFFF');
+
+            $evalSheet->getStyle("{$colLetter}2")->applyFromArray([
+                'font'      => ['bold' => true, 'color' => ['argb' => $headerColor], 'size' => 9.5],
+                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $headerBg]],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
                 'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFCBD5E1']]],
             ]);
 
-            $evalSheet->getStyle("{$colLetter}2")->applyFromArray([
-                'font'      => ['italic' => true, 'color' => ['argb' => 'FF64748B'], 'size' => 9],
+            $evalSheet->getStyle("{$colLetter}3")->applyFromArray([
+                'font'      => ['italic' => true, 'color' => ['argb' => 'FF64748B'], 'size' => 8.5],
                 'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFF8FAFC']],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
                 'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
             ]);
         }
-        $evalSheet->getRowDimension(1)->setRowHeight(28);
-        $evalSheet->getRowDimension(2)->setRowHeight(20);
+        $evalSheet->getRowDimension(2)->setRowHeight(26);
+        $evalSheet->getRowDimension(3)->setRowHeight(20);
 
-        // ─── Row 3: COMPLETE DEMO / DUMMY STUDENT (GUIDE ONLY) ────────────────
+        // ─── Row 4: COMPLETE DEMO / DUMMY STUDENT (GUIDE ONLY) ────────────────
         $demoRow = $this->getDemoStudentRow();
 
         foreach ($columns as $cIdx => $col) {
             $colLetter = $this->indexToColumnLetter($cIdx);
             $val = $demoRow[$cIdx] ?? '';
-            $evalSheet->setCellValue("{$colLetter}3", $val);
+            $evalSheet->setCellValue("{$colLetter}4", $val);
 
             if ($col['type'] === 'list') {
-                $validation = $evalSheet->getCell("{$colLetter}3")->getDataValidation();
+                $validation = $evalSheet->getCell("{$colLetter}4")->getDataValidation();
                 $validation->setType(DataValidation::TYPE_LIST);
                 $validation->setErrorStyle(DataValidation::STYLE_INFORMATION);
                 $validation->setAllowBlank(false);
@@ -181,44 +216,27 @@ class HpcTeacherController extends Controller
                 $validation->setFormula1($col['options']);
             }
 
-            $evalSheet->getStyle("{$colLetter}3")->applyFromArray([
+            $evalSheet->getStyle("{$colLetter}4")->applyFromArray([
                 'font'      => ['bold' => true, 'italic' => true, 'color' => ['argb' => 'FF854D0E']],
                 'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFEF9C3']],
                 'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFFDE047']]],
                 'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
             ]);
         }
-        $evalSheet->getRowDimension(3)->setRowHeight(24);
+        $evalSheet->getRowDimension(4)->setRowHeight(24);
 
-
-        // ─── Rows 4 onwards: REAL ENROLLED STUDENTS ───────────────────────────
+        // ─── Rows 5 onwards: REAL ENROLLED STUDENTS (SMART PRE-FILLED) ────────
         $defaultWd = SchoolWorkingDay::getDefault();
         $defaultWorkMap = $defaultWd->toMonthMap();
         $defaultMax = SchoolMaxMark::getDefault()->toSubjectMap();
 
         foreach ($students as $sIdx => $st) {
-            $rowNum = $sIdx + 4; // Starts at Row 4 below Demo Student
+            $rowNum = $sIdx + 5; // Starts at Row 5 below Category Header, Names, Notes, and Demo Student
+            $starterRow = $this->getStudentStarterProfile($sIdx, $st, $defaultWorkMap, $defaultMax, $rowNum);
 
             foreach ($columns as $cIdx => $col) {
                 $colLetter = $this->indexToColumnLetter($cIdx);
-                $val = '';
-
-                // Pre-fill metadata fetched from portal and default school working days & max marks
-                if ($cIdx === 0) $val = $st['apaar_id'] ?? '';
-                elseif ($cIdx === 1) $val = $st['login_id'] ?? '';
-                elseif ($cIdx === 2) $val = $st['name'] ?? '';
-                elseif ($cIdx === 3) $val = $st['status'] ?? 'HPC Pending';
-                elseif (str_starts_with($col['key'], 'work_')) {
-                    $mKey = substr($col['key'], 5);
-                    $val = $defaultWorkMap[$mKey] ?? 20;
-                }
-                elseif (str_ends_with($col['key'], '_max')) {
-                    $subKey = substr($col['key'], 0, -4);
-                    $val = $defaultMax[$subKey] ?? 50;
-                }
-                elseif ($col['key'] === 'total_work') $val = "=SUM(M{$rowNum},O{$rowNum},Q{$rowNum},S{$rowNum},U{$rowNum},W{$rowNum},Y{$rowNum},AA{$rowNum},AC{$rowNum},AE{$rowNum},AG{$rowNum},AI{$rowNum})";
-                elseif ($col['key'] === 'total_pres') $val = "=SUM(N{$rowNum},P{$rowNum},R{$rowNum},T{$rowNum},V{$rowNum},X{$rowNum},Z{$rowNum},AB{$rowNum},AD{$rowNum},AF{$rowNum},AH{$rowNum},AJ{$rowNum})";
-                elseif ($col['key'] === 'attendance_pct') $val = "=IF(AK{$rowNum}>0, ROUND((AL{$rowNum}/AK{$rowNum})*100, 1) & \"%\", \"\")";
+                $val = $starterRow[$cIdx] ?? '';
 
                 $evalSheet->setCellValue("{$colLetter}{$rowNum}", $val);
 
@@ -234,11 +252,17 @@ class HpcTeacherController extends Controller
                     $validation->setFormula1($col['options']);
                 }
 
-                $isLocked = ($col['type'] === 'locked');
+                $isObt    = str_ends_with($col['key'], '_obt');
+                $isLocked = in_array($col['type'], ['locked', 'calc']);
+
+                // Highlight editable Obtained Marks in soft warm yellow for quick focus
+                $cellBg    = $isObt ? 'FFFEFCE8' : ($isLocked ? 'FFF1F5F9' : 'FFFFFFFF');
+                $cellColor = $isObt ? 'FF0F172A' : ($isLocked ? 'FF475569' : 'FF1E293B');
+
                 $evalSheet->getStyle("{$colLetter}{$rowNum}")->applyFromArray([
-                    'font'      => ['bold' => $isLocked, 'color' => ['argb' => $isLocked ? 'FF0F172A' : 'FF334155']],
-                    'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $isLocked ? 'FFF1F5F9' : 'FFFFFFFF']],
-                    'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
+                    'font'      => ['bold' => ($isObt || $isLocked), 'color' => ['argb' => $cellColor]],
+                    'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $cellBg]],
+                    'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => $isObt ? 'FFFDE047' : 'FFE2E8F0']]],
                     'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
                 ]);
             }
@@ -246,7 +270,7 @@ class HpcTeacherController extends Controller
             $evalSheet->getRowDimension($rowNum)->setRowHeight(22);
         }
 
-        $evalSheet->freezePane('E4');
+        $evalSheet->freezePane('E5');
 
         $filename = 'hpc_teacher_assessment_template.xlsx';
         $writer   = new Xlsx($spreadsheet);
@@ -308,7 +332,7 @@ class HpcTeacherController extends Controller
 
             $columns = $this->getEvaluationColumns();
 
-            for ($r = 3; $r <= $max; $r++) {
+            for ($r = 4; $r <= $max; $r++) {
                 $rowValues = [];
                 foreach ($columns as $cIdx => $col) {
                     $colLetter = $this->indexToColumnLetter($cIdx);
@@ -320,6 +344,7 @@ class HpcTeacherController extends Controller
                 $status  = $rowValues['status'] ?? '';
 
                 if ($name === '' && $loginId === '') continue;
+                if (str_contains($loginId, 'Login ID') || str_contains($name, 'Student Name')) continue;
 
                 $isDemo      = ($loginId === 'DEMO_SAMPLE' || stripos($name, 'SAMPLE') !== false || stripos($name, 'DEMO') !== false);
                 $isCompleted = strcasecmp($status, 'HPC Completed') === 0;
@@ -676,6 +701,27 @@ class HpcTeacherController extends Controller
         return response()->json(['ok' => true, 'message' => "Session ended for active teacher profile."]);
     }
 
+    public function getEvaluationSections(): array
+    {
+        return [
+            ['title' => '🔒 1. STUDENT IDENTITY (LOCKED)',              'start' => 0,   'end' => 3,   'bg' => 'FF0F172A'],
+            ['title' => '👤 2. PART-A1: BASIC PROFILE',                 'start' => 4,   'end' => 11,  'bg' => 'FF1E40AF'],
+            ['title' => '📅 3. PART-A1: MONTHLY ATTENDANCE (APR–MAR)',  'start' => 12,  'end' => 35,  'bg' => 'FF0369A1', 'collapsible' => true],
+            ['title' => '📈 4. ATTENDANCE SUMMARY (AUTO)',              'start' => 36,  'end' => 38,  'bg' => 'FF0D9488'],
+            ['title' => '🌟 5. ABSENCE & HOBBY',                        'start' => 39,  'end' => 41,  'bg' => 'FF4338CA'],
+            ['title' => '🌱 6. PART-A2: ALL ABOUT ME & GOALS',          'start' => 42,  'end' => 67,  'bg' => 'FF6D28D9'],
+            ['title' => '🚀 7. PART-A3: MY AMBITION CARD',              'start' => 68,  'end' => 77,  'bg' => 'FF7C3AED'],
+            ['title' => '🏡 8. PART-A4: HOME RESOURCES',                'start' => 78,  'end' => 87,  'bg' => 'FFBE185D', 'collapsible' => true],
+            ['title' => '😊 9. PART-A4: MOTIVATION & PROGRESS',         'start' => 88,  'end' => 91,  'bg' => 'FF9D174D'],
+            ['title' => '🤝 10. PART-A4: SCHOOL SUPPORT NEEDED',        'start' => 92,  'end' => 102, 'bg' => 'FFB91C1C', 'collapsible' => true],
+            ['title' => '📝 11. PART-A4: PARENT HOME SUPPORT PLAN',     'start' => 103, 'end' => 103, 'bg' => 'FFC2410C'],
+            ['title' => '🎨 12. PART-B: HOLISTIC ACTIVITY PROFILE',     'start' => 104, 'end' => 126, 'bg' => 'FFD97706'],
+            ['title' => '📊 13. PART-C: CURRICULAR PROGRESS LEVELS',    'start' => 127, 'end' => 128, 'bg' => 'FF059669'],
+            ['title' => '🎯 14. HPC CREDIT: CURRICULAR MARKS (8 SUBJ)', 'start' => 129, 'end' => 144, 'bg' => 'FF047857'],
+            ['title' => '✍️ 15. FINAL DECLARATION & REMARKS',           'start' => 145, 'end' => 146, 'bg' => 'FF334155'],
+        ];
+    }
+
     public function getEvaluationColumns(): array
     {
         return [
@@ -890,11 +936,11 @@ class HpcTeacherController extends Controller
             $m['jan'], min(13, $m['jan']),
             $m['feb'], min(19, $m['feb']),
             $m['mar'], min(17, $m['mar']),
-            // Total Working Days (Col AK3) & Total Present Days (Col AL3)
-            '=SUM(M3,O3,Q3,S3,U3,W3,Y3,AA3,AC3,AE3,AG3,AI3)',
-            '=SUM(N3,P3,R3,T3,V3,X3,Z3,AB3,AD3,AF3,AH3,AJ3)',
-            // Attendance % (Col AM3) & Absence Info
-            '=IF(AK3>0, ROUND((AL3/AK3)*100, 1) & "%", "")',
+            // Total Working Days (Col AK4) & Total Present Days (Col AL4)
+            '=SUM(M4,O4,Q4,S4,U4,W4,Y4,AA4,AC4,AE4,AG4,AI4)',
+            '=SUM(N4,P4,R4,T4,V4,X4,Z4,AB4,AD4,AF4,AH4,AJ4)',
+            // Attendance % (Col AM4) & Absence Info
+            '=IF(AK4>0, ROUND((AL4/AK4)*100, 1) & "%", "")',
             16,
             'Viral fever during seasonal change in November',
             'Reading',
@@ -1007,6 +1053,496 @@ class HpcTeacherController extends Controller
             'Yes',
             'Faizan is an exceptionally motivated, intellectually curious, and responsible student. Demonstrates superior grasp in Mathematics and Sciences, with remarkable peer collaboration and positive leadership in class activities.'
         ];
+    }
+
+    public function getStudentStarterProfile(int $sIdx, array $st, array $defaultWorkMap, array $defaultMax, int $rowNum): array
+    {
+        // 5 Archetypes: 0 = STEM, 1 = Literature/Language, 2 = Medical/Science, 3 = Civics/Social, 4 = Design/Math
+        $aIdx = $sIdx % 5;
+
+        $admNo  = 'ADM-2026-' . str_pad($sIdx + 1, 3, '0', STR_PAD_LEFT);
+        $stName = $st['name'] ?? 'Student ' . ($sIdx + 1);
+
+        // Realistic monthly present days (~90-95% attendance rate)
+        $monthKeys = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
+        $monthlyPairs = [];
+        $totalWork = 0;
+        $totalPres = 0;
+
+        foreach ($monthKeys as $mOffset => $mKey) {
+            $w = $defaultWorkMap[$mKey] ?? 20;
+            $loss = (($sIdx + $mOffset) % 4 === 0) ? 1 : ((($sIdx + $mOffset) % 7 === 0) ? 2 : 0);
+            $p = max(1, $w - $loss);
+            $monthlyPairs[] = $w;
+            $monthlyPairs[] = $p;
+            $totalWork += $w;
+            $totalPres += $p;
+        }
+
+        $totalAbsent = $totalWork - $totalPres;
+
+        $archetypes = [
+            // 0: STEM / Space & Mathematics
+            [
+                'hobby'        => 'Reading',
+                'abs_reason'   => 'Mild seasonal fever in late November',
+                'live_with'    => 'Family',
+                'stay_at'      => 'Sugin, Budgam',
+                'free_time'    => 'Reading science magazines and sketching diagrams',
+                'do_well'      => 'Solving numerical puzzles and laboratory experiments',
+                'responsible'  => 'all the time',
+                'do_better'    => 'Time management during lengthy exam papers',
+                'care_others'  => 'Helping classmates with difficult mathematics problems',
+                'feel_proud'   => 'Solving challenging questions independently',
+                'friend_name'  => 'Ayaan Ahmad', 'friend_age' => 12,
+                'acad_goal'    => 'Score above 90% in Mathematics and Science',
+                'acad_why'     => 'Builds strong foundation for higher studies in Engineering and Technology',
+                'acad_step1'   => 'Dedicate 45 minutes daily to numerical problem solving',
+                'acad_step2'   => 'Clarify doubts with subject teachers promptly',
+                'pers_goal'    => 'Maintain disciplined morning exercise and reading schedule',
+                'pers_why'     => 'Keeps mind alert, improves stamina, and enhances daily concentration',
+                'pers_step1'   => 'Wake up at 6:00 AM every morning and practice yoga',
+                'pers_step2'   => 'Read at least 15 pages of non-syllabus books before sleeping',
+                'sch1'         => 'Laws of reflection and refraction in science laboratory',
+                'sch2'         => 'Solving linear equations in single variable',
+                'sch3'         => 'Constitutional preamble and fundamental rights in Social Science',
+                'out1'         => 'Organic kitchen gardening, composting, and soil preparation',
+                'out2'         => 'Bicycle gear maintenance and tire puncture repair',
+                'out3'         => 'Basic household budgeting and grocery expense calculations',
+                'help_with'    => 'Advanced STEM robotics projects and Olympiad preparation',
+                'teach_know'   => 'Enthusiastic about hands-on experiments and collaborative team projects',
+                'ambition'     => 'Software Engineer & Robotics Specialist',
+                'achieve_how'  => 'Conceptual mastery and daily problem solving in Maths and Science',
+                'skills'       => 'Critical Thinking, Problem Solving, Logical Reasoning, Coding, Teamwork',
+                'focus_subj'   => 'Mathematics, Science, English, Computer Science',
+                'habits'       => 'Disciplined daily study, curiosity to question, and regular revision',
+                'mentor'       => 'Bilal Ahmad Tali (Teacher Mentor)',
+                'mentor_help'  => 'Clarifying complex concepts and recommending Olympiad books',
+                'learn_new'    => 'Programming algorithms, 3D robotics design, and laboratory techniques',
+                'feel_achieve' => 'Proud, fulfilled, and motivated to create technological solutions',
+                'parent_feel'  => 'Immensely joyful, honored, and proud',
+                'parent_supp'  => 'Provide quiet study space, supervise 1.5 hours evening revision, and discuss daily learnings',
+                'act_subject'  => 'Science', 'act_app' => 'Art-Integrated',
+                'act_title'    => 'Solar System 3D Model & Planetary Geometry',
+                'act_desc'     => 'Constructed scale planetary orbits, calculated distance ratios, and demonstrated to class',
+                'rubrics'      => ['Advanced', 'Proficient', 'Advanced'],
+                'self'         => ['Yes', 'Yes', 'Yes'],
+                'learnt'       => 'Learned orbital distances, 3D scale geometry, and public presentation skills',
+                'interest'     => 'Fabricating rotating planetary models using recycled materials and LED lighting',
+                'practice'     => 'Time management during hands-on model assembly and fine calibrations',
+                'act_help'     => 'Calculating complex elliptical orbit equations and angular measurements',
+                'peer_name'    => 'Ayaan Ahmad',
+                'peer_q'       => ['Yes', 'Yes'],
+                'peer_pract'   => 'Color shading and finer model labeling',
+                'peer_help'    => 'Mathematical formula application during group work',
+                'peer_fb'      => 'Very collaborative and supportive teammate; explained difficult astronomical concepts clearly',
+                'strength'     => 'Solution-Focused Thinking',
+                'barriers'     => 'None',
+                'supp_plan'    => 'Encourage participation in inter-school science competitions and provide advanced telescope sessions',
+                'c_levels'     => ['Advanced', 'Proficient'],
+                'obt_marks'    => [46, 44, 45, 48, 47, 44, 48, 49],
+                'remarks'      => 'Faizan is an exceptionally motivated, curious, and responsible student with superior grasp in Mathematics and Sciences.',
+            ],
+            // 1: Literature / Creative Writing & Languages
+            [
+                'hobby'        => 'Creative Writing',
+                'abs_reason'   => 'Travel with family during winter vacation',
+                'live_with'    => 'Parents and Grandparents',
+                'stay_at'      => 'Srinagar, Kashmir',
+                'free_time'    => 'Writing short stories and composing poetry',
+                'do_well'      => 'Reading comprehension and creative expression',
+                'responsible'  => 'all the time',
+                'do_better'    => 'Mental math calculations under speed limits',
+                'care_others'  => 'Sharing class notes and mentoring junior readers',
+                'feel_proud'   => 'Publishing a poem in school magazine',
+                'friend_name'  => 'Zehra Batool', 'friend_age' => 12,
+                'acad_goal'    => 'Achieve top grades in Languages and Social Sciences',
+                'acad_why'     => 'Fosters eloquent communication and deep understanding of cultural history',
+                'acad_step1'   => 'Write one descriptive essay each week on current events',
+                'acad_step2'   => 'Expand vocabulary by learning 5 new literary words daily',
+                'pers_goal'    => 'Build public speaking confidence and debate eloquence',
+                'pers_why'     => 'Enables effective articulation of social ideas and civic awareness',
+                'pers_step1'   => 'Participate actively in school morning assembly speeches',
+                'pers_step2'   => 'Practice impromptu storytelling with family members weekly',
+                'sch1'         => 'Literary devices, poetic meters, and critical character analysis',
+                'sch2'         => 'Medieval history and cultural developments across South Asia',
+                'sch3'         => 'Atmospheric circulation and climatic zones in Geography',
+                'out1'         => 'Interviewing village elders to document traditional oral folklore',
+                'out2'         => 'Creating calligraphic art using handmade bamboo reed pens',
+                'out3'         => 'Basic bookbinding and preserving old manuscript papers',
+                'help_with'    => 'Guidance on participating in state-level essay competitions',
+                'teach_know'   => 'Enjoys expressing ideas through essays, debates, and dramatics',
+                'ambition'     => 'Author & Professor of Literature',
+                'achieve_how'  => 'Extensive literary reading, creative writing practice, and linguistic studies',
+                'skills'       => 'Communication, Empathy, Creative Thinking, Research, Public Speaking',
+                'focus_subj'   => 'Language 1 (R1), Language 2 (R2), Social Science, Art Education',
+                'habits'       => 'Daily journaling, wide reading across genres, and thoughtful listening',
+                'mentor'       => 'Dr. Farooq Shah (Language Teacher)',
+                'mentor_help'  => 'Editing creative writing drafts and recommending classic world literature',
+                'learn_new'    => 'Comparative linguistics, poetic translation, and editorial skills',
+                'feel_achieve' => 'Fulfilled, deeply inspired, and proud to enrich cultural heritage',
+                'parent_feel'  => 'Extremely proud, grateful, and celebrated',
+                'parent_supp'  => 'Encourage daily book reading, provide access to public library, and discuss social themes',
+                'act_subject'  => 'Language 1 (R1)', 'act_app' => 'Experiential Learning',
+                'act_title'    => 'Traditional Kashmiri Folk Tales & Digital Audio Narration',
+                'act_desc'     => 'Recorded audio adaptations of local folklore with background acoustic soundscapes',
+                'rubrics'      => ['Advanced', 'Advanced', 'Proficient'],
+                'self'         => ['Yes', 'Yes', 'Yes'],
+                'learnt'       => 'Voice modulation, script adaptation, and cultural preservation ethics',
+                'interest'     => 'Composing expressive dialogues and directing peer audio voice-overs',
+                'practice'     => 'Editing audio sound balances and pacing narrative intervals',
+                'act_help'     => 'Linguistic translation of archaic Kashmiri idioms into English',
+                'peer_name'    => 'Insha Jan',
+                'peer_q'       => ['Yes', 'Yes'],
+                'peer_pract'   => 'Speed of voice delivery during high-tension scenes',
+                'peer_help'    => 'Audio recording software sound normalization',
+                'peer_fb'      => 'Remarkable creative talent; kept the entire audience captivated during presentation',
+                'strength'     => 'Creative',
+                'barriers'     => 'None',
+                'supp_plan'    => 'Recommend for school magazine editorial board and state literary meet',
+                'c_levels'     => ['Advanced', 'Advanced'],
+                'obt_marks'    => [48, 47, 46, 43, 44, 47, 49, 46],
+                'remarks'      => 'Outstanding linguistic competence, rich imagination, and exemplary peer leadership in expressive activities.',
+            ],
+            // 2: Medical / Life Sciences & Ecology
+            [
+                'hobby'        => 'Gardening',
+                'abs_reason'   => 'Brief seasonal illness during weather change',
+                'live_with'    => 'Family',
+                'stay_at'      => 'Baramulla, Kashmir',
+                'free_time'    => 'Caring for home botanical garden and identifying plants',
+                'do_well'      => 'Observational drawing and biological classification',
+                'responsible'  => 'all the time',
+                'do_better'    => 'Speed in written examination calculations',
+                'care_others'  => 'Caring for injured animals and assisting elderly neighbors',
+                'feel_proud'   => 'Successfully propagating rare local medicinal herbs',
+                'friend_name'  => 'Mohammad Yousuf', 'friend_age' => 12,
+                'acad_goal'    => 'Score 90%+ in Natural Sciences and Health Education',
+                'acad_why'     => 'Lays the academic groundwork for pursuing medical studies in surgery',
+                'acad_step1'   => 'Review cellular biology concepts and microscopic diagram labeling weekly',
+                'acad_step2'   => 'Maintain a neat record of botanical and ecological observations',
+                'pers_goal'    => 'Cultivate high empathy, patience, and active community service',
+                'pers_why'     => 'Essential personal virtues for healthcare practitioners and healers',
+                'pers_step1'   => 'Volunteer 2 hours every weekend at community health awareness camps',
+                'pers_step2'   => 'Practice mindfulness and stress regulation techniques daily',
+                'sch1'         => 'Human circulatory and digestive systems in Science',
+                'sch2'         => 'Ratio and proportions applied to medicine dosages in Mathematics',
+                'sch3'         => 'Environmental degradation and conservation policies in Social Studies',
+                'out1'         => 'Identifying indigenous Himalayan medicinal herbs and their healing values',
+                'out2'         => 'First-aid bandaging and emergency wound cleaning techniques',
+                'out3'         => 'Rainwater harvesting and vermicomposting at home',
+                'help_with'    => 'Advanced microscope slides preparation and biology laboratory access',
+                'teach_know'   => 'Passionate about human anatomy, health sciences, and environmental botany',
+                'ambition'     => 'Doctor / Pediatric Surgeon',
+                'achieve_how'  => 'Diligent mastery of Science, regular NEET foundation preparation, and discipline',
+                'skills'       => 'Empathy, Attention to Detail, Scientific Enquiry, Decision Making, Resilience',
+                'focus_subj'   => 'Science, Mathematics, Physical Education & Well Being, English',
+                'habits'       => 'Strict daily study routine, physical fitness, and compassionate nature',
+                'mentor'       => 'Dr. Sajad Wani (Senior Physician)',
+                'mentor_help'  => 'Explaining clinical diagnosis basics and sharing inspiring medical journeys',
+                'learn_new'    => 'Cellular genetics, human physiology, and bioethics principles',
+                'feel_achieve' => 'Deeply honored, humbled, and passionate about saving lives',
+                'parent_feel'  => 'Immensely blessed, delighted, and proud',
+                'parent_supp'  => 'Ensure wholesome nutrition, regular sleep routine, and encourage scientific curiosity',
+                'act_subject'  => 'Science', 'act_app' => 'Experiential Learning',
+                'act_title'    => 'Medicinal Plants Herbarium & Local Ecology Audit',
+                'act_desc'     => 'Collected and classified 25 endemic medicinal flora with verified pharmacological uses',
+                'rubrics'      => ['Advanced', 'Advanced', 'Proficient'],
+                'self'         => ['Yes', 'Yes', 'Yes'],
+                'learnt'       => 'Botanical taxonomy, herbarium preservation, and medicinal plant biochemistry',
+                'interest'     => 'Pressing rare mountain herbs and documenting traditional herbal remedies',
+                'practice'     => 'Accurate scientific terminology in binomial nomenclature',
+                'act_help'     => 'Microscopic cross-sectional plant tissue mounting',
+                'peer_name'    => 'Sahil Bashir',
+                'peer_q'       => ['Yes', 'Yes'],
+                'peer_pract'   => 'Neatness in taxonomy record book annotations',
+                'peer_help'    => 'Color indexing herbarium specimen sheets',
+                'peer_fb'      => 'Exceptionally meticulous and caring worker; brought wonderful botanical specimens to class',
+                'strength'     => 'Empathy',
+                'barriers'     => 'None',
+                'supp_plan'    => 'Provide mentorship for national children science congress project',
+                'c_levels'     => ['Advanced', 'Proficient'],
+                'obt_marks'    => [45, 44, 43, 46, 48, 45, 47, 48],
+                'remarks'      => 'Compassionate, meticulous, and scientifically oriented student with a remarkable work ethic.',
+            ],
+            // 3: Social Sciences / Civics & Public Service
+            [
+                'hobby'        => 'Sports or Games',
+                'abs_reason'   => 'Participated in district sports tournament',
+                'live_with'    => 'Family',
+                'stay_at'      => 'Anantnag, Kashmir',
+                'free_time'    => 'Playing football and following global news events',
+                'do_well'      => 'Team coordination and social leadership',
+                'responsible'  => 'most times',
+                'do_better'    => 'Organizing written notes and keeping notebooks up to date',
+                'care_others'  => 'Standing up against bullying and mediating playground disagreements',
+                'feel_proud'   => 'Leading school sports squad to district championship victory',
+                'friend_name'  => 'Ayaan Ahmad', 'friend_age' => 12,
+                'acad_goal'    => 'Score top grades in Social Science, History, and Mathematics',
+                'acad_why'     => 'Develops deep insight into public governance, policy, and human welfare',
+                'acad_step1'   => 'Read the daily national newspaper editorial column for 20 minutes',
+                'acad_step2'   => 'Prepare structured notes on parliamentary processes and constitutional rights',
+                'pers_goal'    => 'Develop strong leadership, public integrity, and physical endurance',
+                'pers_why'     => 'Builds capacity to lead public service initiatives and serve communities',
+                'pers_step1'   => 'Engage in 45 minutes of football drills and endurance running daily',
+                'pers_step2'   => 'Participate actively in school student council deliberations',
+                'sch1'         => 'Democratic decision making and local Panchayati Raj institutions',
+                'sch2'         => 'Geographical mapping, topography, and river basin networks',
+                'sch3'         => 'Basic economic concepts of markets, commodities, and livelihoods',
+                'out1'         => 'Participating in village sanitation drives and awareness campaigns',
+                'out2'         => 'Basic athletic coaching and refereeing rules in junior football',
+                'out3'         => 'Navigating local administrative offices and understanding land records',
+                'help_with'    => 'Guidance on model united nations and public policy debate formats',
+                'teach_know'   => 'Driven by fairness, justice, collaborative leadership, and sportsmanship',
+                'ambition'     => 'Civil Services Officer (IAS / Administrative Service)',
+                'achieve_how'  => 'Broad reading in history, current affairs, ethics, and rigorous academic study',
+                'skills'       => 'Communication, Leadership, Critical Thinking, Decision Making, Integrity',
+                'focus_subj'   => 'Social Science, English, Mathematics, Physical Education & Well Being',
+                'habits'       => 'Punctuality, fair play on and off field, and persistent daily revision',
+                'mentor'       => 'Bashir Ahmad Mir (Social Science Teacher)',
+                'mentor_help'  => 'Guiding deep analysis of current affairs and constitutional case studies',
+                'learn_new'    => 'Public administration principles, developmental economics, and diplomacy',
+                'feel_achieve' => 'Humbled, purposeful, and dedicated to serving underprivileged citizens',
+                'parent_feel'  => 'Immensely proud, respected, and delighted',
+                'parent_supp'  => 'Discuss current news daily, encourage leadership roles, and supervise balance between sports and academics',
+                'act_subject'  => 'Social Science', 'act_app' => 'Technology-Integrated',
+                'act_title'    => 'Community Water Heritage & Local History GIS Mapping',
+                'act_desc'     => 'Mapped historical water springs in the locality and documented changes in discharge',
+                'rubrics'      => ['Advanced', 'Proficient', 'Advanced'],
+                'self'         => ['Yes', 'Yes', 'Yes'],
+                'learnt'       => 'GIS coordinate mapping, oral historical survey techniques, and water conservation',
+                'interest'     => 'Interviewing local community elders about spring folklore and historical canals',
+                'practice'     => 'Statistical chart formatting for survey data presentation',
+                'act_help'     => 'Interpreting satellite imagery overlays on historical village maps',
+                'peer_name'    => 'Zehra Batool',
+                'peer_q'       => ['Yes', 'Yes'],
+                'peer_pract'   => 'Summarizing lengthy interview transcripts into concise bullet points',
+                'peer_help'    => 'Formatting GIS digital map pins and photo legends',
+                'peer_fb'      => 'Outstanding leadership and team coordination; rallied the whole team effectively',
+                'strength'     => 'Communication',
+                'barriers'     => 'None',
+                'supp_plan'    => 'Assign student council responsibility and support entry in civic innovation challenges',
+                'c_levels'     => ['Proficient', 'Advanced'],
+                'obt_marks'    => [47, 45, 46, 44, 45, 49, 46, 48],
+                'remarks'      => 'Natural leader with strong civic awareness, excellent peer collaboration, and strong communicative ability.',
+            ],
+            // 4: Mathematics, Architecture & Structural Design
+            [
+                'hobby'        => 'Craft',
+                'abs_reason'   => 'Mild dental appointment and follow up visit',
+                'live_with'    => 'Family',
+                'stay_at'      => 'Sugin, Budgam',
+                'free_time'    => 'Building architectural papercraft models and origami structures',
+                'do_well'      => 'Spatial reasoning, geometrical construction, and technical drawing',
+                'responsible'  => 'all the time',
+                'do_better'    => 'Expanding vocabulary in English language comprehension',
+                'care_others'  => 'Helping friends design project models and craft displays',
+                'feel_proud'   => 'Constructing an intricate geodesic dome model using bamboo sticks',
+                'friend_name'  => 'Faizan Ahmad', 'friend_age' => 12,
+                'acad_goal'    => 'Master advanced geometry, mensuration, and visual arts',
+                'acad_why'     => 'Essential prerequisite for pursuing architectural design and structural engineering',
+                'acad_step1'   => 'Practice 5 geometrical theorem proofs and coordinate problems daily',
+                'acad_step2'   => 'Maintain a sketchbook of 3D architectural elevations and perspective drawings',
+                'pers_goal'    => 'Develop high precision, patience, and sustainable design awareness',
+                'pers_why'     => 'Creates mindful craftsmanship and responsible ecological architectural thinking',
+                'pers_step1'   => 'Dedicate 30 minutes every evening to precision drafting and sketching',
+                'pers_step2'   => 'Observe and record traditional Kashmiri Pinjrakari and Khatamband woodwork styles',
+                'sch1'         => 'Properties of triangles, polygons, and Pythagoras theorem in Geometry',
+                'sch2'         => 'Force, pressure, and structural loads in physical science',
+                'sch3'         => 'Traditional architecture and heritage building preservation in Social Science',
+                'out1'         => 'Basic carpentry joints, wood polishing, and measurement accuracy',
+                'out2'         => 'Clay sculpting, mold making, and architectural model casting',
+                'out3'         => 'Eco-friendly building insulation techniques using mud, straw, and timber',
+                'help_with'    => 'Access to digital CAD modeling tools and architectural geometry books',
+                'teach_know'   => 'Thinks visually and excels when concepts are represented through physical models',
+                'ambition'     => 'Architect & Sustainable Urban Designer',
+                'achieve_how'  => 'Mastery of Mathematics, physics, aesthetic design, and digital drafting',
+                'skills'       => 'Spatial Reasoning, Creative Design, Mathematics, Precision, Problem Solving',
+                'focus_subj'   => 'Mathematics, Science, Art Education, English',
+                'habits'       => 'Meticulous attention to detail, continuous sketching, and orderly workspace',
+                'mentor'       => 'Ar. Tariq Rather (Architect Mentor)',
+                'mentor_help'  => 'Teaching isometric perspective drawing and sustainable building concepts',
+                'learn_new'    => 'Structural load calculation, 3D computer design, and urban planning',
+                'feel_achieve' => 'Proud, inspired, and enthusiastic about building sustainable habitats',
+                'parent_feel'  => 'Overjoyed, deeply proud, and honored',
+                'parent_supp'  => 'Provide drafting materials, model-making supplies, and visit heritage architecture together',
+                'act_subject'  => 'Mathematics', 'act_app' => 'Toy-Based',
+                'act_title'    => 'Geometric Polyhedra & Structural Tessellations',
+                'act_desc'     => 'Constructed 3D Platonic solids and computed surface area to volume ratios',
+                'rubrics'      => ['Advanced', 'Advanced', 'Advanced'],
+                'self'         => ['Yes', 'Yes', 'Yes'],
+                'learnt'       => 'Euler formula (V - E + F = 2), surface area optimization, and spatial geometry',
+                'interest'     => 'Building interlocking modular origami polyhedra without using glue',
+                'practice'     => 'Speed in calculating irrational square roots for diagonal lengths',
+                'act_help'     => 'Mathematical derivation of icosahedron dihedral angles',
+                'peer_name'    => 'Mohammad Yousuf',
+                'peer_q'       => ['Yes', 'Yes'],
+                'peer_pract'   => 'Precision in folding heavy paper cardstock edges',
+                'peer_help'    => 'Angular measurement verification with protractor',
+                'peer_fb'      => 'Outstanding spatial genius; helped every group member visualize 3D geometrical shapes',
+                'strength'     => 'Collaboration',
+                'barriers'     => 'None',
+                'supp_plan'    => 'Encourage submission of structural designs to state technology and art fairs',
+                'c_levels'     => ['Advanced', 'Advanced'],
+                'obt_marks'    => [44, 43, 44, 49, 46, 44, 49, 46],
+                'remarks'      => 'Remarkable spatial and design intelligence, meticulous craftsmanship, and strong cooperative spirit.',
+            ],
+        ];
+
+        $a = $archetypes[$aIdx];
+
+        // Assemble 147 evaluation values matching getEvaluationColumns schema
+        $row = [
+            // 0-3: Locked Metadata
+            $st['apaar_id'] ?? '',
+            $st['login_id'] ?? '',
+            $st['name'] ?? $stName,
+            $st['status'] ?? 'HPC Pending',
+
+            // 4-11: Part-A1 Profile
+            $admNo,
+            'Grade 6',
+            'A',
+            'Rural',
+            'English',
+            'Kashmiri',
+            'Father',
+            'Mohammad ' . explode(' ', $stName)[0] . ' Parent',
+        ];
+
+        // 12-35: 24 Monthly Attendance
+        foreach ($monthlyPairs as $val) {
+            $row[] = $val;
+        }
+
+        // 36-38: Totals & %
+        $row[] = "=SUM(M{$rowNum},O{$rowNum},Q{$rowNum},S{$rowNum},U{$rowNum},W{$rowNum},Y{$rowNum},AA{$rowNum},AC{$rowNum},AE{$rowNum},AG{$rowNum},AI{$rowNum})";
+        $row[] = "=SUM(N{$rowNum},P{$rowNum},R{$rowNum},T{$rowNum},V{$rowNum},X{$rowNum},Z{$rowNum},AB{$rowNum},AD{$rowNum},AF{$rowNum},AH{$rowNum},AJ{$rowNum})";
+        $row[] = "=IF(AK{$rowNum}>0, ROUND((AL{$rowNum}/AK{$rowNum})*100, 1) & \"%\", \"\")";
+
+        // 39-41: Absent count, reason, interest
+        $row[] = $totalAbsent;
+        $row[] = $a['abs_reason'];
+        $row[] = $a['hobby'];
+
+        // 42-67: Part-A2 All About Me & Goal Setting (26 items)
+        $row[] = $a['live_with'];
+        $row[] = $a['stay_at'];
+        $row[] = $a['free_time'];
+        $row[] = $a['do_well'];
+        $row[] = $a['responsible'];
+        $row[] = $a['do_better'];
+        $row[] = $a['care_others'];
+        $row[] = $a['feel_proud'];
+        $row[] = $a['friend_name'];
+        $row[] = $a['friend_age'];
+        $row[] = $a['acad_goal'];
+        $row[] = $a['acad_why'];
+        $row[] = $a['acad_step1'];
+        $row[] = $a['acad_step2'];
+        $row[] = $a['pers_goal'];
+        $row[] = $a['pers_why'];
+        $row[] = $a['pers_step1'];
+        $row[] = $a['pers_step2'];
+        $row[] = $a['sch1'];
+        $row[] = $a['sch2'];
+        $row[] = $a['sch3'];
+        $row[] = $a['out1'];
+        $row[] = $a['out2'];
+        $row[] = $a['out3'];
+        $row[] = $a['help_with'];
+        $row[] = $a['teach_know'];
+
+        // 68-77: Part-A3 My Ambition Card (10 items)
+        $row[] = $a['ambition'];
+        $row[] = $a['achieve_how'];
+        $row[] = $a['skills'];
+        $row[] = $a['focus_subj'];
+        $row[] = $a['habits'];
+        $row[] = $a['mentor'];
+        $row[] = $a['mentor_help'];
+        $row[] = $a['learn_new'];
+        $row[] = $a['feel_achieve'];
+        $row[] = $a['parent_feel'];
+
+        // 78-87: Part-A4 Home Resources (10 items)
+        $row[] = 'Yes'; // Books
+        $row[] = 'Yes'; // Newspaper
+        $row[] = 'Yes'; // Toys
+        $row[] = 'Yes'; // Phone
+        $row[] = 'Yes'; // Internet
+        $row[] = 'No';  // Radio
+        $row[] = 'No';  // Broadcast
+        $row[] = 'Yes'; // TV
+        $row[] = 'No';  // CWD
+        $row[] = '';    // Other
+
+        // 88-91: Part-A4 Motivation (4 items)
+        $row[] = 'Yes';
+        $row[] = 'Yes';
+        $row[] = 'No';
+        $row[] = 'Yes';
+
+        // 92-102: Part-A4 Support Needed (11 items)
+        $row[] = 'No'; // Lang
+        $row[] = ($aIdx === 0 || $aIdx === 4 ? 'No' : 'Yes'); // Math
+        $row[] = ($aIdx === 0 || $aIdx === 2 ? 'No' : 'Yes'); // Sci
+        $row[] = 'No'; // Soc
+        $row[] = 'No'; // Self-belief
+        $row[] = 'No'; // Social skills
+        $row[] = 'No'; // Managing emotions
+        $row[] = 'Yes'; // Study skills
+        $row[] = 'No'; // Skill guidance
+        $row[] = 'No'; // Other
+        $row[] = '';   // Specify
+
+        // 103: Part-A4 Parent Support Plan (1 item)
+        $row[] = $a['parent_supp'];
+
+        // 104-126: Part-B Holistic Activity (23 items)
+        $row[] = $a['act_subject'];
+        $row[] = $a['act_app'];
+        $row[] = $a['act_title'];
+        $row[] = $a['act_desc'];
+        $row[] = $a['rubrics'][0];
+        $row[] = $a['rubrics'][1];
+        $row[] = $a['rubrics'][2];
+        $row[] = $a['self'][0];
+        $row[] = $a['self'][1];
+        $row[] = $a['self'][2];
+        $row[] = $a['learnt'];
+        $row[] = $a['interest'];
+        $row[] = $a['practice'];
+        $row[] = $a['act_help'];
+        $row[] = $a['peer_name'];
+        $row[] = $a['peer_q'][0];
+        $row[] = $a['peer_q'][1];
+        $row[] = $a['peer_pract'];
+        $row[] = $a['peer_help'];
+        $row[] = $a['peer_fb'];
+        $row[] = $a['strength'];
+        $row[] = $a['barriers'];
+        $row[] = $a['supp_plan'];
+
+        // 127-128: Part-C Levels (2 items)
+        $row[] = $a['c_levels'][0];
+        $row[] = $a['c_levels'][1];
+
+        // 129-144: HPC Credit Marks (16 items)
+        $subjKeys = ['l1', 'l2', 'l3', 'm', 'sci', 'soc', 'art', 'pe'];
+        foreach ($subjKeys as $sKIdx => $sKey) {
+            $maxM = $defaultMax[$sKey] ?? 50;
+            $rawObt = $a['obt_marks'][$sKIdx] ?? 45;
+            $scaledObt = round(($rawObt / 50) * $maxM);
+            $row[] = $maxM;
+            $row[] = min($maxM, max(1, $scaledObt));
+        }
+
+        // 145-146: Declaration & Remarks (2 items)
+        $row[] = 'Yes';
+        $row[] = $a['remarks'];
+
+        return $row;
     }
 }
 

@@ -311,31 +311,46 @@
                     <div>
                         <div class="flex items-center gap-2 mb-2">
                             <span class="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">1</span>
-                            <h3 class="text-sm font-bold text-slate-900">Download Assessment Template (All 7 Pages)</h3>
+                            <h3 class="text-sm font-bold text-slate-900">Download Simplified Assessment Template</h3>
                         </div>
                         <p class="text-xs text-slate-500 mb-3">
-                            Generates an Excel workbook covering all 147 evaluation columns across all 7 pages (Part-A1 through HPC Credit) with interactive dropdowns.
+                            Covers all 7 evaluation pages (147 columns) structured with <strong>Category Color Banners</strong> and <strong>Collapsible Outlines</strong> for effortless editing by non-technical teachers.
                         </p>
-                        <div class="bg-amber-50 rounded-xl p-3 border border-amber-200 text-[11px] text-amber-900 space-y-1 mb-3">
-                            <div class="font-bold flex items-center gap-1.5">
-                                <span>📖 Row 3: Pre-Filled Demo Student Guide</span>
+
+                        <!-- Simplification Features List -->
+                        <div class="space-y-2 mb-4">
+                            <div class="bg-emerald-50 rounded-xl p-2.5 border border-emerald-200 text-[11px] text-emerald-950 flex items-start gap-2">
+                                <span class="text-sm mt-0.5">⚡</span>
+                                <div>
+                                    <strong class="text-emerald-900 font-bold">Smart Auto-Fill Baseline Profiles:</strong> Every student row (Row 5+) comes pre-filled with high-quality, authentic starter responses, ~92% attendance, and realistic marks. <em>You only need to review and adjust Obtained Marks!</em>
+                                </div>
                             </div>
-                            <div class="text-amber-800">
-                                Row 3 contains a complete sample dummy student with every textbox, dropdown, activity, and mark pre-filled to show teachers exactly what and how to fill.
+
+                            <div class="bg-amber-50 rounded-xl p-2.5 border border-amber-200 text-[11px] text-amber-950 flex items-start gap-2">
+                                <span class="text-sm mt-0.5">✏️</span>
+                                <div>
+                                    <strong class="text-amber-900 font-bold">Yellow Highlighted Headers:</strong> Key action columns that need your marks input (e.g. <code>✏️ Lang 1 Marks Obtained</code>) are highlighted in bright yellow so you can locate and edit them instantly.
+                                </div>
                             </div>
-                        </div>
-                        <div class="bg-indigo-50/60 rounded-xl p-3 border border-indigo-100 text-[11px] text-indigo-900 space-y-1 mb-4">
-                            <div class="font-bold flex items-center gap-1.5">
-                                <span>📋 Row 4+: Enrolled Students (Pre-Filled Working Days, Max Marks &amp; Formulas)</span>
+
+                            <div class="bg-indigo-50/70 rounded-xl p-2.5 border border-indigo-100 text-[11px] text-indigo-950 flex items-start gap-2">
+                                <span class="text-sm mt-0.5">📁</span>
+                                <div>
+                                    <strong class="text-indigo-900 font-bold">Collapsible Column Groups:</strong> Excel native <code>[ - ]</code> outline buttons above Monthly Attendance and Checkboxes allow collapsing 40+ columns into a clean, compact view.
+                                </div>
                             </div>
-                            <div class="text-indigo-700">
-                                Pre-fills student metadata, standard <strong>School Working Days (Apr–Mar)</strong>, and <strong>Curricular Max Marks (HPC Credit)</strong> with active Excel formulas for Total Working, Total Present, and Attendance %. Student evaluation responses and present days are left blank for the teacher to complete. Completed students remain protected.
+
+                            <div class="bg-slate-50 rounded-xl p-2.5 border border-slate-200 text-[11px] text-slate-800 flex items-start gap-2">
+                                <span class="text-sm mt-0.5">🔒</span>
+                                <div>
+                                    <strong class="text-slate-900 font-bold">Row 4 Demo Guide &amp; Locked Metadata:</strong> Student IDs, names, and attendance totals calculate automatically. Row 4 provides a complete demo reference.
+                                </div>
                             </div>
                         </div>
                     </div>
                     <a href="{{ route('hpc.teacher.template.download') }}"
                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow">
-                        📥 Download Pre-Filled Template (.xlsx)
+                        📥 Download Simplified Pre-Filled Template (.xlsx)
                     </a>
                 </div>
 

@@ -366,6 +366,17 @@ class HpcTeacherController extends Controller
 
             $columns = $this->getEvaluationColumns();
 
+            $portalStudents = [];
+            $tStudentsFile = storage_path('app/hpc/teacher_students.json');
+            if (file_exists($tStudentsFile)) {
+                $tsData = json_decode(file_get_contents($tStudentsFile), true) ?: [];
+                foreach ($tsData as $tSt) {
+                    if (!empty($tSt['login_id'])) {
+                        $portalStudents[$tSt['login_id']] = $tSt['status'] ?? '';
+                    }
+                }
+            }
+
             for ($r = 4; $r <= $max; $r++) {
                 $rowValues = [];
                 foreach ($columns as $cIdx => $col) {
@@ -380,8 +391,13 @@ class HpcTeacherController extends Controller
                 if ($name === '' && $loginId === '') continue;
                 if (str_contains($loginId, 'Login ID') || str_contains($name, 'Student Name')) continue;
 
+                if (!empty($loginId) && isset($portalStudents[$loginId]) && !empty($portalStudents[$loginId])) {
+                    $status = $portalStudents[$loginId];
+                    $rowValues['status'] = $status;
+                }
+
                 $isDemo      = ($loginId === 'DEMO_SAMPLE' || stripos($name, 'SAMPLE') !== false || stripos($name, 'DEMO') !== false);
-                $isCompleted = strcasecmp($status, 'HPC Completed') === 0;
+                $isCompleted = (strcasecmp($status, 'HPC Completed') === 0 || stripos($status, 'completed') !== false);
 
                 $rowErrors = [];
                 if (! $isDemo && ! $isCompleted) {

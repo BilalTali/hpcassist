@@ -422,7 +422,10 @@
                                     @foreach($preview as $p)
                                         @php
                                             $isDemo = !empty($p['is_demo']);
-                                            $isCompleted = !empty($p['is_completed']);
+                                            $stText = trim($p['status'] ?? '');
+                                            $stLower = strtolower($stText);
+                                            $isCompleted = !empty($p['is_completed']) || str_contains($stLower, 'completed') || str_contains($stLower, 'success');
+                                            $isUnderProcess = str_contains($stLower, 'process') || str_contains($stLower, 'progress');
                                             $hasErrors = !empty($p['errors']);
                                         @endphp
                                         <tr class="hover:bg-slate-50/80">
@@ -431,13 +434,15 @@
                                             <td class="px-3 py-2 font-bold text-slate-900">{{ $p['name'] ?? '' }}</td>
                                             <td class="px-3 py-2">
                                                 @if($isDemo)
-                                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">📖 Demo Guide</span>
-                                                @elseif($isCompleted)
-                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Successful</span>
+                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">📖 Demo Guide</span>
                                                 @elseif($hasErrors)
-                                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">✕ Invalid</span>
+                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">✕ Invalid</span>
+                                                @elseif($isCompleted)
+                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Success</span>
+                                                @elseif($isUnderProcess)
+                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-300">⏳ Under Process</span>
                                                 @else
-                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Successful</span>
+                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">⏳ Pending</span>
                                                 @endif
                                             </td>
                                             <td class="px-3 py-2 text-xs text-slate-600">
@@ -445,6 +450,10 @@
                                                     <span class="text-amber-700 italic">Sample guide (skipped in run)</span>
                                                 @elseif($hasErrors)
                                                     <span class="text-rose-600 font-semibold">{{ implode(', ', $p['errors']) }}</span>
+                                                @elseif($isCompleted)
+                                                    <span class="text-emerald-700 font-semibold">Completed on PARAKH portal</span>
+                                                @elseif($isUnderProcess)
+                                                    <span class="text-blue-700 font-semibold">In Progress on portal — Ready for submission</span>
                                                 @else
                                                     <span>Grade: {{ $p['grade'] ?? 'Grade 6' }} | Section: {{ $p['section'] ?? 'A' }}</span>
                                                 @endif
@@ -627,18 +636,28 @@
                 const tr = document.createElement('tr');
                 let badge = '';
                 let remarks = '';
+                const stLower = (p.status || '').toLowerCase();
+                const isCompleted = p.is_completed || stLower.includes('completed') || stLower.includes('success');
+                const isUnderProcess = stLower.includes('process') || stLower.includes('progress');
 
                 if (p.is_demo) {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">📖 Demo Guide</span>';
+                    badge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">📖 Demo Guide</span>';
                     remarks = '<span class="text-amber-700 italic">Sample guide (skipped in run)</span>';
                 } else if (p.errors && p.errors.length) {
-                    badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">✕ Invalid</span>';
+                    badge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">✕ Invalid</span>';
                     remarks = '<span class="text-rose-600 font-semibold">' + p.errors.join(', ') + '</span>';
+                } else if (isCompleted) {
+                    badge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Success</span>';
+                    remarks = '<span class="text-emerald-700 font-semibold">Completed on PARAKH portal</span>';
+                } else if (isUnderProcess) {
+                    badge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-300">⏳ Under Process</span>';
+                    remarks = '<span class="text-blue-700 font-semibold">In Progress on portal — Ready for submission</span>';
                 } else {
-                    badge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Successful</span>';
+                    badge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">⏳ Pending</span>';
                     remarks = '<span class="text-slate-600">Grade: ' + (p.grade || 'Grade 6') + ' | Section: ' + (p.section || 'A') + '</span>';
                 }
 
+                tr.className = 'hover:bg-slate-50/80';
                 tr.innerHTML = `
                     <td class="px-3 py-2 font-mono text-slate-400">${p.row}</td>
                     <td class="px-3 py-2 font-mono font-bold text-slate-800">${p.login_id}</td>
@@ -704,14 +723,22 @@
             results.forEach(r => {
                 const tr = document.createElement('tr');
                 let badge = '';
-                if (r.status === 'skipped') {
+                const st = (r.status || '').toLowerCase();
+
+                const msg = (r.message || '').toLowerCase();
+                if (st === 'success' || st === 'completed' || msg.includes('completed') || msg.includes('success')) {
+                    badge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Success</span>';
+                } else if (st === 'skipped') {
                     badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">⏭ Left Untouched</span>';
-                } else if (r.status === 'success') {
-                    badge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Successful</span>';
+                } else if (st === 'processing' || st === 'in_progress' || st.includes('process') || st.includes('progress') || msg.includes('evaluating')) {
+                    badge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-300">⏳ Under Process</span>';
+                } else if (st === 'pending') {
+                    badge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">⏳ Pending</span>';
                 } else {
                     badge = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">✕ Error</span>';
                 }
 
+                tr.className = 'hover:bg-slate-50/80';
                 tr.innerHTML = `
                     <td class="px-3 py-2 font-mono text-slate-400">${r.row}</td>
                     <td class="px-3 py-2 font-mono font-bold text-slate-800">${r.login_id}</td>

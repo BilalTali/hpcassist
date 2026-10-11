@@ -37,6 +37,8 @@ Route::post('/hpc/teacher/add',                  [HpcTeacherController::class, '
 Route::post('/hpc/teacher/delete',               [HpcTeacherController::class, 'deleteTeacher'])->name('hpc.teacher.delete');
 Route::get('/hpc/teacher/working-days',          [HpcTeacherController::class, 'getWorkingDays'])->name('hpc.teacher.working_days.get');
 Route::post('/hpc/teacher/working-days/update',  [HpcTeacherController::class, 'updateWorkingDays'])->name('hpc.teacher.working_days.update');
+Route::get('/hpc/teacher/max-marks',             [HpcTeacherController::class, 'getMaxMarks'])->name('hpc.teacher.max_marks.get');
+Route::post('/hpc/teacher/max-marks/update',     [HpcTeacherController::class, 'updateMaxMarks'])->name('hpc.teacher.max_marks.update');
 
 // ── Main app ──────────────────────────────────────────────────────────────────
 Route::get('/dashboard', fn() => view('dashboard'))

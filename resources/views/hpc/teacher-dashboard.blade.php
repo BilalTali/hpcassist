@@ -233,6 +233,76 @@
                 <div id="wd-status-msg" class="mt-3 text-xs font-semibold hidden"></div>
             </div>
 
+            <!-- CURRICULAR MAX MARKS CONFIGURATION (HPC CREDIT) -->
+            @php
+                $curricularSubjects = [
+                    'l1_max'  => ['name' => 'Lang 1 (R1)', 'full' => 'Language 1'],
+                    'l2_max'  => ['name' => 'Lang 2 (R2)', 'full' => 'Language 2'],
+                    'l3_max'  => ['name' => 'Lang 3 (R3)', 'full' => 'Language 3'],
+                    'm_max'   => ['name' => 'Maths',       'full' => 'Mathematics'],
+                    'sci_max' => ['name' => 'Science',     'full' => 'Science'],
+                    'soc_max' => ['name' => 'Soc Sci',     'full' => 'Social Science'],
+                    'art_max' => ['name' => 'Art Ed',      'full' => 'Art Education'],
+                    'pe_max'  => ['name' => 'Phys Ed',     'full' => 'PE & Well Being'],
+                ];
+            @endphp
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                            <span>🎯 Curricular Max Marks Configuration (HPC Credit)</span>
+                            <span class="text-[11px] font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-md">
+                                Summative Assessment
+                            </span>
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-0.5">
+                            Set default maximum marks per subject for your school (standard PARAKH Middle Stage is 50). These defaults are automatically pre-populated into every student's row in the Excel template.
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-600 font-medium">
+                            <span>Presets:</span>
+                            <button type="button" onclick="presetMaxMarks(50)"
+                                    class="px-2 py-0.5 bg-white hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 rounded-md font-bold text-[11px] shadow-sm transition"
+                                    title="Set all subjects to 50 (PARAKH Standard)">
+                                All 50
+                            </button>
+                            <button type="button" onclick="presetMaxMarks(100)"
+                                    class="px-2 py-0.5 bg-white hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 rounded-md font-bold text-[11px] shadow-sm transition"
+                                    title="Set all subjects to 100">
+                                All 100
+                            </button>
+                            <button type="button" onclick="presetMaxMarks(40)"
+                                    class="px-2 py-0.5 bg-white hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-slate-200 rounded-md font-bold text-[11px] shadow-sm transition"
+                                    title="Set all subjects to 40">
+                                All 40
+                            </button>
+                        </div>
+                        <button onclick="saveMaxMarks()" id="btn-save-mm"
+                                class="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-sm transition">
+                            <span>💾 Set as Default</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 8 Subjects Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 pt-2">
+                    @foreach($curricularSubjects as $sKey => $sInfo)
+                        <div class="bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl p-2.5 transition flex items-center justify-between">
+                            <div class="flex flex-col">
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-700">{{ $sInfo['name'] }}</span>
+                                <span class="text-[10px] text-slate-400">{{ $sInfo['full'] }}</span>
+                            </div>
+                            <input type="number" id="mm-{{ $sKey }}" min="1" max="100"
+                                   value="{{ $maxMarks->{$sKey} ?? 50 }}"
+                                   class="w-14 text-center font-bold text-sm bg-white border border-slate-300 rounded-lg px-1.5 py-1 text-slate-900 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-mono">
+                        </div>
+                    @endforeach
+                </div>
+
+                <div id="mm-status-msg" class="mt-3 text-xs font-semibold hidden"></div>
+            </div>
+
             <!-- TWO COLUMNS: STEP 1 (TEMPLATE) & STEP 2 (UPLOAD) -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
@@ -244,7 +314,7 @@
                             <h3 class="text-sm font-bold text-slate-900">Download Assessment Template (All 7 Pages)</h3>
                         </div>
                         <p class="text-xs text-slate-500 mb-3">
-                            Generates an Excel workbook covering all 129 evaluation columns across all 7 pages (Part-A1 through HPC Credit) with interactive dropdowns.
+                            Generates an Excel workbook covering all 147 evaluation columns across all 7 pages (Part-A1 through HPC Credit) with interactive dropdowns.
                         </p>
                         <div class="bg-amber-50 rounded-xl p-3 border border-amber-200 text-[11px] text-amber-900 space-y-1 mb-3">
                             <div class="font-bold flex items-center gap-1.5">
@@ -256,10 +326,10 @@
                         </div>
                         <div class="bg-indigo-50/60 rounded-xl p-3 border border-indigo-100 text-[11px] text-indigo-900 space-y-1 mb-4">
                             <div class="font-bold flex items-center gap-1.5">
-                                <span>📋 Row 4+: Enrolled Students (Pre-Filled Working Days &amp; Formulas)</span>
+                                <span>📋 Row 4+: Enrolled Students (Pre-Filled Working Days, Max Marks &amp; Formulas)</span>
                             </div>
                             <div class="text-indigo-700">
-                                Pre-fills student metadata and standard <strong>School Working Days (Apr–Mar)</strong> with active Excel formulas for Total Working, Total Present, and Attendance %. Student evaluation responses and present days are left blank for the teacher to complete. Completed students remain protected.
+                                Pre-fills student metadata, standard <strong>School Working Days (Apr–Mar)</strong>, and <strong>Curricular Max Marks (HPC Credit)</strong> with active Excel formulas for Total Working, Total Present, and Attendance %. Student evaluation responses and present days are left blank for the teacher to complete. Completed students remain protected.
                             </div>
                         </div>
                     </div>
@@ -664,6 +734,61 @@
 
         function showWdStatus(msg, classes) {
             const el = document.getElementById('wd-status-msg');
+            if (!el) return;
+            el.className = 'mt-3 text-xs font-semibold ' + classes;
+            el.innerText = msg;
+            el.classList.remove('hidden');
+        }
+
+        // ─── Curricular Max Marks Defaults Management ──────────────────────────────
+        const mmSubjectKeys = ['l1_max', 'l2_max', 'l3_max', 'm_max', 'sci_max', 'soc_max', 'art_max', 'pe_max'];
+
+        function presetMaxMarks(val) {
+            mmSubjectKeys.forEach(k => {
+                const inp = document.getElementById('mm-' + k);
+                if (inp) inp.value = val;
+            });
+            showMmStatus('Preset applied: All subjects set to ' + val + ' marks. Click "Set as Default" to save changes.', 'text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg inline-block');
+        }
+
+        async function saveMaxMarks() {
+            const btn = document.getElementById('btn-save-mm');
+            const oldHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳ Saving...</span>';
+
+            const payload = {};
+            mmSubjectKeys.forEach(k => {
+                const inp = document.getElementById('mm-' + k);
+                payload[k] = inp ? parseInt(inp.value, 10) : 50;
+            });
+
+            try {
+                const res = await fetch('{{ route('hpc.teacher.max_marks.update') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showMmStatus('✓ ' + data.message + ' (All student rows in newly downloaded Excel will reflect these marks)', 'text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg inline-block');
+                } else {
+                    showMmStatus('✕ ' + (data.message || 'Failed to save max marks.'), 'text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg inline-block');
+                }
+            } catch (err) {
+                showMmStatus('✕ Network error: ' + err.message, 'text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg inline-block');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = oldHtml;
+            }
+        }
+
+        function showMmStatus(msg, classes) {
+            const el = document.getElementById('mm-status-msg');
             if (!el) return;
             el.className = 'mt-3 text-xs font-semibold ' + classes;
             el.innerText = msg;

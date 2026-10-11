@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SchoolWorkingDay;
+use App\Models\SchoolMaxMark;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -41,6 +42,7 @@ class HpcTeacherController extends Controller
         $lastRun = file_exists($resultsFile) ? json_decode(file_get_contents($resultsFile), true) : null;
 
         $workingDays = SchoolWorkingDay::getDefault();
+        $maxMarks = SchoolMaxMark::getDefault();
 
         return view('hpc.teacher-dashboard', compact(
             'schoolsData',
@@ -51,7 +53,8 @@ class HpcTeacherController extends Controller
             'students',
             'preview',
             'lastRun',
-            'workingDays'
+            'workingDays',
+            'maxMarks'
         ));
     }
 
@@ -191,6 +194,7 @@ class HpcTeacherController extends Controller
         // ─── Rows 4 onwards: REAL ENROLLED STUDENTS ───────────────────────────
         $defaultWd = SchoolWorkingDay::getDefault();
         $defaultWorkMap = $defaultWd->toMonthMap();
+        $defaultMax = SchoolMaxMark::getDefault()->toSubjectMap();
 
         foreach ($students as $sIdx => $st) {
             $rowNum = $sIdx + 4; // Starts at Row 4 below Demo Student
@@ -199,7 +203,7 @@ class HpcTeacherController extends Controller
                 $colLetter = $this->indexToColumnLetter($cIdx);
                 $val = '';
 
-                // Pre-fill metadata fetched from portal and default school working days
+                // Pre-fill metadata fetched from portal and default school working days & max marks
                 if ($cIdx === 0) $val = $st['apaar_id'] ?? '';
                 elseif ($cIdx === 1) $val = $st['login_id'] ?? '';
                 elseif ($cIdx === 2) $val = $st['name'] ?? '';
@@ -207,6 +211,10 @@ class HpcTeacherController extends Controller
                 elseif (str_starts_with($col['key'], 'work_')) {
                     $mKey = substr($col['key'], 5);
                     $val = $defaultWorkMap[$mKey] ?? 20;
+                }
+                elseif (str_ends_with($col['key'], '_max')) {
+                    $subKey = substr($col['key'], 0, -4);
+                    $val = $defaultMax[$subKey] ?? 50;
                 }
                 elseif ($col['key'] === 'total_work') $val = "=SUM(M{$rowNum},O{$rowNum},Q{$rowNum},S{$rowNum},U{$rowNum},W{$rowNum},Y{$rowNum},AA{$rowNum},AC{$rowNum},AE{$rowNum},AG{$rowNum},AI{$rowNum})";
                 elseif ($col['key'] === 'total_pres') $val = "=SUM(N{$rowNum},P{$rowNum},R{$rowNum},T{$rowNum},V{$rowNum},X{$rowNum},Z{$rowNum},AB{$rowNum},AD{$rowNum},AF{$rowNum},AH{$rowNum},AJ{$rowNum})";
@@ -322,20 +330,22 @@ class HpcTeacherController extends Controller
                     if ($loginId === '') $rowErrors[] = 'HPC Login ID missing';
                 }
 
+                $defaultMax = SchoolMaxMark::getDefault()->toSubjectMap();
+
                 $rowItem = array_merge($rowValues, [
                     'row'          => $r,
                     'is_demo'      => $isDemo,
                     'is_completed' => $isCompleted,
                     'errors'       => $rowErrors,
                     'marks' => [
-                        'l1' => ['max' => $rowValues['l1_max'] ?: '50', 'obt' => $rowValues['l1_obt'] ?: '42'],
-                        'l2' => ['max' => $rowValues['l2_max'] ?: '50', 'obt' => $rowValues['l2_obt'] ?: '40'],
-                        'l3' => ['max' => $rowValues['l3_max'] ?: '50', 'obt' => $rowValues['l3_obt'] ?: '41'],
-                        'm'  => ['max' => $rowValues['m_max']  ?: '50', 'obt' => $rowValues['m_obt']  ?: '44'],
-                        'sci'=> ['max' => $rowValues['sci_max'] ?: '50', 'obt' => $rowValues['sci_obt'] ?: '43'],
-                        'soc'=> ['max' => $rowValues['soc_max'] ?: '50', 'obt' => $rowValues['soc_obt'] ?: '42'],
-                        'art'=> ['max' => $rowValues['art_max'] ?: '50', 'obt' => $rowValues['art_obt'] ?: '46'],
-                        'pe' => ['max' => $rowValues['pe_max'] ?: '50', 'obt' => $rowValues['pe_obt'] ?: '47'],
+                        'l1' => ['max' => $rowValues['l1_max'] ?: (string) ($defaultMax['l1'] ?? 50), 'obt' => $rowValues['l1_obt'] ?: '42'],
+                        'l2' => ['max' => $rowValues['l2_max'] ?: (string) ($defaultMax['l2'] ?? 50), 'obt' => $rowValues['l2_obt'] ?: '40'],
+                        'l3' => ['max' => $rowValues['l3_max'] ?: (string) ($defaultMax['l3'] ?? 50), 'obt' => $rowValues['l3_obt'] ?: '41'],
+                        'm'  => ['max' => $rowValues['m_max']  ?: (string) ($defaultMax['m']  ?? 50), 'obt' => $rowValues['m_obt']  ?: '44'],
+                        'sci'=> ['max' => $rowValues['sci_max'] ?: (string) ($defaultMax['sci'] ?? 50), 'obt' => $rowValues['sci_obt'] ?: '43'],
+                        'soc'=> ['max' => $rowValues['soc_max'] ?: (string) ($defaultMax['soc'] ?? 50), 'obt' => $rowValues['soc_obt'] ?: '42'],
+                        'art'=> ['max' => $rowValues['art_max'] ?: (string) ($defaultMax['art'] ?? 50), 'obt' => $rowValues['art_obt'] ?: '46'],
+                        'pe' => ['max' => $rowValues['pe_max'] ?: (string) ($defaultMax['pe'] ?? 50), 'obt' => $rowValues['pe_obt'] ?: '47'],
                     ],
                 ]);
 
@@ -482,6 +492,48 @@ class HpcTeacherController extends Controller
             'ok'      => true,
             'message' => 'Default school working days updated successfully!',
             'data'    => $wd->fresh(),
+        ]);
+    }
+
+    // ─── Curricular Max Marks Defaults Management ─────────────────────────────
+
+    public function getMaxMarks(Request $request)
+    {
+        $mm = SchoolMaxMark::getDefault();
+        return response()->json([
+            'ok'     => true,
+            'data'   => $mm,
+            'map'    => $mm->toSubjectMap(),
+            'labels' => SchoolMaxMark::subjectLabels(),
+        ]);
+    }
+
+    public function updateMaxMarks(Request $request)
+    {
+        $data = $request->validate([
+            'academic_year' => 'nullable|string|max:20',
+            'l1_max'        => 'required|integer|min:1|max:100',
+            'l2_max'        => 'required|integer|min:1|max:100',
+            'l3_max'        => 'required|integer|min:1|max:100',
+            'm_max'         => 'required|integer|min:1|max:100',
+            'sci_max'       => 'required|integer|min:1|max:100',
+            'soc_max'       => 'required|integer|min:1|max:100',
+            'art_max'       => 'required|integer|min:1|max:100',
+            'pe_max'        => 'required|integer|min:1|max:100',
+            'remarks'       => 'nullable|string|max:255',
+        ]);
+
+        $mm = SchoolMaxMark::getDefault();
+        $data['academic_year'] = $data['academic_year'] ?? $mm->academic_year ?? '2025-2026';
+        $data['is_default'] = true;
+
+        $mm->update($data);
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Default curricular max marks updated successfully!',
+            'data'    => $mm->fresh(),
+            'map'     => $mm->fresh()->toSubjectMap(),
         ]);
     }
 
@@ -808,6 +860,7 @@ class HpcTeacherController extends Controller
     {
         $wd = SchoolWorkingDay::getDefault();
         $m = $wd->toMonthMap();
+        $defaultMax = SchoolMaxMark::getDefault()->toSubjectMap();
 
         return [
             // Metadata
@@ -942,14 +995,14 @@ class HpcTeacherController extends Controller
             'Advanced',
             'Proficient',
             // HPC Credit Marks
-            50, 46,
-            50, 45,
-            50, 44,
-            50, 48,
-            50, 47,
-            50, 44,
-            50, 48,
-            50, 49,
+            $defaultMax['l1'] ?? 50, 46,
+            $defaultMax['l2'] ?? 50, 45,
+            $defaultMax['l3'] ?? 50, 44,
+            $defaultMax['m']  ?? 50, 48,
+            $defaultMax['sci']?? 50, 47,
+            $defaultMax['soc']?? 50, 44,
+            $defaultMax['art']?? 50, 48,
+            $defaultMax['pe'] ?? 50, 49,
             // Declaration & Remarks
             'Yes',
             'Faizan is an exceptionally motivated, intellectually curious, and responsible student. Demonstrates superior grasp in Mathematics and Sciences, with remarkable peer collaboration and positive leadership in class activities.'

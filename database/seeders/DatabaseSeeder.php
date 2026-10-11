@@ -20,6 +20,9 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Test User', 'password' => bcrypt('password')]
         );
 
-        $this->call(SchoolWorkingDaysSeeder::class);
+        $this->call([
+            SchoolWorkingDaysSeeder::class,
+            SchoolMaxMarksSeeder::class,
+        ]);
     }
 }

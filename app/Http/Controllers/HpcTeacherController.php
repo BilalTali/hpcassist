@@ -92,11 +92,11 @@ class HpcTeacherController extends Controller
             ['Rule #', 'Section / Page', 'Field Type', 'Rule Description', 'Permitted Values / Dragdown Options'],
             ['1', 'Student Metadata', 'Locked String', 'APAAR ID, HPC Login ID, Student Name, and Status. HPC Login ID is the unique identifier on the PARAKH portal.', 'Pre-filled from school portal roster.'],
             ['2', 'Status Protection', 'System Rule', 'Students with status "HPC Completed" will be protected and left untouched during update runs.', 'HPC Completed (skipped), HPC Pending / In Progress (updated)'],
-            ['3', 'Row 3 Guide Row', 'Guide Reference', 'Row 3 (DEMO_SAMPLE) provides a complete, realistic model of teacher evaluation for guidance. Do not delete or alter.', 'All 128 fields pre-filled for visual demonstration.'],
+            ['3', 'Row 3 Guide Row', 'Guide Reference', 'Row 3 (DEMO_SAMPLE) provides a complete, realistic model of teacher evaluation for guidance. Do not delete or alter.', 'All 127 fields pre-filled for visual demonstration.'],
             ['4', 'Part-A(1) Monthly Attendance', 'Integer & Formulas', 'Working Days and Present Days are arranged neck-to-neck for each month (Apr to Mar). Total Working, Total Present, and Attendance % calculate automatically via Excel formulas.', 'Monthly Working (0-31), Monthly Present (0-Working). Present <= Working.'],
             ['5', 'Part-A(2) All About Me', 'Text & Dragdown', 'Living arrangement, leisure activities, self-responsibility, improvement areas, friend info, academic & personal goals with rationale & steps, learnings in/outside school.', 'Responsibility: all the time, most times, sometimes.'],
             ['6', 'Part-A(3) Ambition Card', 'Text & Dragdown', 'Student career ambition, path to achieve, 5 key skills, focus subjects, habits to cultivate, teacher mentor name & guidance, emotional reflections.', 'Mentor guidance and structured skill acquisition.'],
-            ['7', 'Part-A(4) Parent Partnership', 'Dragdown & Text', 'Home resources, motivation level, routine/screen time schedule, curriculum difficulty, academic progress, support needs, parent home action plan, peer review.', 'Motivation/Schedule/Difficulty/Progress: Yes, Sometimes, No, Not Sure.'],
+            ['7', 'Part-A(4) Parent Partnership', 'Radio & Multi-Select', 'Tick resources available at home (multi-select), Understanding of child Q1-Q4 (Radio smileys: Yes, Sometimes, No, Not Sure), Support needs (multi-select), and Home support plan text.', 'Multi-select: pick or comma-separate; Radio: Yes, Sometimes, No, Not Sure.'],
             ['8', 'Part-B Holistic Activities', 'Dragdown & Text', 'Pedagogical approach, activity title, description, rubric ratings (Awareness, Sensitivity, Creativity), student self-reflection, peer review, teacher strength/barrier areas & support plan.', 'Approach: Art-Integrated, Sports-Integrated...; Rubrics: Beginner, Proficient, Advanced.'],
             ['9', 'Part-C Curricular Assessment', 'Dragdown (Level)', 'Year-end formative and summative performance levels across curricular domains.', 'Beginner, Proficient, Advanced'],
             ['10', 'HPC Credit (Marks Grid)', 'Integer (0-50)', 'Summative Assessment marks for each of the 8 curricular subjects.', 'Max Marks (default 50), Marks Obtained (0 to Max Marks).'],
@@ -716,15 +716,14 @@ class HpcTeacherController extends Controller
             ['key' => 'feel_when_achieve',      'label' => 'I will feel ... when I achieve my ambition (A3) *',        'width' => 34, 'type' => 'string',  'note' => 'e.g. Proud, happy, fulfilled, and motivated to contribute to society'],
             ['key' => 'parents_feel',           'label' => 'My parents will feel ... when I achieve my ambition (A3) *', 'width' => 36, 'type' => 'string',  'note' => 'e.g. Immensely joyful, honored, and proud'],
 
-            // ── Part-A(4) Parent-Teacher Partnership Card ──────────────────────────────
-            ['key' => 'home_resources',         'label' => 'Home Resources Available (A4) *',        'width' => 32, 'type' => 'string',  'note' => 'e.g. Books, Newspaper, Computer, Internet, TV'],
-            ['key' => 'p_motivated',            'label' => 'Child Motivated To Learn (A4) *',        'width' => 24, 'type' => 'list',    'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Doc 29 Q1: motivated to learn'],
-            ['key' => 'p_schedule',             'label' => 'Follows Home Schedule (A4) *',           'width' => 22, 'type' => 'list',    'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Doc 29 Q2: home schedule & screen time'],
-            ['key' => 'p_curriculum_diff',      'label' => 'Curriculum Difficult (A4) *',            'width' => 22, 'type' => 'list',    'options' => '"No,Sometimes,Yes,Not Sure"', 'note' => 'Doc 29 Q3: curriculum difficulty'],
-            ['key' => 'p_progress',             'label' => 'Good Grade Progress (A4) *',             'width' => 22, 'type' => 'list',    'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Doc 29 Q4: grade progress'],
-            ['key' => 'child_needs_support',    'label' => 'Child Needs Support With (A4) *',        'width' => 32, 'type' => 'string',  'note' => 'e.g. Mathematics, Science, Time management'],
-            ['key' => 'parent_feedback',        'label' => 'Parent Home Support Plan (A4) *',        'width' => 34, 'type' => 'string',  'note' => 'e.g. Evening study supervision & screen time limits'],
-            ['key' => 'peer_rating',            'label' => 'Peer Review Collaboration (A4) *',       'width' => 24, 'type' => 'list',    'options' => '"All the time,Most times,Sometimes"', 'note' => 'Peer collaboration rating'],
+            // ── Part-A(4) Parent-Teacher Partnership Card (Cols CA to CG) ─────────────
+            ['key' => 'home_resources',         'label' => 'Tick the resources available to your child at home (A4) *', 'width' => 44, 'type' => 'list', 'options' => '"Books and Magazines,Newspaper,Toys Games and Sports,Phone and Computer,Internet,Radio,Broadcast,T.V.,Resources for CWD,Any Other"', 'note' => 'Multi-select: Pick from dropdown or comma-separated: Books and Magazines, Newspaper, Toys Games and Sports, Phone and Computer, Internet, Radio, Broadcast, T.V., Resources for CWD'],
+            ['key' => 'p_motivated',            'label' => '1. My child seems motivated to learn and engage with new concepts (A4) *', 'width' => 40, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio option: Yes, Sometimes, No, Not Sure'],
+            ['key' => 'p_schedule',             'label' => '2. My child follows a schedule at home for curriculum and screen time (A4) *', 'width' => 42, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio option: Yes, Sometimes, No, Not Sure'],
+            ['key' => 'p_curriculum_diff',      'label' => '3. My child finds the grade-level curriculum difficult and needs support (A4) *', 'width' => 42, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio option: Yes, Sometimes, No, Not Sure'],
+            ['key' => 'p_progress',             'label' => '4. My child is making good progress as per the grade (A4) *', 'width' => 36, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio option: Yes, Sometimes, No, Not Sure'],
+            ['key' => 'child_needs_support',    'label' => 'At school, my child needs support with (A4) *', 'width' => 40, 'type' => 'list', 'options' => '"Languages,Mathematics,Science,Social Science,Building self-belief,Social skills,Managing emotions,Study skills,Skill Guidance,Any Other"', 'note' => 'Multi-select: Pick from dropdown or comma-separated: Languages (R1 R2 R3), Mathematics, Science, Social Science, Building self-belief, Social skills, Managing emotions, Study skills, Skill Guidance'],
+            ['key' => 'parent_feedback',        'label' => 'Based on my discussion with teacher, I will support my child at home by (A4) *', 'width' => 48, 'type' => 'string', 'note' => 'Parent home support plan (max 700 chars)'],
 
             // ── Part-B Holistic Activities ─────────────────────────────────────────────
             ['key' => 'act_approach',           'label' => 'Activity Approach (B) *',                'width' => 24, 'type' => 'list',    'options' => '"Art-Integrated,Sports-Integrated,Toy-Based,Technology-Integrated,Experiential Learning,Any Other"', 'note' => 'Pedagogical approach from Doc 29'],
@@ -857,15 +856,14 @@ class HpcTeacherController extends Controller
             'Scientific problem-solving strategies and computational simulations',
             'Immensely fulfilled, proud, and inspired to contribute to the nation space mission',
             'Overjoyed, deeply proud, and grateful',
-            // Part-A(4)
-            'Books and Magazines, Newspaper, Phone and Computer, Internet, T.V., Toys Games Sports',
+            // Part-A(4) (Cols CA to CG)
+            'Books and Magazines, Newspaper, Phone and Computer, Internet, T.V.',
             'Yes',
             'Yes',
             'No',
             'Yes',
             'Mathematics, Science, Developing effective study skills like time management',
             'Provide quiet study space, supervise 1.5 hours of evening revision, monitor screen time, and discuss daily learnings',
-            'All the time',
             // Part-B
             'Art-Integrated',
             'Solar System 3D Model & Daily Life Geometry',

@@ -485,33 +485,63 @@ class HpcTeacherRun extends Command
 
         // ── 5. Fill Part-A4 (Smileys, Multi-selects & Textareas) ───────────────
         if (str_contains($client->getCurrentURL(), '/part-A4')) {
-            $parentFeedback = $s['parent_feedback'] ?? 'Provide quiet study space, supervise 1.5 hours of evening revision, monitor screen time, and discuss daily learnings';
-            $pMotivation    = $s['p_motivated'] ?? ($s['p_motivation'] ?? 'Yes');
+            $parentFeedback  = $s['parent_feedback'] ?? 'Provide quiet study space, supervise 1.5 hours of evening revision, monitor screen time, and discuss daily learnings';
+            $pRatings = [
+                $s['p_motivated'] ?? 'Yes',
+                $s['p_schedule'] ?? 'Yes',
+                $s['p_curriculum_diff'] ?? 'No',
+                $s['p_progress'] ?? 'Yes',
+            ];
+            $homeRes = $s['home_resources'] ?? 'Books and Magazines, Newspaper, Phone and Computer, Internet, T.V.';
+            $childSupp = $s['child_needs_support'] ?? 'Mathematics, Science, Developing effective study skills like time management';
 
             $client->executeScript("
                 const pFeedback = " . json_encode($parentFeedback) . ";
-                const targetRating = " . json_encode($pMotivation) . ";
+                const ratings = " . json_encode($pRatings) . ";
+                const homeResStr = " . json_encode(strtolower($homeRes)) . ";
+                const childSuppStr = " . json_encode(strtolower($childSupp)) . ";
 
-                // 1. Select smiley for 'Understanding of my Child' questions
-                const table = document.querySelector('table');
+                // 1. Home Resources Available Checkboxes (Multi-select)
+                document.querySelectorAll('.childrens-resources li').forEach(li => {
+                    const lbl = (li.querySelector('label')?.innerText || '').toLowerCase();
+                    const cb = li.querySelector('input[type=\"checkbox\"]');
+                    if (cb && lbl) {
+                        const shouldCheck = homeResStr ? (homeResStr.includes(lbl.slice(0, 4)) || homeResStr.includes('all')) : true;
+                        if (shouldCheck !== cb.checked) {
+                            cb.click();
+                            cb.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+                });
+
+                // 2. Select radio smileys for 'Understanding of my Child' (Q1 - Q4)
+                const table = document.querySelector('.hpc-table-part-b table, table');
                 if (table) {
-                    const rows = Array.from(table.querySelectorAll('tr')).slice(2);
-                    rows.forEach(r => {
-                        const targetLi = Array.from(r.querySelectorAll('li')).find(li => (li.innerText || '').trim().toLowerCase() === targetRating.toLowerCase())
-                                      || Array.from(r.querySelectorAll('li')).find(li => (li.innerText || '').trim() === 'Yes');
+                    const rows = Array.from(table.querySelectorAll('tbody tr')).filter(r => r.querySelectorAll('.appropriate-option-select li').length > 0);
+                    rows.forEach((r, idx) => {
+                        const targetRating = (ratings[idx] || 'Yes').toLowerCase();
+                        const lis = Array.from(r.querySelectorAll('.appropriate-option-select li'));
+                        const targetLi = lis.find(li => (li.innerText || '').trim().toLowerCase() === targetRating)
+                                      || lis.find(li => (li.innerText || '').trim().toLowerCase() === 'yes')
+                                      || lis[0];
                         if (targetLi) targetLi.click();
                     });
                 }
 
-                // 2. Multi-select checkboxes
-                document.querySelectorAll('input[type=\"checkbox\"]').forEach(cb => {
-                    if (!cb.checked) {
-                        cb.click();
-                        cb.dispatchEvent(new Event('change', { bubbles: true }));
+                // 3. Child Support Needs Checkboxes (Multi-select)
+                document.querySelectorAll('.need-children-support-check input[type=\"checkbox\"]').forEach(cb => {
+                    const p = cb.closest('label')?.querySelector('p') || cb.closest('li')?.querySelector('p');
+                    const txt = (p?.innerText || '').toLowerCase();
+                    if (txt) {
+                        const shouldCheck = childSuppStr ? (childSuppStr.includes(txt.slice(0, 4)) || childSuppStr.includes('all')) : true;
+                        if (shouldCheck !== cb.checked) {
+                            cb.click();
+                            cb.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
                     }
                 });
 
-                // 3. Fill textareas
+                // 4. Fill textareas
                 document.querySelectorAll('textarea').forEach(ta => {
                     const proto = window.HTMLTextAreaElement.prototype;
                     const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;

@@ -311,39 +311,39 @@
                     <div>
                         <div class="flex items-center gap-2 mb-2">
                             <span class="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">1</span>
-                            <h3 class="text-sm font-bold text-slate-900">Download Condensed Assessment Template (36 Columns Visible)</h3>
+                            <h3 class="text-sm font-bold text-slate-900">Download Condensed Assessment Template (33 Columns Visible)</h3>
                         </div>
                         <p class="text-xs text-slate-500 mb-3">
-                            Opens in a compact <strong>36-column default view</strong> with zero horizontal dragging. 111 detailed secondary columns are collapsed into 7 groups ready to expand with <code>[ + ]</code>.
+                            Opens in a compact <strong>33-column view</strong>. From Student Identity, <strong>only Student Name is visible</strong>. Empty cells are dynamically highlighted in red and turn to their respective colors once filled!
                         </p>
 
                         <!-- Simplification Features List -->
                         <div class="space-y-2 mb-4">
-                            <div class="bg-emerald-50 rounded-xl p-2.5 border border-emerald-200 text-[11px] text-emerald-950 flex items-start gap-2">
-                                <span class="text-sm mt-0.5">⚡</span>
+                            <div class="bg-indigo-50 rounded-xl p-2.5 border border-indigo-200 text-[11px] text-indigo-950 flex items-start gap-2">
+                                <span class="text-sm mt-0.5">👤</span>
                                 <div>
-                                    <strong class="text-emerald-900 font-bold">Zero Horizontal Dragging:</strong> Non-essential columns are collapsed by default. You see Identity, Attendance Summary, Ambition, Activity Title, and all 8 Subject Marks right on screen!
+                                    <strong class="text-indigo-900 font-bold">Only Student Name Visible:</strong> From Student Identity, only Student Name is displayed (frozen on the left). APAAR ID, HPC Login ID, and Status are collapsed with <code>[ + ]</code> expand buttons if you ever need to inspect them.
+                                </div>
+                            </div>
+
+                            <div class="bg-rose-50 rounded-xl p-2.5 border border-rose-200 text-[11px] text-rose-950 flex items-start gap-2">
+                                <span class="text-sm mt-0.5">🔴</span>
+                                <div>
+                                    <strong class="text-rose-900 font-bold">Empty Cells Highlighted in Red:</strong> All blank cells light up in soft red. Once you enter a mark, present day, or text, Excel automatically converts the cell back to its respective color!
                                 </div>
                             </div>
 
                             <div class="bg-amber-50 rounded-xl p-2.5 border border-amber-200 text-[11px] text-amber-950 flex items-start gap-2">
                                 <span class="text-sm mt-0.5">✏️</span>
                                 <div>
-                                    <strong class="text-amber-900 font-bold">Obtained Marks Focus:</strong> All 8 subject columns (<code>✏️ Lang 1 Marks Obtained</code> to <code>Physical Ed Marks Obt</code>) are highlighted in soft yellow with default max marks (50) already set.
-                                </div>
-                            </div>
-
-                            <div class="bg-indigo-50/70 rounded-xl p-2.5 border border-indigo-100 text-[11px] text-indigo-950 flex items-start gap-2">
-                                <span class="text-sm mt-0.5">📁</span>
-                                <div>
-                                    <strong class="text-indigo-900 font-bold">One-Click Group Expansion [ + ]:</strong> Monthly Attendance (24 cols), Part-A2 (26 cols), Part-A3 (9 cols), Part-A4 (26 cols), and Part-B reflections (20 cols) expand instantly whenever needed.
+                                    <strong class="text-amber-900 font-bold">Obtained Marks Focus:</strong> All 8 subject columns (<code>✏️ Lang 1 Marks Obtained</code> to <code>Physical Ed Marks Obt</code>) are highlighted in soft warm yellow with default max marks (50) already set.
                                 </div>
                             </div>
 
                             <div class="bg-slate-50 rounded-xl p-2.5 border border-slate-200 text-[11px] text-slate-800 flex items-start gap-2">
                                 <span class="text-sm mt-0.5">🔒</span>
                                 <div>
-                                    <strong class="text-slate-900 font-bold">Single Demo Guide (Row 4 Only):</strong> Only Row 4 has sample reference entries. Real students (Row 5+) have clean blank evaluation fields—no dummy text or dummy marks to erase!
+                                    <strong class="text-slate-900 font-bold">Single Demo Guide (Row 4 Only):</strong> Only Row 4 has sample reference entries. Real students (Row 5+) have clean blank evaluation fields ready for entry.
                                 </div>
                             </div>
                         </div>

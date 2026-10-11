@@ -10,6 +10,7 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Conditional;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 
 class HpcTeacherController extends Controller
@@ -157,8 +158,10 @@ class HpcTeacherController extends Controller
             ]);
         }
 
-        // ─── 7 Contiguous Collapsible Column Outlines (Opens in Condensed 36-Col View) ──
+        // ─── Contiguous Collapsible Column Outlines (Student Identity: Only Name Visible) ──
         $collapsibleRanges = [
+            [0, 1],    // A:B - Student Identity (APAAR ID, HPC Login ID) -> Collapsed! Only Name (Col C) visible
+            [3, 3],    // D:D - Student Identity (Status) -> Collapsed!
             [7, 10],   // H:K - Profile secondary (Location, Medium, Mother Tongue, Relation)
             [12, 35],  // M:AJ - Monthly Attendance (Apr-Mar neck to neck)
             [39, 40],  // AN:AO - Absence count & Reason
@@ -282,7 +285,26 @@ class HpcTeacherController extends Controller
             $evalSheet->getRowDimension($rowNum)->setRowHeight(22);
         }
 
-        $evalSheet->freezePane('E5');
+        // ─── Conditional Formatting: Highlight Empty Cells in Light Red ───────
+        // All empty cells light up in soft alert red (#FEE2E2 with border #FCA5A5).
+        // Once filled by teacher, conditional rule evaluates to false and cell converts to its respective color.
+        $lastColLetter = $this->indexToColumnLetter(count($columns) - 1);
+        $maxRow = max(5, count($students) + 4);
+        $evalDataRange = "A5:{$lastColLetter}{$maxRow}";
+
+        $blankRule = new Conditional();
+        $blankRule->setConditionType(Conditional::CONDITION_CONTAINSBLANKS);
+        $blankRule->getStyle()->getFill()->setFillType(Fill::FILL_SOLID);
+        $blankRule->getStyle()->getFill()->getStartColor()->setARGB('FFFEE2E2');
+        $blankRule->getStyle()->getFill()->getEndColor()->setARGB('FFFEE2E2');
+        $blankRule->getStyle()->getBorders()->getTop()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFFCA5A5');
+        $blankRule->getStyle()->getBorders()->getBottom()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFFCA5A5');
+        $blankRule->getStyle()->getBorders()->getLeft()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFFCA5A5');
+        $blankRule->getStyle()->getBorders()->getRight()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFFCA5A5');
+
+        $evalSheet->getStyle($evalDataRange)->setConditionalStyles([$blankRule]);
+
+        $evalSheet->freezePane('D5');
 
         $filename = 'hpc_teacher_assessment_template.xlsx';
         $writer   = new Xlsx($spreadsheet);

@@ -303,39 +303,74 @@ class HpcTeacherRun extends Command
         }
 
         // ── 2. Fill Part-A1 ───────────────────────────────────────────────────
+        $admissionNo   = $s['admission_no'] ?? 'ADM-2026-089';
         $motherTongue  = $s['mother_tongue'] ?? 'Kashmiri';
         $parentName    = $s['parent_name'] ?? 'Parent';
-        $workingDays   = $s['working_days'] ?? '220';
-        $presentDays   = $s['present_days'] ?? '204';
-        $absenceReason = $s['absence_reason'] ?? 'Illness / fever';
+        $absentCount   = $s['absent_count'] ?? '16';
+        $absenceReason = $s['absence_reason'] ?? 'Brief seasonal viral illness';
         $interest      = $s['interest'] ?? 'Reading';
+
+        // 12 Monthly Working Days (Apr - Mar)
+        $monthKeys = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
+        $defaultWork = [20, 22, 10, 20, 22, 21, 19, 20, 15, 15, 20, 18];
+        $defaultPres = [19, 21, 10, 18, 20, 20, 18, 17, 14, 13, 19, 17];
+
+        $monthlyWork = [];
+        $monthlyPres = [];
+        foreach ($monthKeys as $mIdx => $mKey) {
+            $wVal = $s["work_{$mKey}"] ?? '';
+            $monthlyWork[] = ($wVal !== '' && is_numeric($wVal)) ? intval($wVal) : $defaultWork[$mIdx];
+
+            $pVal = $s["pres_{$mKey}"] ?? '';
+            $monthlyPres[] = ($pVal !== '' && is_numeric($pVal)) ? intval($pVal) : $defaultPres[$mIdx];
+        }
 
         $client->executeScript("
             function setVal(el, val) {
                 if (!el) return;
                 const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-                if (setter) setter.call(el, val); else el.value = val;
+                if (setter) setter.call(el, val.toString()); else el.value = val.toString();
                 el.dispatchEvent(new Event('input', { bubbles: true }));
                 el.dispatchEvent(new Event('change', { bubbles: true }));
             }
 
-            // Mother tongue
-            const mtInp = document.querySelector('input[placeholder=\"Write here\"]');
+            // 1. Admission Number
+            const admContainer = Array.from(document.querySelectorAll('label')).find(l => l.innerText.includes('School Admission Number'))?.closest('div');
+            const admInp = admContainer?.querySelector('input');
+            if (admInp) setVal(admInp, " . json_encode($admissionNo) . ");
+
+            // 2. Mother tongue
+            const mtContainer = Array.from(document.querySelectorAll('label')).find(l => l.innerText.includes('Mother Tongue'))?.closest('div');
+            const mtInp = mtContainer?.querySelector('input');
             if (mtInp) setVal(mtInp, " . json_encode($motherTongue) . ");
 
-            // Parent Name
+            // 3. Parent Name
             const pInp = document.querySelector('input[placeholder=\"Enter Father Name\"], input[placeholder*=\"Father\"]');
             if (pInp) setVal(pInp, " . json_encode($parentName) . ");
 
-            // Attendance
-            document.querySelectorAll('table tbody tr:nth-child(1) td input').forEach(inp => setVal(inp, " . json_encode((string)$workingDays) . "));
-            document.querySelectorAll('table tbody tr:nth-child(2) td input').forEach(inp => setVal(inp, " . json_encode((string)$presentDays) . "));
+            // 4. Monthly Working Days (12 months: Apr - Mar)
+            const monthlyWork = " . json_encode($monthlyWork) . ";
+            const r1Inputs = Array.from(document.querySelectorAll('tbody tr:nth-child(1) td input'));
+            monthlyWork.forEach((v, i) => {
+                if (r1Inputs[i]) setVal(r1Inputs[i], v);
+            });
 
-            // Absence frequency / reason
-            const absInp = document.querySelector('input[placeholder=\"Write here\"]:last-of-type');
+            // 5. Monthly Present Days (12 months: Apr - Mar)
+            const monthlyPres = " . json_encode($monthlyPres) . ";
+            const r2Inputs = Array.from(document.querySelectorAll('tbody tr:nth-child(2) td input'));
+            monthlyPres.forEach((v, i) => {
+                if (r2Inputs[i]) setVal(r2Inputs[i], v);
+            });
+
+            // 6. Absent times count
+            const absTimesInp = Array.from(document.querySelectorAll('label')).find(l => l.innerText.includes('absent'))?.closest('div')?.querySelector('input');
+            if (absTimesInp) setVal(absTimesInp, " . json_encode((string)$absentCount) . ");
+
+            // 7. Absence frequency / reason
+            const absInp = document.querySelector('input[placeholder=\"Write here\"]:last-of-type, textarea');
             if (absInp) setVal(absInp, " . json_encode($absenceReason) . ");
 
-            // Interests checkbox
+            // 8. Interests checkbox
             const interestTarget = " . json_encode(strtolower($interest)) . ";
             const cbs = Array.from(document.querySelectorAll('input[type=\"checkbox\"]'));
             const matchingCb = cbs.find(c => {

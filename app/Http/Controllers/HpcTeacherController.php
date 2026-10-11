@@ -88,8 +88,8 @@ class HpcTeacherController extends Controller
             ['Rule #', 'Section / Page', 'Field Type', 'Rule Description', 'Permitted Values / Dragdown Options'],
             ['1', 'Student Metadata', 'Locked String', 'APAAR ID, HPC Login ID, Student Name, and Status. HPC Login ID is the unique identifier on the PARAKH portal.', 'Pre-filled from school portal roster.'],
             ['2', 'Status Protection', 'System Rule', 'Students with status "HPC Completed" will be protected and left untouched during update runs.', 'HPC Completed (skipped), HPC Pending / In Progress (updated)'],
-            ['3', 'Row 3 Guide Row', 'Guide Reference', 'Row 3 (DEMO_SAMPLE) provides a complete, realistic model of teacher evaluation for guidance. Do not delete or alter.', 'All 103 fields pre-filled for visual demonstration.'],
-            ['4', 'Part-A(1) Profile & Attendance', 'Dragdown & Integer', 'Admission No, Grade, Section, Location, Medium of Instruction, Mother Tongue, Guardian, Working/Present days, Absence Reason, Interests.', 'Grade: 6-8; Medium: English/Urdu/Hindi...; Present Days <= Working Days.'],
+            ['3', 'Row 3 Guide Row', 'Guide Reference', 'Row 3 (DEMO_SAMPLE) provides a complete, realistic model of teacher evaluation for guidance. Do not delete or alter.', 'All 129 fields pre-filled for visual demonstration.'],
+            ['4', 'Part-A(1) Monthly Attendance', 'Integer & Formulas', 'Fill monthly Working Days (Apr-Mar) & Present Days (Apr-Mar). Total Working, Total Present, and Attendance % calculate automatically via Excel formulas.', 'Monthly Working (0-31), Monthly Present (0-Working). Present <= Working.'],
             ['5', 'Part-A(2) All About Me', 'Text & Dragdown', 'Living arrangement, leisure activities, self-responsibility, improvement areas, friend info, academic & personal goals with rationale & steps, learnings in/outside school.', 'Responsibility: all the time, most times, sometimes.'],
             ['6', 'Part-A(3) Ambition Card', 'Text & Dragdown', 'Student career ambition, path to achieve, 5 key skills, focus subjects, habits to cultivate, teacher mentor name & guidance, emotional reflections.', 'Mentor guidance and structured skill acquisition.'],
             ['7', 'Part-A(4) Parent Partnership', 'Dragdown & Text', 'Home resources, motivation level, routine/screen time schedule, curriculum difficulty, academic progress, support needs, parent home action plan, peer review.', 'Motivation/Schedule/Difficulty/Progress: Yes, Sometimes, No, Not Sure.'],
@@ -197,6 +197,9 @@ class HpcTeacherController extends Controller
                 elseif ($cIdx === 1) $val = $st['login_id'] ?? '';
                 elseif ($cIdx === 2) $val = $st['name'] ?? '';
                 elseif ($cIdx === 3) $val = $st['status'] ?? 'HPC Pending';
+                elseif ($col['key'] === 'total_work') $val = "=SUM(M{$rowNum}:X{$rowNum})";
+                elseif ($col['key'] === 'total_pres') $val = "=SUM(Z{$rowNum}:AK{$rowNum})";
+                elseif ($col['key'] === 'attendance_pct') $val = "=IF(Y{$rowNum}>0, ROUND((AL{$rowNum}/Y{$rowNum})*100, 1) & \"%\", \"\")";
 
                 $evalSheet->setCellValue("{$colLetter}{$rowNum}", $val);
 
@@ -581,8 +584,39 @@ class HpcTeacherController extends Controller
             ['key' => 'mother_tongue',          'label' => 'Mother Tongue *',                        'width' => 18, 'type' => 'list',    'options' => '"Kashmiri,Urdu,Hindi,English,Dogri,Punjabi,Other"', 'note' => 'Student mother tongue'],
             ['key' => 'relation',               'label' => 'Parent Relation *',                      'width' => 22, 'type' => 'list',    'options' => '"Father,Mother,Guardian (Other than Parents)"', 'note' => 'Select relation'],
             ['key' => 'parent_name',            'label' => 'Parent / Guardian Name *',               'width' => 24, 'type' => 'string',  'note' => 'Full parent / guardian name'],
-            ['key' => 'working_days',           'label' => 'School Working Days *',                  'width' => 20, 'type' => 'integer', 'note' => 'Annual working days (e.g. 220)'],
-            ['key' => 'present_days',           'label' => 'Student Present Days *',                 'width' => 20, 'type' => 'integer', 'note' => 'Annual present days (e.g. 204)'],
+            // Monthly Working Days (12 Months: Apr - Mar)
+            ['key' => 'work_apr',               'label' => 'Working Days - Apr *',                   'width' => 16, 'type' => 'integer', 'note' => 'April working days (e.g. 20)'],
+            ['key' => 'work_may',               'label' => 'Working Days - May *',                   'width' => 16, 'type' => 'integer', 'note' => 'May working days (e.g. 22)'],
+            ['key' => 'work_jun',               'label' => 'Working Days - Jun *',                   'width' => 16, 'type' => 'integer', 'note' => 'June working days (e.g. 10)'],
+            ['key' => 'work_jul',               'label' => 'Working Days - Jul *',                   'width' => 16, 'type' => 'integer', 'note' => 'July working days (e.g. 20)'],
+            ['key' => 'work_aug',               'label' => 'Working Days - Aug *',                   'width' => 16, 'type' => 'integer', 'note' => 'August working days (e.g. 22)'],
+            ['key' => 'work_sep',               'label' => 'Working Days - Sep *',                   'width' => 16, 'type' => 'integer', 'note' => 'September working days (e.g. 21)'],
+            ['key' => 'work_oct',               'label' => 'Working Days - Oct *',                   'width' => 16, 'type' => 'integer', 'note' => 'October working days (e.g. 19)'],
+            ['key' => 'work_nov',               'label' => 'Working Days - Nov *',                   'width' => 16, 'type' => 'integer', 'note' => 'November working days (e.g. 20)'],
+            ['key' => 'work_dec',               'label' => 'Working Days - Dec *',                   'width' => 16, 'type' => 'integer', 'note' => 'December working days (e.g. 15)'],
+            ['key' => 'work_jan',               'label' => 'Working Days - Jan *',                   'width' => 16, 'type' => 'integer', 'note' => 'January working days (e.g. 15)'],
+            ['key' => 'work_feb',               'label' => 'Working Days - Feb *',                   'width' => 16, 'type' => 'integer', 'note' => 'February working days (e.g. 20)'],
+            ['key' => 'work_mar',               'label' => 'Working Days - Mar *',                   'width' => 16, 'type' => 'integer', 'note' => 'March working days (e.g. 18)'],
+            ['key' => 'total_work',             'label' => 'Total Working Days (Auto)',              'width' => 20, 'type' => 'calc',    'note' => 'Auto-calculated sum: =SUM(M:X)'],
+
+            // Monthly Present Days (12 Months: Apr - Mar)
+            ['key' => 'pres_apr',               'label' => 'Present Days - Apr *',                   'width' => 16, 'type' => 'integer', 'note' => 'April present days (e.g. 19)'],
+            ['key' => 'pres_may',               'label' => 'Present Days - May *',                   'width' => 16, 'type' => 'integer', 'note' => 'May present days (e.g. 21)'],
+            ['key' => 'pres_jun',               'label' => 'Present Days - Jun *',                   'width' => 16, 'type' => 'integer', 'note' => 'June present days (e.g. 10)'],
+            ['key' => 'pres_jul',               'label' => 'Present Days - Jul *',                   'width' => 16, 'type' => 'integer', 'note' => 'July present days (e.g. 18)'],
+            ['key' => 'pres_aug',               'label' => 'Present Days - Aug *',                   'width' => 16, 'type' => 'integer', 'note' => 'August present days (e.g. 20)'],
+            ['key' => 'pres_sep',               'label' => 'Present Days - Sep *',                   'width' => 16, 'type' => 'integer', 'note' => 'September present days (e.g. 20)'],
+            ['key' => 'pres_oct',               'label' => 'Present Days - Oct *',                   'width' => 16, 'type' => 'integer', 'note' => 'October present days (e.g. 18)'],
+            ['key' => 'pres_nov',               'label' => 'Present Days - Nov *',                   'width' => 16, 'type' => 'integer', 'note' => 'November present days (e.g. 17)'],
+            ['key' => 'pres_dec',               'label' => 'Present Days - Dec *',                   'width' => 16, 'type' => 'integer', 'note' => 'December present days (e.g. 14)'],
+            ['key' => 'pres_jan',               'label' => 'Present Days - Jan *',                   'width' => 16, 'type' => 'integer', 'note' => 'January present days (e.g. 13)'],
+            ['key' => 'pres_feb',               'label' => 'Present Days - Feb *',                   'width' => 16, 'type' => 'integer', 'note' => 'February present days (e.g. 19)'],
+            ['key' => 'pres_mar',               'label' => 'Present Days - Mar *',                   'width' => 16, 'type' => 'integer', 'note' => 'March present days (e.g. 17)'],
+            ['key' => 'total_pres',             'label' => 'Total Present Days (Auto)',              'width' => 20, 'type' => 'calc',    'note' => 'Auto-calculated sum: =SUM(Z:AK)'],
+
+            // Attendance % & Absence
+            ['key' => 'attendance_pct',         'label' => 'Attendance % (Auto)',                    'width' => 18, 'type' => 'calc',    'note' => 'Auto %: (Present/Working)*100'],
+            ['key' => 'absent_count',           'label' => 'Absent Times Count',                     'width' => 18, 'type' => 'integer', 'note' => 'Total times remained absent (e.g. 16)'],
             ['key' => 'absence_reason',         'label' => 'Reason for Absence (A1)',                'width' => 26, 'type' => 'string',  'note' => 'e.g. Brief seasonal viral illness'],
             ['key' => 'interest',               'label' => 'Primary Interest / Hobby (A1) *',         'width' => 32, 'type' => 'list',    'options' => '"Reading,Dancing or Singing or Playing a musical instrument,Creative Writing,Gardening,Yoga,Art,Craft,Sports or Games,Cooking,Participation at home"', 'note' => 'Student hobby from Doc 29'],
 
@@ -706,8 +740,15 @@ class HpcTeacherController extends Controller
             'Kashmiri',
             'Father',
             'Mohammad Ahmad Wani',
-            220,
-            204,
+            // Monthly Working Days (12 Months: Apr - Mar)
+            20, 22, 10, 20, 22, 21, 19, 20, 15, 15, 20, 18,
+            '=SUM(M3:X3)',
+            // Monthly Present Days (12 Months: Apr - Mar)
+            19, 21, 10, 18, 20, 20, 18, 17, 14, 13, 19, 17,
+            '=SUM(Z3:AK3)',
+            // Attendance % & Absence
+            '=IF(Y3>0, ROUND((AL3/Y3)*100, 1) & "%", "")',
+            16,
             'Viral fever during seasonal change in November',
             'Reading',
             // Part-A(2)

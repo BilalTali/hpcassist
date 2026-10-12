@@ -243,6 +243,18 @@ class UdiseController extends Controller
             file_put_contents(storage_path('app/hpc/udise_latest_fetch.json'), json_encode($meta, JSON_PRETTY_PRINT));
             file_put_contents(storage_path('app/hpc/udise_students_1007827_raw.json'), json_encode($students, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
+            if (\Illuminate\Support\Facades\Auth::check()) {
+                $userSchool = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
+                if ($userSchool) {
+                    $userSchool->update([
+                        'udise_status'         => 'synced',
+                        'udise_synced_at'      => now(),
+                        'udise_students_count' => count($students),
+                        'udise_apaar_count'    => $fileInfo['apaar_count'],
+                    ]);
+                }
+            }
+
             return response()->json([
                 'ok'             => true,
                 'logged_in'      => true,

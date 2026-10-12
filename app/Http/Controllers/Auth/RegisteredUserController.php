@@ -30,16 +30,52 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        if (! $request->filled('school_name') && $request->filled('name')) {
+            $request->merge(['school_name' => $request->input('name')]);
+        }
+        if (! $request->filled('udise_code')) {
+            $request->merge(['udise_code' => '01041800702']);
+        }
+        if (! $request->filled('principal_name')) {
+            $request->merge(['principal_name' => $request->input('name') ?: 'School Incharge']);
+        }
+
         $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'school_name'    => ['required', 'string', 'max:255'],
+            'udise_code'     => ['required', 'string', 'max:15'],
+            'principal_name' => ['required', 'string', 'max:255'],
+            'phone'          => ['nullable', 'string', 'max:20'],
+            'district'       => ['nullable', 'string', 'max:100'],
+            'email'          => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
+            'password'       => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
         $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
+            'name'     => $request->school_name,
+            'email'    => $request->email,
             'password' => Hash::make($request->password),
+        ]);
+
+        $school = \App\Models\School::create([
+            'user_id'        => $user->id,
+            'name'           => $request->school_name,
+            'udise_code'     => preg_replace('/[^0-9]/', '', $request->udise_code),
+            'principal_name' => $request->principal_name,
+            'phone'          => $request->phone,
+            'district'       => $request->district ?: 'Default District',
+            'state'          => 'Jammu & Kashmir',
+            'is_active'      => true,
+        ]);
+
+        // Create initial default teacher (Principal / Head Incharge)
+        \App\Models\Teacher::create([
+            'school_id'    => $school->id,
+            'name'         => $request->principal_name,
+            'designation'  => 'Headmaster / Principal',
+            'mobile'       => $request->phone,
+            'email'        => $request->email,
+            'classes'      => 'All Classes',
+            'is_active'    => true,
         ]);
 
         event(new Registered($user));

@@ -70,24 +70,96 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
 
             <!-- SECTION 1: Universal Form URL Discovery & Template Generator -->
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-5">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
-                            <span>🔍 Fetch Form Details &amp; Create Template</span>
-                            <span class="text-[11px] font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">Universal</span>
-                        </h3>
-                        <p class="text-xs text-slate-500 mt-0.5">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                                <span>🔍 Fetch Form Details &amp; Create Template</span>
+                                <span class="text-[11px] font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">Universal</span>
+                            </h3>
+                            @if(isset($udiseCount) && $udiseCount > 0)
+                                <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold shadow-xs">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                    ✨ {{ $udiseCount }} UDISE Students Synced ({{ $udiseApaarCount }} Unmasked APAAR IDs)
+                                </span>
+                            @endif
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">
                             Enter any HPC portal form URL (e.g. Students, Teachers, Classes) to inspect inputs and generate the corresponding Excel template.
                         </p>
                     </div>
-                    <div class="shrink-0 flex items-center gap-2">
+
+                    <div class="shrink-0 flex items-center flex-wrap gap-2.5">
+                        <!-- Button 1: Blank Standard Template -->
                         <a href="{{ route('hpc.template.download') }}"
-                           class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow">
+                           class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow active:scale-95">
                             📥 Download Template (.xlsx)
                         </a>
+
+                        <!-- Button 2: Template Pre-filled with UDISE Data -->
+                        <a href="{{ route('hpc.template.download_udise') }}"
+                           class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow active:scale-95"
+                           title="Download Excel pre-populated with 129 UDISE students and unmasked APAAR IDs">
+                            📊 Template with UDISE Data (.xlsx)
+                            @if(isset($udiseCount) && $udiseCount > 0)
+                                <span class="bg-white/20 text-white text-[10px] px-1.5 py-0.5 rounded-md font-mono">{{ $udiseCount }} Students</span>
+                            @endif
+                        </a>
+
+                        @if(isset($udiseCount) && $udiseCount > 0)
+                            <!-- Action 3: 1-Click Load directly into Step 2 -->
+                            <button id="btn-preload-udise" onclick="loadUdiseDirectly()"
+                                    class="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow active:scale-95">
+                                ⚡ 1-Click Load into Validation
+                            </button>
+                        @endif
                     </div>
                 </div>
+
+                <!-- Column Mapping Guide -->
+                @if(isset($udiseCount) && $udiseCount > 0)
+                    <div class="bg-gradient-to-r from-slate-50 to-indigo-50/30 rounded-xl p-3.5 border border-slate-200">
+                        <div class="flex items-center justify-between text-xs font-bold text-slate-800 mb-2">
+                            <span class="flex items-center gap-1.5">
+                                <span class="text-indigo-600">📌</span> Automated Column Mapping (UDISE+ &rarr; HPC Portal Template)
+                            </span>
+                            <span class="text-[11px] font-mono text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">All {{ $udiseCount }} Ready</span>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-[11px]">
+                            <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
+                                <div class="text-slate-400 font-semibold text-[10px]">FULL NAME &rarr;</div>
+                                <div class="font-bold text-slate-800 truncate" title="First Name + Last Name">First + Last Name</div>
+                                <div class="text-[10px] text-slate-500">Separated at word 1</div>
+                            </div>
+                            <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
+                                <div class="text-slate-400 font-semibold text-[10px]">DOB &rarr;</div>
+                                <div class="font-bold text-slate-800">Date of Birth *</div>
+                                <div class="text-[10px] text-slate-500 font-mono">DD/MM/YYYY</div>
+                            </div>
+                            <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
+                                <div class="text-slate-400 font-semibold text-[10px]">CLASS/GRADE &rarr;</div>
+                                <div class="font-bold text-indigo-700">Grade *</div>
+                                <div class="text-[10px] text-slate-500">Balvatika 1, Grade 1-8</div>
+                            </div>
+                            <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
+                                <div class="text-slate-400 font-semibold text-[10px]">SECTION &rarr;</div>
+                                <div class="font-bold text-slate-800">Section *</div>
+                                <div class="text-[10px] text-slate-500">Default: <b class="text-slate-700">A</b></div>
+                            </div>
+                            <div class="bg-white p-2 rounded-lg border border-emerald-200 shadow-2xs bg-emerald-50/20">
+                                <div class="text-emerald-600 font-semibold text-[10px]">UNMASKED AADHAAR &rarr;</div>
+                                <div class="font-bold text-emerald-800">APAAR ID</div>
+                                <div class="text-[10px] text-emerald-700 font-mono">12-Digit ({{ $udiseApaarCount }} present)</div>
+                            </div>
+                            <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
+                                <div class="text-slate-400 font-semibold text-[10px]">EMAIL &rarr;</div>
+                                <div class="font-bold text-slate-800">Email *</div>
+                                <div class="text-[10px] text-slate-500 truncate" title="{first}.{pen}@bms.school.gov.in">{name}.{pen}@bms..</div>
+                            </div>
+                        </div>
+                    </div>
+                @endif
 
                 <div class="flex flex-col sm:flex-row gap-3">
                     <div class="relative flex-1">
@@ -136,7 +208,7 @@
                             <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded">Step 1</span>
                         </div>
                         <p class="text-xs text-slate-500 mb-4">
-                            Upload your filled <code>.xlsx</code> file. Drop it below to validate student records instantly.
+                            Upload your filled <code>.xlsx</code> file, or click 1-Click Load above to directly populate from synced UDISE data.
                         </p>
 
                         <!-- Dropzone -->
@@ -249,23 +321,31 @@
                         <p class="text-xs text-slate-500 mt-0.5">Full clean view of all uploaded records and their portal submission status.</p>
                     </div>
 
-                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <div class="flex items-center flex-wrap gap-2 w-full sm:w-auto">
                         <input type="text" id="table-search" oninput="searchTable(this.value)" placeholder="Search students..."
-                               class="text-xs px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:border-indigo-500 w-full sm:w-48 bg-white">
+                               class="text-xs px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:border-indigo-500 w-full sm:w-44 bg-white">
                         <div class="flex items-center gap-1 shrink-0">
                             <button onclick="filterResults('all')" id="filter-all"
                                     class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
                                 All
                             </button>
+                            <button onclick="filterResults('valid')" id="filter-valid"
+                                    class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">
+                                Valid
+                            </button>
+                            <button onclick="filterResults('rejected')" id="filter-rejected"
+                                    class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">
+                                Issues
+                            </button>
                             <button onclick="filterResults('success')" id="filter-success"
                                     class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">
                                 Successful
                             </button>
-                            <button onclick="filterResults('rejected')" id="filter-rejected"
-                                    class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">
-                                Rejected
-                            </button>
                         </div>
+                        <button onclick="openAddStudentModal()"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-sm transition active:scale-95 shrink-0">
+                            ➕ Add Student
+                        </button>
                     </div>
                 </div>
 
@@ -279,8 +359,9 @@
                                 <th class="py-3 px-4">Date of Birth</th>
                                 <th class="py-3 px-4">Email</th>
                                 <th class="py-3 px-4">APAAR ID</th>
-                                <th class="py-3 px-4 w-36">Status</th>
+                                <th class="py-3 px-4 w-32">Status</th>
                                 <th class="py-3 px-4">Portal Feedback / Details</th>
+                                <th class="py-3 px-4 text-center w-24">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="results-table-body" class="divide-y divide-slate-100 text-slate-700">
@@ -345,10 +426,22 @@
                                             <span class="text-slate-400">Waiting for automation execution</span>
                                         @endif
                                     </td>
+                                    <td class="py-3 px-4 text-center whitespace-nowrap">
+                                        <button onclick="openEditStudentModal({{ $idx }})"
+                                                class="px-2 py-1 text-xs font-semibold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 rounded-lg border border-slate-200 transition"
+                                                title="Edit all columns for this student">
+                                            ✏️ Edit
+                                        </button>
+                                        <button onclick="deleteStudentRow({{ $idx }})"
+                                                class="px-2 py-1 text-xs font-semibold bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-500 rounded-lg border border-slate-200 transition ml-1"
+                                                title="Delete student">
+                                            🗑️
+                                        </button>
+                                    </td>
                                 </tr>
                             @empty
                                 <tr id="empty-row">
-                                    <td colspan="8" class="py-16 text-center text-slate-400">
+                                    <td colspan="9" class="py-16 text-center text-slate-400">
                                         <div class="flex flex-col items-center justify-center space-y-2">
                                             <span class="text-4xl">📂</span>
                                             <p class="font-bold text-slate-700 text-sm">No student records loaded</p>
@@ -360,8 +453,122 @@
                         </tbody>
                     </table>
                 </div>
+
+                <!-- Table Pagination Bar -->
+                <div class="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+                    <div id="pagination-info" class="font-medium text-slate-500">
+                        Showing <strong id="page-start">1</strong> to <strong id="page-end">20</strong> of <strong id="page-total">{{ count($preview) }}</strong> records
+                    </div>
+                    <div class="flex items-center gap-1.5" id="pagination-controls">
+                        <button onclick="prevPage()" id="btn-page-prev" class="px-2.5 py-1 bg-white border border-slate-200 rounded-lg font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                            &larr; Prev
+                        </button>
+                        <div id="page-numbers" class="flex items-center gap-1"></div>
+                        <button onclick="nextPage()" id="btn-page-next" class="px-2.5 py-1 bg-white border border-slate-200 rounded-lg font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                            Next &rarr;
+                        </button>
+                    </div>
+                </div>
             </div>
 
+        </div>
+    </div>
+
+    <!-- Student Add / Edit Modal -->
+    <div id="student-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs hidden p-4">
+        <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full overflow-hidden transition-all transform scale-100 animate-in fade-in zoom-in duration-150">
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <h3 id="modal-title" class="font-bold text-sm text-slate-800 flex items-center gap-2">
+                    <span>✏️ Edit Student Record</span>
+                </h3>
+                <button type="button" onclick="closeStudentModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold leading-none">&times;</button>
+            </div>
+
+            <form id="student-form" onsubmit="handleStudentFormSubmit(event)" class="p-6 space-y-4">
+                <input type="hidden" id="student-index" value="-1">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">First Name <span class="text-rose-500">*</span></label>
+                        <input type="text" id="modal-first-name" required placeholder="e.g. AARAV"
+                               class="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Last Name</label>
+                        <input type="text" id="modal-last-name" placeholder="e.g. KUMAR"
+                               class="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-indigo-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Grade / Class <span class="text-rose-500">*</span></label>
+                        <select id="modal-grade" required class="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-indigo-500 bg-white">
+                            <option value="Balvatika 1">Balvatika 1</option>
+                            <option value="Balvatika 2">Balvatika 2</option>
+                            <option value="Balvatika 3">Balvatika 3</option>
+                            <option value="Grade 1">Grade 1</option>
+                            <option value="Grade 2">Grade 2</option>
+                            <option value="Grade 3">Grade 3</option>
+                            <option value="Grade 4">Grade 4</option>
+                            <option value="Grade 5">Grade 5</option>
+                            <option value="Grade 6">Grade 6</option>
+                            <option value="Grade 7">Grade 7</option>
+                            <option value="Grade 8">Grade 8</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Section <span class="text-rose-500">*</span></label>
+                        <select id="modal-section" required class="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-indigo-500 bg-white">
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                            <option value="E">E</option>
+                            <option value="F">F</option>
+                            <option value="G">G</option>
+                            <option value="H">H</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Date of Birth <span class="text-rose-500">*</span></label>
+                        <input type="text" id="modal-dob" required placeholder="DD/MM/YYYY"
+                               class="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-indigo-500 font-mono">
+                        <p class="text-[10px] text-slate-400 mt-0.5">Format: 15/08/2012</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">APAAR ID (12 Digits)</label>
+                        <input type="text" id="modal-apaar" maxlength="12" placeholder="12-digit unmasked ID"
+                               class="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-indigo-500 font-mono">
+                        <p class="text-[10px] text-slate-400 mt-0.5">Optional, or exactly 12 digits</p>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-semibold text-slate-700">Email Address <span class="text-rose-500">*</span></label>
+                        <button type="button" onclick="autoGenEmail()" class="text-[11px] text-indigo-600 hover:underline">⚡ Auto-generate</button>
+                    </div>
+                    <input type="email" id="modal-email" required placeholder="student.code@bms.school.gov.in"
+                           class="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-indigo-500 font-mono">
+                </div>
+
+                <div id="modal-error" class="hidden text-xs text-rose-600 bg-rose-50 border border-rose-200 p-2.5 rounded-lg"></div>
+
+                <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                    <button type="button" onclick="closeStudentModal()"
+                            class="px-4 py-2 border border-slate-300 text-slate-700 text-xs font-semibold rounded-xl hover:bg-slate-50 transition">
+                        Cancel
+                    </button>
+                    <button type="submit" id="btn-save-student"
+                            class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm transition active:scale-95">
+                        💾 Save Record
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -370,6 +577,7 @@
         const CSRF = "{{ csrf_token() }}";
         let pollInterval = null;
         let isRunning = false;
+        window.currentPreview = @json($preview);
 
         // School Profile Actions
         async function handleSchoolChange(val) {
@@ -530,6 +738,69 @@
             }
         }
 
+        async function loadUdiseDirectly() {
+            const btn = document.getElementById('btn-preload-udise');
+            const originalText = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Loading UDISE Records...';
+            }
+
+            try {
+                const res = await fetch("{{ route('hpc.students.preload_udise') }}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': CSRF,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await res.json();
+
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+
+                if (!data.ok) {
+                    alert(data.error || 'Failed to preload UDISE records');
+                    return;
+                }
+
+                // Update summary counts
+                const summaryBox = document.getElementById('upload-summary');
+                if (summaryBox) summaryBox.classList.remove('hidden');
+                document.getElementById('stat-total').textContent = data.total;
+                document.getElementById('stat-valid').textContent = data.valid;
+                document.getElementById('stat-invalid').textContent = data.invalid;
+
+                // Render table
+                renderTable(data.preview);
+
+                // Enable batch run button
+                const runBtn = document.getElementById('btn-run');
+                if (data.valid > 0 && runBtn) {
+                    runBtn.disabled = false;
+                    runBtn.className = "flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm text-white shadow-sm transition-all bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-700 hover:to-emerald-700 cursor-pointer hover:shadow active:scale-98";
+                    document.getElementById('run-status-msg').textContent = `${data.valid} UDISE student(s) loaded & verified. Ready for batch submission.`;
+                    document.getElementById('run-status-icon').textContent = '✅';
+                }
+
+                // Smooth scroll to records table
+                const tableSection = document.getElementById('results-count-badge');
+                if (tableSection) {
+                    tableSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+
+            } catch (err) {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+                alert('Request failed: ' + err.message);
+            }
+        }
+
         // Drag & Drop Setup
         const dropArea = document.getElementById('drop-area');
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -608,24 +879,48 @@
             }
         }
 
-        function renderTable(rows) {
-            const tbody = document.getElementById('results-table-body');
-            document.getElementById('results-count-badge').textContent = `${rows.length} loaded`;
+        window.currentPage = 1;
+        window.pageSize = 20;
+        window.filteredRows = [];
 
-            if (!rows.length) {
+        function renderTable(rows) {
+            window.currentPreview = rows || [];
+            window.filteredRows = [...window.currentPreview];
+            window.currentPage = 1;
+            renderTablePage();
+        }
+
+        function renderTablePage() {
+            const tbody = document.getElementById('results-table-body');
+            const total = window.filteredRows.length;
+            document.getElementById('results-count-badge').textContent = `${total} loaded`;
+
+            if (!total) {
                 tbody.innerHTML = `
                     <tr id="empty-row">
-                        <td colspan="8" class="py-16 text-center text-slate-400">
+                        <td colspan="9" class="py-16 text-center text-slate-400">
                             <div class="flex flex-col items-center justify-center space-y-2">
                                 <span class="text-4xl">📂</span>
-                                <p class="font-bold text-slate-700 text-sm">No student records loaded</p>
+                                <p class="font-bold text-slate-700 text-sm">No student records found</p>
+                                <p class="text-xs text-slate-400">Try adjusting your search or upload an Excel template.</p>
                             </div>
                         </td>
                     </tr>`;
+                updatePaginationControls(0, 0, 0);
                 return;
             }
 
-            tbody.innerHTML = rows.map((r, i) => {
+            const totalPages = Math.ceil(total / window.pageSize);
+            if (window.currentPage > totalPages) window.currentPage = totalPages;
+            if (window.currentPage < 1) window.currentPage = 1;
+
+            const startIdx = (window.currentPage - 1) * window.pageSize;
+            const endIdx = Math.min(startIdx + window.pageSize, total);
+            const pageSlice = window.filteredRows.slice(startIdx, endIdx);
+
+            tbody.innerHTML = pageSlice.map((r, sliceIdx) => {
+                const actualIdx = window.currentPreview.indexOf(r);
+                const displayNum = startIdx + sliceIdx + 1;
                 const hasErrors = r.errors && r.errors.length > 0;
                 const statusBadge = hasErrors
                     ? `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">❌ Invalid</span>`
@@ -636,22 +931,92 @@
                     : `<span class="text-slate-400">Waiting for automation execution</span>`;
 
                 return `
-                    <tr class="hover:bg-slate-50/70 transition result-row" data-status="${hasErrors ? 'rejected' : 'pending'}" data-row="${r.row || (i + 1)}">
-                        <td class="py-3 px-4 text-center font-mono text-slate-400">${i + 1}</td>
-                        <td class="py-3 px-4 font-bold text-slate-900 student-name-cell">${escapeHtml(r.name)}</td>
+                    <tr class="hover:bg-slate-50/70 transition result-row" data-status="${hasErrors ? 'rejected' : 'pending'}" data-row="${r.row || displayNum}">
+                        <td class="py-3 px-4 text-center font-mono text-slate-400">${displayNum}</td>
+                        <td class="py-3 px-4 font-bold text-slate-900 student-name-cell">${escapeHtml(r.name || r.first_name)}</td>
                         <td class="py-3 px-4">
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-800">
-                                ${escapeHtml(r.grade)} - ${escapeHtml(r.section)}
+                                ${escapeHtml(r.grade || 'Grade 6')} - ${escapeHtml(r.section || 'A')}
                             </span>
                         </td>
-                        <td class="py-3 px-4 text-slate-500 font-mono text-[11px]">${escapeHtml(r.dob)}</td>
-                        <td class="py-3 px-4 font-mono text-[11px] text-slate-500">${escapeHtml(r.email)}</td>
+                        <td class="py-3 px-4 text-slate-500 font-mono text-[11px]">${escapeHtml(r.dob || '—')}</td>
+                        <td class="py-3 px-4 font-mono text-[11px] text-slate-500">${escapeHtml(r.email || '—')}</td>
                         <td class="py-3 px-4 font-mono text-[11px] text-slate-400">${escapeHtml(r.apaar_id || '—')}</td>
                         <td class="py-3 px-4 status-cell">${statusBadge}</td>
                         <td class="py-3 px-4 message-cell text-slate-500">${msg}</td>
+                        <td class="py-3 px-4 text-center whitespace-nowrap">
+                            <button onclick="openEditStudentModal(${actualIdx})"
+                                    class="px-2 py-1 text-xs font-semibold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 rounded-lg border border-slate-200 transition"
+                                    title="Edit all columns for this student">
+                                ✏️ Edit
+                            </button>
+                            <button onclick="deleteStudentRow(${actualIdx})"
+                                    class="px-2 py-1 text-xs font-semibold bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-500 rounded-lg border border-slate-200 transition ml-1"
+                                    title="Delete student">
+                                🗑️
+                            </button>
+                        </td>
                     </tr>
                 `;
             }).join('');
+
+            updatePaginationControls(startIdx + 1, endIdx, total);
+        }
+
+        function updatePaginationControls(start, end, total) {
+            const startEl = document.getElementById('page-start');
+            const endEl = document.getElementById('page-end');
+            const totalEl = document.getElementById('page-total');
+            if (startEl) startEl.textContent = start;
+            if (endEl) endEl.textContent = end;
+            if (totalEl) totalEl.textContent = total;
+
+            const totalPages = Math.ceil(total / window.pageSize) || 1;
+            const prevBtn = document.getElementById('btn-page-prev');
+            const nextBtn = document.getElementById('btn-page-next');
+            if (prevBtn) prevBtn.disabled = (window.currentPage <= 1);
+            if (nextBtn) nextBtn.disabled = (window.currentPage >= totalPages);
+
+            const numContainer = document.getElementById('page-numbers');
+            if (numContainer) {
+                numContainer.innerHTML = '';
+                const maxButtons = 5;
+                let startPage = Math.max(1, window.currentPage - 2);
+                let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+                if (endPage - startPage < maxButtons - 1) {
+                    startPage = Math.max(1, endPage - maxButtons + 1);
+                }
+
+                for (let p = startPage; p <= endPage; p++) {
+                    const btn = document.createElement('button');
+                    btn.textContent = p;
+                    btn.onclick = () => goToPage(p);
+                    btn.className = (p === window.currentPage)
+                        ? "px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-bold"
+                        : "px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium";
+                    numContainer.appendChild(btn);
+                }
+            }
+        }
+
+        function prevPage() {
+            if (window.currentPage > 1) {
+                window.currentPage--;
+                renderTablePage();
+            }
+        }
+
+        function nextPage() {
+            const totalPages = Math.ceil(window.filteredRows.length / window.pageSize);
+            if (window.currentPage < totalPages) {
+                window.currentPage++;
+                renderTablePage();
+            }
+        }
+
+        function goToPage(p) {
+            window.currentPage = p;
+            renderTablePage();
         }
 
         // Start Run
@@ -779,32 +1144,203 @@
             }
         }
 
-        // Live search filter in table
+        // ─── Student Record Modal & CRUD Handlers ─────────────────────────────
+        function openAddStudentModal() {
+            document.getElementById('modal-title').innerHTML = '<span>➕ Add New Student Record</span>';
+            document.getElementById('student-index').value = '-1';
+            document.getElementById('modal-first-name').value = '';
+            document.getElementById('modal-last-name').value = '';
+            document.getElementById('modal-grade').value = 'Grade 6';
+            document.getElementById('modal-section').value = 'A';
+            document.getElementById('modal-dob').value = '';
+            document.getElementById('modal-email').value = '';
+            document.getElementById('modal-apaar').value = '';
+            document.getElementById('modal-error').classList.add('hidden');
+            document.getElementById('student-modal').classList.remove('hidden');
+            document.getElementById('modal-first-name').focus();
+        }
+
+        function openEditStudentModal(idx) {
+            const st = (window.currentPreview && window.currentPreview[idx]) ? window.currentPreview[idx] : null;
+            if (!st) return;
+            const displayName = escapeHtml(st.name || st.first_name || 'Student');
+            document.getElementById('modal-title').innerHTML = `<span>✏️ Edit Student (Row #${idx + 1}: ${displayName})</span>`;
+            document.getElementById('student-index').value = idx;
+            document.getElementById('modal-first-name').value = st.first_name || (st.name ? st.name.split(' ')[0] : '');
+            document.getElementById('modal-last-name').value = st.last_name || (st.name ? st.name.split(' ').slice(1).join(' ') : '');
+            document.getElementById('modal-grade').value = st.grade || 'Grade 6';
+            document.getElementById('modal-section').value = st.section || 'A';
+            document.getElementById('modal-dob').value = st.dob || '';
+            document.getElementById('modal-email').value = st.email || '';
+            document.getElementById('modal-apaar').value = st.apaar_id || '';
+            document.getElementById('modal-error').classList.add('hidden');
+            document.getElementById('student-modal').classList.remove('hidden');
+            document.getElementById('modal-first-name').focus();
+        }
+
+        function closeStudentModal() {
+            document.getElementById('student-modal').classList.add('hidden');
+        }
+
+        function autoGenEmail() {
+            const first = (document.getElementById('modal-first-name').value || 'student').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const code = Math.floor(1000000000 + Math.random() * 9000000000);
+            document.getElementById('modal-email').value = `${first}.${code}@bms.school.gov.in`;
+        }
+
+        async function handleStudentFormSubmit(e) {
+            e.preventDefault();
+            const errBox = document.getElementById('modal-error');
+            errBox.classList.add('hidden');
+
+            const indexVal = document.getElementById('student-index').value;
+            const index = (indexVal !== '' && parseInt(indexVal) >= 0) ? parseInt(indexVal) : -1;
+
+            const payload = {
+                index: index,
+                first_name: document.getElementById('modal-first-name').value.trim(),
+                last_name: document.getElementById('modal-last-name').value.trim(),
+                grade: document.getElementById('modal-grade').value.trim(),
+                section: document.getElementById('modal-section').value.trim(),
+                dob: document.getElementById('modal-dob').value.trim(),
+                email: document.getElementById('modal-email').value.trim(),
+                apaar_id: document.getElementById('modal-apaar').value.trim(),
+            };
+
+            const saveBtn = document.getElementById('btn-save-student');
+            const originalText = saveBtn.innerHTML;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '⏳ Saving...';
+
+            try {
+                const res = await fetch("{{ route('hpc.students.save') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalText;
+
+                if (!data.ok) {
+                    errBox.textContent = data.error || 'Failed to save record';
+                    errBox.classList.remove('hidden');
+                    return;
+                }
+
+                window.currentPreview = data.preview;
+                closeStudentModal();
+                renderTable(window.currentPreview);
+
+                // Update summary badges
+                document.getElementById('results-count-badge').textContent = `${data.total} loaded`;
+                const summaryBox = document.getElementById('upload-summary');
+                if (summaryBox) summaryBox.classList.remove('hidden');
+                document.getElementById('stat-total').textContent = data.total;
+                document.getElementById('stat-valid').textContent = data.valid;
+                document.getElementById('stat-invalid').textContent = data.invalid;
+
+                const runBtn = document.getElementById('btn-run');
+                if (data.valid > 0 && runBtn) {
+                    runBtn.disabled = false;
+                    runBtn.className = "flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm text-white shadow-sm transition-all bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-700 hover:to-emerald-700 cursor-pointer hover:shadow active:scale-98";
+                    document.getElementById('run-status-msg').textContent = `${data.valid} student(s) ready to submit. Click Run to begin.`;
+                    document.getElementById('run-status-icon').textContent = '✅';
+                }
+
+            } catch (err) {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalText;
+                errBox.textContent = 'Request failed: ' + err.message;
+                errBox.classList.remove('hidden');
+            }
+        }
+
+        async function deleteStudentRow(idx) {
+            const st = (window.currentPreview && window.currentPreview[idx]) ? window.currentPreview[idx] : null;
+            const name = st ? (st.name || st.first_name) : `Row #${idx + 1}`;
+            if (!confirm(`Are you sure you want to delete ${name}?`)) return;
+
+            try {
+                const res = await fetch("{{ route('hpc.students.delete') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ index: idx })
+                });
+                const data = await res.json();
+                if (!data.ok) {
+                    alert(data.error || 'Failed to delete student');
+                    return;
+                }
+
+                window.currentPreview = data.preview;
+                renderTable(window.currentPreview);
+
+                // Update summary badges
+                document.getElementById('results-count-badge').textContent = `${data.total} loaded`;
+                document.getElementById('stat-total').textContent = data.total;
+                document.getElementById('stat-valid').textContent = data.valid;
+                document.getElementById('stat-invalid').textContent = data.invalid;
+
+                const runBtn = document.getElementById('btn-run');
+                if (data.valid > 0 && runBtn) {
+                    runBtn.disabled = false;
+                } else if (runBtn) {
+                    runBtn.disabled = true;
+                    runBtn.className = "flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm text-white shadow-sm transition-all bg-slate-300 cursor-not-allowed opacity-60";
+                }
+
+            } catch (err) {
+                alert('Failed to delete student: ' + err.message);
+            }
+        }
+
+        let activeFilter = 'all';
+
         function searchTable(query) {
-            const q = query.toLowerCase().trim();
-            document.querySelectorAll('.result-row').forEach(row => {
-                const text = row.innerText.toLowerCase();
-                row.style.display = text.includes(q) ? '' : 'none';
-            });
+            applyFilterAndSearch();
         }
 
         function filterResults(type) {
-            ['all', 'success', 'rejected'].forEach(t => {
+            activeFilter = type;
+            ['all', 'valid', 'rejected', 'success'].forEach(t => {
                 const btn = document.getElementById('filter-' + t);
+                if (!btn) return;
                 if (t === type) {
                     btn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200";
                 } else {
                     btn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50";
                 }
             });
+            applyFilterAndSearch();
+        }
 
-            document.querySelectorAll('.result-row').forEach(row => {
-                const status = row.getAttribute('data-status');
-                if (type === 'all') row.style.display = '';
-                else if (type === 'success' && status === 'success') row.style.display = '';
-                else if (type === 'rejected' && (status === 'rejected' || status === 'error')) row.style.display = '';
-                else row.style.display = 'none';
+        function applyFilterAndSearch() {
+            const q = (document.getElementById('table-search')?.value || '').toLowerCase().trim();
+            window.filteredRows = (window.currentPreview || []).filter(r => {
+                const nameMatch = (r.name || r.first_name || '').toLowerCase().includes(q)
+                               || (r.last_name || '').toLowerCase().includes(q)
+                               || (r.email || '').toLowerCase().includes(q)
+                               || (r.apaar_id || '').toLowerCase().includes(q)
+                               || (r.grade || '').toLowerCase().includes(q);
+                if (!nameMatch) return false;
+
+                const hasErrors = r.errors && r.errors.length > 0;
+                if (activeFilter === 'valid') return !hasErrors;
+                if (activeFilter === 'rejected') return hasErrors;
+                return true;
             });
+
+            window.currentPage = 1;
+            renderTablePage();
         }
 
         function escapeHtml(str) {
@@ -818,6 +1354,8 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
+            renderTable(window.currentPreview);
+
             fetch("{{ route('hpc.run.status') }}")
                 .then(r => r.json())
                 .then(data => {

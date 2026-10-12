@@ -44,26 +44,61 @@ class HpcController extends Controller
             ? trim(file_get_contents(storage_path('app/hpc/current_form.txt')))
             : config('hpc.add_student_url');
 
-        return view('hpc.dashboard', compact('hasFields', 'hasProfile', 'preview', 'lastRun', 'currentFormUrl', 'schoolsData', 'activeSchool'));
+        $udiseStudents   = $this->getUdiseStudents();
+        $udiseCount       = count($udiseStudents);
+        $udiseApaarCount  = count(array_filter($udiseStudents, fn($s) => !empty($s['apaarId']) && ctype_digit((string)$s['apaarId']) && strlen((string)$s['apaarId']) === 12));
+
+        return view('hpc.dashboard', compact(
+            'hasFields', 'hasProfile', 'preview', 'lastRun', 'currentFormUrl',
+            'schoolsData', 'activeSchool', 'udiseCount', 'udiseApaarCount'
+        ));
     }
 
-    // ─── Step 1: Download the blank Excel template ───────────────────────────
+    // ─── Step 1: Download the Excel template (Populated from UDISE if available) ────────
 
-    public function downloadTemplate()
+    public function downloadTemplate(Request $request)
+    {
+        $wantsUdise = $request->query('source') === 'udise'
+                   || $request->query('udise') === '1'
+                   || $request->query('with_udise') === '1'
+                   || $request->is('*/udise*');
+
+        $isForcedBlank = $request->query('blank') === '1';
+
+        $udiseStudents = ($wantsUdise && ! $isForcedBlank) ? $this->getUdiseStudents() : [];
+
+        $sheet = $this->buildStudentSpreadsheet($udiseStudents);
+
+        $filename = (! empty($udiseStudents))
+            ? 'hpc_students_01041800702_from_udise.xlsx'
+            : 'hpc_students_template.xlsx';
+
+        $writer = new Xlsx($sheet);
+
+        return response()->stream(function () use ($writer) {
+            $writer->save('php://output');
+        }, 200, [
+            'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Cache-Control'       => 'no-cache, no-store, must-revalidate',
+        ]);
+    }
+
+    public function buildStudentSpreadsheet(array $udiseStudents = []): Spreadsheet
     {
         $sheet = new Spreadsheet();
         $ws    = $sheet->getActiveSheet();
         $ws->setTitle('Students');
 
-        // Columns we expose in the template
+        // Columns exposed in the template
         $columns = [
-            ['key' => 'first_name', 'label' => 'First Name *',   'width' => 20, 'note' => 'As per Aadhar / school records'],
-            ['key' => 'last_name',  'label' => 'Last Name',       'width' => 20, 'note' => 'Optional'],
+            ['key' => 'first_name', 'label' => 'First Name *',   'width' => 22, 'note' => 'First name from UDISE / records'],
+            ['key' => 'last_name',  'label' => 'Last Name',       'width' => 22, 'note' => 'Last name / surname (optional)'],
             ['key' => 'dob',        'label' => 'Date of Birth *', 'width' => 18, 'note' => 'DD/MM/YYYY e.g. 15/08/2012'],
-            ['key' => 'email',      'label' => 'Email *',         'width' => 28, 'note' => 'Valid email address'],
+            ['key' => 'email',      'label' => 'Email *',         'width' => 34, 'note' => 'Valid email address'],
             ['key' => 'grade',      'label' => 'Grade *',         'width' => 18, 'note' => 'Balvatika 1-3, Grade 1-8'],
-            ['key' => 'section',    'label' => 'Section *',       'width' => 14, 'note' => 'A, B, C, D...'],
-            ['key' => 'apaar_id',   'label' => 'APAAR ID',        'width' => 20, 'note' => '12 digits (optional)'],
+            ['key' => 'section',    'label' => 'Section *',       'width' => 14, 'note' => 'Default: A'],
+            ['key' => 'apaar_id',   'label' => 'APAAR ID',        'width' => 22, 'note' => '12-digit unmasked APAAR ID'],
         ];
 
         // ── Header row (Row 1) ────────────────────────────────────────────────
@@ -97,36 +132,105 @@ class HpcController extends Controller
         }
         $ws->getRowDimension(2)->setRowHeight(20);
 
-        // ── Sample row (Row 3 — gentle example row) ──────────────────────────
-        $sample = ['Aarav', 'Sharma', '15/08/2012', 'aarav.sharma@example.com', 'Grade 6', 'A', '123456789012'];
-        $sampleStyle = [
-            'font'      => ['color' => ['argb' => 'FF334155'], 'size' => 10],
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFF8FAFC']],
-            'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
-            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
-        ];
-        foreach ($sample as $i => $val) {
-            $letter = chr(65 + $i);
-            $ws->setCellValueExplicit("{$letter}3", $val, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-            $ws->getStyle("{$letter}3")->applyFromArray($sampleStyle);
+        $gradeMap  = $this->getGradeMap();
+        $totalRows = max(count($udiseStudents) + 2, 200);
+
+        if (! empty($udiseStudents)) {
+            // Populate UDISE Students starting from Row 3
+            foreach ($udiseStudents as $idx => $st) {
+                $r = $idx + 3;
+
+                if (isset($st['first_name'])) {
+                    $firstName = trim($st['first_name']);
+                    $lastName  = trim($st['last_name'] ?? '');
+                    $dob       = trim($st['dob'] ?? '');
+                    $email     = trim($st['email'] ?? '');
+                    $grade     = trim($st['grade'] ?? 'Grade 6');
+                    $section   = trim($st['section'] ?? 'A');
+                    $apaarId   = trim((string)($st['apaar_id'] ?? ''));
+                } else {
+                    // 1. First Name + Last Name from studentName
+                    $rawName   = trim($st['studentName'] ?? '');
+                    $parts     = preg_split('/\s+/', $rawName);
+                    $firstName = $parts[0] ?? 'Student';
+                    $lastName  = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
+
+                    // 2. Date of Birth (ensure DD/MM/YYYY)
+                    $dob = trim($st['dob'] ?? '');
+                    if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dob, $m)) {
+                        $dob = "{$m[3]}/{$m[2]}/{$m[1]}";
+                    }
+
+                    // 3. Email (use UDISE email or generate valid unique student email)
+                    $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL) ? trim($st['email']) : '';
+                    if (empty($email)) {
+                        $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
+                        $cleanPen   = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
+                        $email      = "{$cleanFirst}.{$cleanPen}@bms.school.gov.in";
+                    }
+
+                    // 4. Grade mapped from classDesc
+                    $rawClass = trim($st['classDesc'] ?? '');
+                    $grade    = $gradeMap[$rawClass] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawClass)] ?? 'Grade 6');
+
+                    // 5. Section (default A)
+                    $section  = ! empty($st['sectionDesc']) ? trim($st['sectionDesc']) : 'A';
+
+                    // 6. APAAR ID (unmasked 12-digit)
+                    $apaarId  = ! empty($st['apaarId']) ? (string) $st['apaarId'] : '';
+                }
+
+                $rowVals  = [$firstName, $lastName, $dob, $email, $grade, $section, $apaarId];
+                $isApaar  = ! empty($apaarId);
+                $rowBg    = ($idx % 2 === 0) ? 'FFFFFFFF' : 'FFF8FAFC';
+
+                foreach ($rowVals as $cIdx => $val) {
+                    $colLetter = chr(65 + $cIdx);
+                    $ws->setCellValueExplicit("{$colLetter}{$r}", (string) $val, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
+                    $cellBg = ($cIdx === 6 && $isApaar) ? 'FFCCFBF1' : $rowBg; // Soft teal highlight for APAAR ID
+                    $ws->getStyle("{$colLetter}{$r}")->applyFromArray([
+                        'font'      => [
+                            'size'  => 9.5,
+                            'bold'  => ($cIdx === 6 && $isApaar),
+                            'color' => ['argb' => ($cIdx === 6 && $isApaar) ? 'FF0F766E' : 'FF0F172A'],
+                        ],
+                        'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $cellBg]],
+                        'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                        'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
+                    ]);
+                }
+                $ws->getRowDimension($r)->setRowHeight(22);
+            }
+        } else {
+            // Sample row (Row 3)
+            $sample = ['Aarav', 'Sharma', '15/08/2012', 'aarav.sharma@example.com', 'Grade 6', 'A', '123456789012'];
+            $sampleStyle = [
+                'font'      => ['color' => ['argb' => 'FF334155'], 'size' => 10],
+                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFF8FAFC']],
+                'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
+            ];
+            foreach ($sample as $i => $val) {
+                $letter = chr(65 + $i);
+                $ws->setCellValueExplicit("{$letter}3", $val, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $ws->getStyle("{$letter}3")->applyFromArray($sampleStyle);
+            }
+            $ws->getRowDimension(3)->setRowHeight(22);
+
+            $dataStyle = [
+                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
+                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFFFFF']],
+                'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+            ];
+            $ws->getStyle("A4:G200")->applyFromArray($dataStyle);
         }
-        $ws->getRowDimension(3)->setRowHeight(22);
 
-        // ── Data rows style (Rows 4–200 blank rows) ──────────────────────────
-        $dataStyle = [
-            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFFFFF']],
-            'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
-        ];
-        $lastCol = chr(64 + count($columns));
-        $ws->getStyle("A4:{$lastCol}200")->applyFromArray($dataStyle);
-
-        // ── In-cell Dropdown Data Validation for Grade and Section ────────────
+        // In-cell Dropdown Data Validation for Grade and Section
         $gradeFormula   = '"Balvatika 1,Balvatika 2,Balvatika 3,Grade 1,Grade 2,Grade 3,Grade 4,Grade 5,Grade 6,Grade 7,Grade 8"';
         $sectionFormula = '"A,B,C,D,E,F,G,H"';
 
-        for ($r = 3; $r <= 200; $r++) {
-            // Grade dropdown (Column E)
+        for ($r = 3; $r <= $totalRows; $r++) {
             $gv = $ws->getCell("E{$r}")->getDataValidation();
             $gv->setType(DataValidation::TYPE_LIST);
             $gv->setErrorStyle(DataValidation::STYLE_INFORMATION);
@@ -137,7 +241,6 @@ class HpcController extends Controller
             $gv->setPrompt('Select Grade 1-8 or Balvatika 1-3');
             $gv->setFormula1($gradeFormula);
 
-            // Section dropdown (Column F)
             $sv = $ws->getCell("F{$r}")->getDataValidation();
             $sv->setType(DataValidation::TYPE_LIST);
             $sv->setErrorStyle(DataValidation::STYLE_INFORMATION);
@@ -146,29 +249,28 @@ class HpcController extends Controller
             $sv->setFormula1($sectionFormula);
         }
 
-        // Freeze header rows
         $ws->freezePane('A3');
 
-        // ── Instructions sheet ───────────────────────────────────────────────
+        // Instructions Sheet
         $info = $sheet->createSheet();
         $info->setTitle('Instructions');
-        $info->setCellValue('A1', '🎓 HPC Student Entry Tool — Excel Guide');
+        $info->setCellValue('A1', '🎓 HPC Student Entry Tool — Excel Guide & UDISE Field Mapping');
         $info->getStyle('A1')->getFont()->setBold(true)->setSize(14);
 
-        $info->setCellValue('A3', 'Column');
-        $info->setCellValue('B3', 'Required');
-        $info->setCellValue('C3', 'Format & Allowed Options');
+        $info->setCellValue('A3', 'HPC Template Field');
+        $info->setCellValue('B3', 'UDISE+ Source Column');
+        $info->setCellValue('C3', 'Description & Mapping Rules');
         $info->getStyle('A3:C3')->getFont()->setBold(true);
         $info->getStyle('A3:C3')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFEDE9FE');
 
         $rows = [
-            ['First Name',   'YES', 'Student first name as per records.'],
-            ['Last Name',    'No',  'Student last name (optional).'],
-            ['Date of Birth','YES', 'Format: DD/MM/YYYY (e.g. 15/08/2012).'],
-            ['Email',        'YES', 'Valid email address.'],
-            ['Grade',        'YES', 'Choose from dropdown: Balvatika 1, Balvatika 2, Balvatika 3, Grade 1, Grade 2, Grade 3, Grade 4, Grade 5, Grade 6, Grade 7, Grade 8 (Numbers 1-8 also accepted)'],
-            ['Section',      'YES', 'Choose from dropdown: A, B, C, D, E, F, G, H'],
-            ['APAAR ID',     'No',  '12-digit APAAR ID number (optional).'],
+            ['First Name *',   'studentName (Word 1)', 'Student first name as per official UDISE / school records.'],
+            ['Last Name',      'studentName (Rest)',   'Student last name (optional or remaining parts of full name).'],
+            ['Date of Birth *','dob',                  'Format: DD/MM/YYYY (e.g. 15/08/2012).'],
+            ['Email *',        'email / auto-gen',     'Official student email (auto-generated using PEN if blank).'],
+            ['Grade *',        'classDesc',            'Mapped from UDISE class (PP-1 -> Balvatika 1, I-VIII -> Grade 1-8).'],
+            ['Section *',      'sectionDesc',          'Defaulted to Section A.'],
+            ['APAAR ID',       'apaarId',              'Unmasked 12-digit APAAR ID from UDISE SDMS.'],
         ];
 
         foreach ($rows as $ri => $row) {
@@ -178,24 +280,127 @@ class HpcController extends Controller
             $info->setCellValue("C{$line}", $row[2]);
         }
 
-        $info->getColumnDimension('A')->setWidth(18);
-        $info->getColumnDimension('B')->setWidth(12);
-        $info->getColumnDimension('C')->setWidth(50);
+        $info->getColumnDimension('A')->setWidth(20);
+        $info->getColumnDimension('B')->setWidth(24);
+        $info->getColumnDimension('C')->setWidth(60);
 
-        // Select first sheet by default
         $sheet->setActiveSheetIndex(0);
 
-        // ── Stream the file ──────────────────────────────────────────────────
-        $filename = 'hpc_students_template.xlsx';
-        $writer   = new Xlsx($sheet);
+        return $sheet;
+    }
 
-        return response()->stream(function () use ($writer) {
-            $writer->save('php://output');
-        }, 200, [
-            'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
-            'Cache-Control'       => 'no-cache, no-store, must-revalidate',
+    public function preloadUdise(Request $request)
+    {
+        $udiseStudents = $this->getUdiseStudents();
+        if (empty($udiseStudents)) {
+            return response()->json([
+                'ok'    => false,
+                'error' => 'No UDISE student records found. Please sync from http://127.0.0.1:8000/dashboard first.',
+            ], 404);
+        }
+
+        // 1. Generate and save storage/app/hpc/students.xlsx
+        $spreadsheet = $this->buildStudentSpreadsheet($udiseStudents);
+        $dir = storage_path('app/hpc');
+        @mkdir($dir, 0755, true);
+        $fullPath = $dir . '/students.xlsx';
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($fullPath);
+
+        // 2. Generate preview.json for Step 2
+        $preview   = [];
+        $gradeMap  = $this->getGradeMap();
+
+        foreach ($udiseStudents as $idx => $st) {
+            $r = $idx + 3;
+
+            $rawName   = trim($st['studentName'] ?? '');
+            $parts     = preg_split('/\s+/', $rawName);
+            $firstName = $parts[0] ?? 'Student';
+            $lastName  = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
+
+            $dob = trim($st['dob'] ?? '');
+            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dob, $m)) {
+                $dob = "{$m[3]}/{$m[2]}/{$m[1]}";
+            }
+
+            $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL) ? trim($st['email']) : '';
+            if (empty($email)) {
+                $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
+                $cleanPen   = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
+                $email      = "{$cleanFirst}.{$cleanPen}@bms.school.gov.in";
+            }
+
+            $rawClass = trim($st['classDesc'] ?? '');
+            $grade    = $gradeMap[$rawClass] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawClass)] ?? 'Grade 6');
+            $section  = ! empty($st['sectionDesc']) ? trim($st['sectionDesc']) : 'A';
+            $apaarId  = ! empty($st['apaarId']) ? (string) $st['apaarId'] : '';
+
+            $preview[] = [
+                'row'        => $r,
+                'first_name' => $firstName,
+                'last_name'  => $lastName,
+                'name'       => trim("{$firstName} {$lastName}"),
+                'dob'        => $dob,
+                'email'      => $email,
+                'grade'      => $grade,
+                'section'    => $section,
+                'apaar_id'   => $apaarId,
+                'errors'     => [],
+            ];
+        }
+
+        file_put_contents(storage_path('app/hpc/preview.json'), json_encode($preview, JSON_PRETTY_PRINT));
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Successfully loaded ' . count($preview) . ' students from UDISE with unmasked APAAR IDs into Step 2!',
+            'total'   => count($preview),
+            'valid'   => count($preview),
+            'invalid' => 0,
+            'errors'  => [],
+            'preview' => $preview,
         ]);
+    }
+
+    public function getUdiseStudents(): array
+    {
+        $file = storage_path('app/hpc/udise_students_1007827_raw.json');
+        if (file_exists($file)) {
+            return json_decode(file_get_contents($file), true) ?: [];
+        }
+
+        $files = glob(storage_path('app/hpc/udise_students_*_raw.json'));
+        if (! empty($files)) {
+            return json_decode(file_get_contents($files[0]), true) ?: [];
+        }
+
+        return [];
+    }
+
+    public function getGradeMap(): array
+    {
+        return [
+            'PP-1'  => 'Balvatika 1',
+            'PP-2'  => 'Balvatika 2',
+            'PP-3'  => 'Balvatika 3',
+            'I'     => 'Grade 1',
+            'II'    => 'Grade 2',
+            'III'   => 'Grade 3',
+            'IV'    => 'Grade 4',
+            'V'     => 'Grade 5',
+            'VI'    => 'Grade 6',
+            'VII'   => 'Grade 7',
+            'VIII'  => 'Grade 8',
+            '1'     => 'Grade 1',
+            '2'     => 'Grade 2',
+            '3'     => 'Grade 3',
+            '4'     => 'Grade 4',
+            '5'     => 'Grade 5',
+            '6'     => 'Grade 6',
+            '7'     => 'Grade 7',
+            '8'     => 'Grade 8',
+        ];
     }
 
     // ─── Step 2: Upload & validate the filled Excel ───────────────────────────
@@ -308,6 +513,166 @@ class HpcController extends Controller
         ]);
     }
 
+    // ─── Student CRUD & Column Corrections ───────────────────────────────────
+
+    public function validateStudentRow(array $data, int $rowNum = 1): array
+    {
+        $firstName = trim((string)($data['first_name'] ?? ''));
+        $lastName  = trim((string)($data['last_name'] ?? ''));
+        $dob       = trim((string)($data['dob'] ?? ''));
+        $email     = trim((string)($data['email'] ?? ''));
+        $grade     = trim((string)($data['grade'] ?? ''));
+        $section   = trim((string)($data['section'] ?? ''));
+        $apaarId   = trim((string)($data['apaar_id'] ?? ''));
+
+        $rowErrors = [];
+        if ($firstName === '') {
+            $rowErrors[] = 'First Name required';
+        }
+        if ($dob === '') {
+            $rowErrors[] = 'Date of Birth required';
+        } elseif (! preg_match('/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/', $dob)) {
+            $rowErrors[] = 'Date of Birth must be DD/MM/YYYY';
+        }
+
+        if ($email === '') {
+            $rowErrors[] = 'Email required';
+        } elseif (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $rowErrors[] = 'Email invalid';
+        }
+
+        if ($grade === '') {
+            $rowErrors[] = 'Grade required';
+        }
+        if ($section === '') {
+            $rowErrors[] = 'Section required';
+        }
+        if ($apaarId !== '' && (! ctype_digit($apaarId) || strlen($apaarId) !== 12)) {
+            $rowErrors[] = 'APAAR ID must be exactly 12 digits';
+        }
+
+        return [
+            'row'        => $rowNum,
+            'first_name' => $firstName,
+            'last_name'  => $lastName,
+            'name'       => trim("{$firstName} {$lastName}"),
+            'dob'        => $dob,
+            'email'      => $email,
+            'grade'      => $grade,
+            'section'    => $section,
+            'apaar_id'   => $apaarId,
+            'errors'     => $rowErrors,
+        ];
+    }
+
+    public function syncSpreadsheetFromPreview(array $preview): void
+    {
+        try {
+            $sheet = $this->buildStudentSpreadsheet($preview);
+            $writer = new Xlsx($sheet);
+            $dir = storage_path('app/hpc');
+            @mkdir($dir, 0755, true);
+            $writer->save($dir . '/students.xlsx');
+        } catch (\Throwable $e) {
+            \Log::warning('Could not sync students.xlsx: ' . $e->getMessage());
+        }
+    }
+
+    public function saveStudent(Request $request)
+    {
+        $previewFile = storage_path('app/hpc/preview.json');
+        $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
+
+        $index = $request->input('index');
+        $isEdit = ($index !== null && $index !== '' && (int)$index >= 0 && isset($preview[(int)$index]));
+        $targetRow = $isEdit ? ((int)$index + 1) : (count($preview) + 1);
+
+        $validated = $this->validateStudentRow($request->all(), $targetRow);
+
+        if ($isEdit) {
+            $preview[(int)$index] = $validated;
+        } else {
+            $preview[] = $validated;
+        }
+
+        // Re-index rows
+        foreach ($preview as $i => &$st) {
+            $st['row'] = $i + 1;
+        }
+        unset($st);
+
+        file_put_contents($previewFile, json_encode($preview, JSON_PRETTY_PRINT));
+        $this->syncSpreadsheetFromPreview($preview);
+
+        $valid = count(array_filter($preview, fn($r) => empty($r['errors'])));
+        $invalid = count($preview) - $valid;
+
+        return response()->json([
+            'ok'      => true,
+            'message' => $isEdit ? 'Student record updated successfully' : 'Student added successfully',
+            'total'   => count($preview),
+            'valid'   => $valid,
+            'invalid' => $invalid,
+            'preview' => $preview,
+        ]);
+    }
+
+    public function deleteStudent(Request $request)
+    {
+        $previewFile = storage_path('app/hpc/preview.json');
+        $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
+
+        $index = (int) $request->input('index');
+        if (isset($preview[$index])) {
+            array_splice($preview, $index, 1);
+
+            foreach ($preview as $i => &$st) {
+                $st['row'] = $i + 1;
+            }
+            unset($st);
+
+            file_put_contents($previewFile, json_encode($preview, JSON_PRETTY_PRINT));
+            $this->syncSpreadsheetFromPreview($preview);
+        }
+
+        $valid = count(array_filter($preview, fn($r) => empty($r['errors'])));
+        $invalid = count($preview) - $valid;
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Student record removed',
+            'total'   => count($preview),
+            'valid'   => $valid,
+            'invalid' => $invalid,
+            'preview' => $preview,
+        ]);
+    }
+
+    public function updateAllStudents(Request $request)
+    {
+        $items = $request->input('students', []);
+        $preview = [];
+        foreach ($items as $i => $item) {
+            $preview[] = $this->validateStudentRow($item, $i + 1);
+        }
+
+        $previewFile = storage_path('app/hpc/preview.json');
+        file_put_contents($previewFile, json_encode($preview, JSON_PRETTY_PRINT));
+        $this->syncSpreadsheetFromPreview($preview);
+
+        $valid = count(array_filter($preview, fn($r) => empty($r['errors'])));
+        $invalid = count($preview) - $valid;
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'All student records updated successfully',
+            'total'   => count($preview),
+            'valid'   => $valid,
+            'invalid' => $invalid,
+            'preview' => $preview,
+        ]);
+    }
+
     // ─── Step 3: Start Automation ────────────────────────────────────────────
 
     public function runStart(Request $request)
@@ -380,6 +745,24 @@ class HpcController extends Controller
 
     public function getSchoolsData(): array
     {
+        if (\Illuminate\Support\Facades\Auth::check()) {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $dbSchool = $user->getEffectiveSchool();
+            if ($dbSchool) {
+                return [
+                    'active' => 'school_' . $dbSchool->id,
+                    'schools' => [
+                        [
+                            'id'    => 'school_' . $dbSchool->id,
+                            'name'  => $dbSchool->name,
+                            'udise' => $dbSchool->udise_code,
+                            'dir'   => 'chrome-profile',
+                        ]
+                    ]
+                ];
+            }
+        }
+
         $file = storage_path('app/hpc/schools.json');
         if (file_exists($file)) {
             $data = json_decode(file_get_contents($file), true);

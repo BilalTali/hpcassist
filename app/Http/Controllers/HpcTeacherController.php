@@ -635,6 +635,43 @@ class HpcTeacherController extends Controller
 
     public function getSchoolsData(): array
     {
+        if (\Illuminate\Support\Facades\Auth::check()) {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $dbSchool = $user->getEffectiveSchool();
+            if ($dbSchool) {
+                $dbTeachers = $dbSchool->teachers()->where('is_active', true)->get()->map(function($t) {
+                    return [
+                        'id'    => 'teacher_' . $t->id,
+                        'name'  => $t->name . ($t->designation ? ' (' . $t->designation . ')' : ''),
+                        'dir'   => 'teacher-profiles/teacher_' . $t->id,
+                        'db_id' => $t->id,
+                    ];
+                })->toArray();
+
+                if (empty($dbTeachers)) {
+                    $dbTeachers = [
+                        ['id' => 'teacher_default', 'name' => $dbSchool->principal_name ?: 'Teacher', 'dir' => 'teacher-profile']
+                    ];
+                }
+
+                $activeTeacherId = session('active_teacher_id', $dbTeachers[0]['id']);
+
+                return [
+                    'active' => 'school_' . $dbSchool->id,
+                    'schools' => [
+                        [
+                            'id'             => 'school_' . $dbSchool->id,
+                            'name'           => $dbSchool->name,
+                            'udise'          => $dbSchool->udise_code,
+                            'dir'            => 'chrome-profile',
+                            'teachers'       => $dbTeachers,
+                            'active_teacher' => $activeTeacherId,
+                        ]
+                    ]
+                ];
+            }
+        }
+
         $file = storage_path('app/hpc/schools.json');
         if (file_exists($file)) {
             $data = json_decode(file_get_contents($file), true);
@@ -689,16 +726,22 @@ class HpcTeacherController extends Controller
     public function switchTeacher(Request $request)
     {
         $teacherId = trim((string) $request->input('id'));
-        $data = $this->getSchoolsData();
-        $activeSchoolId = $data['active'] ?? 'default';
+        session(['active_teacher_id' => $teacherId]);
 
-        foreach ($data['schools'] as &$sch) {
-            if ($sch['id'] === $activeSchoolId) {
-                $sch['active_teacher'] = $teacherId;
-                break;
+        $file = storage_path('app/hpc/schools.json');
+        if (file_exists($file)) {
+            $data = json_decode(file_get_contents($file), true) ?: [];
+            $activeSchoolId = $data['active'] ?? 'default';
+
+            foreach ($data['schools'] ?? [] as &$sch) {
+                if ($sch['id'] === $activeSchoolId) {
+                    $sch['active_teacher'] = $teacherId;
+                    break;
+                }
             }
+            file_put_contents(storage_path('app/hpc/schools.json'), json_encode($data, JSON_PRETTY_PRINT));
         }
-        file_put_contents(storage_path('app/hpc/schools.json'), json_encode($data, JSON_PRETTY_PRINT));
+
         return response()->json(['ok' => true]);
     }
 

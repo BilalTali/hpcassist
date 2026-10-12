@@ -46,4 +46,19 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function school(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(School::class);
+    }
+
+    public function teachers(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
+    {
+        return $this->hasManyThrough(Teacher::class, School::class);
+    }
+
+    public function getEffectiveSchool(): ?School
+    {
+        return $this->school ?? School::first();
+    }
 }

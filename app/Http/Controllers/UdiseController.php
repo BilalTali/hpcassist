@@ -25,6 +25,27 @@ use PhpOffice\PhpSpreadsheet\Cell\DataType;
  */
 class UdiseController extends Controller
 {
+    /**
+     * Download the HPC Assist UDISE+ Chrome Extension zip archive.
+     */
+    public function downloadExtension()
+    {
+        $zipPath = public_path('downloads/hpc-assist-udise-extension.zip');
+        if (! file_exists($zipPath) || filemtime(base_path('extension/content.js')) > filemtime($zipPath)) {
+            @mkdir(dirname($zipPath), 0755, true);
+            $zip = new \ZipArchive();
+            if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
+                $zip->addFile(base_path('extension/manifest.json'), 'manifest.json');
+                $zip->addFile(base_path('extension/content.js'), 'content.js');
+                $zip->close();
+            }
+        }
+
+        return response()->download($zipPath, 'hpc-assist-udise-extension.zip', [
+            'Content-Type' => 'application/zip',
+        ]);
+    }
+
     // ─── Bridge page (public, no auth) ──────────────────────────────────────
 
     /**

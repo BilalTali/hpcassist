@@ -17,7 +17,9 @@ Route::get('/', function () {
 // ── Public UDISE bridge & ingest (no auth required) ─────────────────────────
 // Bridge page: opened in user's own browser tab to handle UDISE login & fetch
 Route::get('/udise/bridge', [UdiseController::class, 'bridge'])->name('udise.bridge');
-// Ingest: called by bridge page JS after fetching students (CSRF-exempt via bootstrap/app.php)
+// Extension zip download
+Route::get('/extension/download', [UdiseController::class, 'downloadExtension'])->name('extension.download');
+// Ingest: called by bridge page JS or extension after fetching students (CSRF-exempt via bootstrap/app.php)
 Route::match(['post','options'], '/udise/ingest', [UdiseController::class, 'ingest'])->name('udise.ingest');
 
 Route::middleware('auth')->group(function () {
@@ -70,10 +72,13 @@ Route::middleware('auth')->group(function () {
 
         $schoolToken = $school ? substr(hash('sha256', $school->id . '_' . $school->udise_code . '_' . config('app.key')), 0, 32) : '';
 
+        $workingDays = \App\Models\SchoolWorkingDay::getDefault();
+        $maxMarks    = \App\Models\SchoolMaxMark::getDefault();
+
         return view('dashboard', compact(
             'school', 'teachers', 'udiseCount', 'udiseApaarCount', 'udiseStudents',
             'preview', 'lastRun', 'hasFields', 'hasSchoolProfile', 'currentFormUrl',
-            'activeTeacher', 'hasTeacherProfile', 'schoolToken'
+            'activeTeacher', 'hasTeacherProfile', 'schoolToken', 'workingDays', 'maxMarks'
         ));
     })->name('dashboard');
 

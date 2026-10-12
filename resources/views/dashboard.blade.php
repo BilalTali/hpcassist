@@ -34,6 +34,18 @@
                         Setup In Progress
                     </span>
                 @endif
+                <a href="#seeder-working-days"
+                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 shadow-2xs transition">
+                    📅 Working Days ({{ $workingDays->total_days ?? 222 }}d)
+                </a>
+                <a href="#seeder-max-marks"
+                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 shadow-2xs transition">
+                    🎯 Max Marks
+                </a>
+                <a href="{{ route('hpc.teacher.dashboard') }}"
+                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition">
+                    🧑‍🏫 Teacher Assessment Portal
+                </a>
                 <button onclick="openSchoolModal()"
                         class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 shadow-xs transition active:scale-95">
                     ⚙️ Edit School
@@ -136,6 +148,106 @@
                 </div>
             </div>
 
+            <!-- ── SEEDER CONFIGURATIONS: SCHOOL WORKING DAYS & CURRICULAR MAX MARKS ── -->
+            @php
+                $calMonths = [
+                    'apr' => 'Apr', 'may' => 'May', 'jun' => 'Jun',
+                    'jul' => 'Jul', 'aug' => 'Aug', 'sep' => 'Sep',
+                    'oct' => 'Oct', 'nov' => 'Nov', 'dec' => 'Dec',
+                    'jan' => 'Jan', 'feb' => 'Feb', 'mar' => 'Mar',
+                ];
+                $curricularSubjects = [
+                    'l1_max'  => ['name' => 'Lang 1', 'full' => 'Language 1 (R1)'],
+                    'l2_max'  => ['name' => 'Lang 2', 'full' => 'Language 2 (R2)'],
+                    'l3_max'  => ['name' => 'Lang 3', 'full' => 'Language 3 (R3)'],
+                    'm_max'   => ['name' => 'Maths',  'full' => 'Mathematics'],
+                    'sci_max' => ['name' => 'Sci',    'full' => 'Science'],
+                    'soc_max' => ['name' => 'Soc Sci','full' => 'Social Science'],
+                    'art_max' => ['name' => 'Art Ed', 'full' => 'Art Education'],
+                    'pe_max'  => ['name' => 'PE',     'full' => 'PE & Well Being'],
+                ];
+            @endphp
+            <div id="seeder-config-section" class="grid grid-cols-1 lg:grid-cols-2 gap-4 scroll-mt-6">
+                <!-- CARD A: SCHOOL WORKING DAYS CONFIGURATION -->
+                <div id="seeder-working-days" class="bg-white rounded-2xl shadow-xs border border-slate-200 p-4 hover:border-slate-300 transition scroll-mt-6">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 gap-2 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                <span>📅</span> School Working Days Calendar
+                            </span>
+                            <span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                                AY {{ $workingDays->academic_year ?? '2025-2026' }}
+                            </span>
+                            <span class="text-xs text-slate-500 font-medium">
+                                Total: <strong id="wd-total-display" class="font-mono text-indigo-700 font-extrabold">{{ $workingDays->total_days ?? 222 }}</strong> Days
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="resetWorkingDaysToStandard()"
+                                    class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold transition"
+                                    title="Reset to seeded 222 working days">
+                                ↺ Reset 222d
+                            </button>
+                            <button onclick="saveWorkingDays()" id="btn-save-wd"
+                                    class="inline-flex items-center gap-1 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold shadow-xs transition active:scale-95">
+                                <span>💾 Save Defaults</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 12 Monthly Compact Inline Grid -->
+                    <div class="grid grid-cols-6 sm:grid-cols-12 gap-1.5 pt-3">
+                        @foreach($calMonths as $mKey => $mLabel)
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-center">
+                                <div class="text-[9px] font-bold uppercase text-slate-500 leading-none">{{ $mLabel }}</div>
+                                <input type="number" id="wd-{{ $mKey }}" min="0" max="31"
+                                       value="{{ $workingDays->{$mKey} ?? 20 }}"
+                                       oninput="recalcWorkingDaysTotal()"
+                                       class="w-full text-center font-bold text-xs font-mono p-0.5 border border-slate-300 rounded mt-1 text-slate-900 bg-white focus:ring-1 focus:ring-indigo-500">
+                            </div>
+                        @endforeach
+                    </div>
+                    <div id="wd-status-msg" class="mt-2 text-xs font-semibold hidden"></div>
+                </div>
+
+                <!-- CARD B: CURRICULAR MAX MARKS CONFIGURATION -->
+                <div id="seeder-max-marks" class="bg-white rounded-2xl shadow-xs border border-slate-200 p-4 hover:border-slate-300 transition scroll-mt-6">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 gap-2 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                <span>🎯</span> Curricular Max Marks Defaults
+                            </span>
+                            <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                HPC Credit
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-0.5 text-[10px] font-semibold text-slate-600">
+                                <button type="button" onclick="presetMaxMarks(50)" class="px-2 py-0.5 hover:bg-white rounded transition" title="Set all to 50">50</button>
+                                <button type="button" onclick="presetMaxMarks(100)" class="px-2 py-0.5 hover:bg-white rounded transition" title="Set all to 100">100</button>
+                            </div>
+                            <button onclick="saveMaxMarks()" id="btn-save-mm"
+                                    class="inline-flex items-center gap-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold shadow-xs transition active:scale-95">
+                                <span>💾 Save Defaults</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 8 Subjects Compact Inline Grid -->
+                    <div class="grid grid-cols-4 sm:grid-cols-8 gap-1.5 pt-3">
+                        @foreach($curricularSubjects as $sKey => $sMeta)
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-center">
+                                <div class="text-[9px] font-bold uppercase text-slate-500 leading-none truncate" title="{{ $sMeta['full'] }}">{{ $sMeta['name'] }}</div>
+                                <input type="number" id="mm-{{ $sKey }}" min="1" max="100"
+                                       value="{{ $maxMarks->{$sKey} ?? 50 }}"
+                                       class="w-full text-center font-bold text-xs font-mono p-0.5 border border-slate-300 rounded mt-1 text-slate-900 bg-white focus:ring-1 focus:ring-emerald-500">
+                            </div>
+                        @endforeach
+                    </div>
+                    <div id="mm-status-msg" class="mt-2 text-xs font-semibold hidden"></div>
+                </div>
+            </div>
+
             <!-- ========================================================================= -->
             <!-- STEP 1 CONTENT: UDISE LOGIN & STUDENT DATA EXTRACTION -->
             <!-- ======================================================= -->
@@ -206,103 +318,7 @@
                     {{-- ── INITIAL STATE — two cards ─────────────────────────────── --}}
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5"
                          x-data="{
-                            syncing: false,
                             loading: false,
-                            showSnippet: false,
-                            pollTimer: null,
-                            copied: false,
-                            ingestUrl: '{{ url('/udise/ingest') }}',
-                            dashUrl: '{{ route('dashboard', ['step' => 2]) }}',
-                            schoolId: {{ $school?->id ?? 0 }},
-                            token: '{{ $schoolToken ?? '' }}',
-                            udiseCode: '{{ $school?->udise_code ?? '' }}',
-
-                            get bookmarklet() {
-                                return `(async()=>{try{` +
-                                    `let id=(location.href.match(/school\\/(\\d+)/)?.[1])||(location.hash.match(/school\\/(\\d+)/)?.[1])||` +
-                                    `(window.performance.getEntriesByType('resource').map(r=>r.name).find(u=>u.includes('/snapshot/students/all/'))?.match(/all\\/(\\d+)/)?.[1])||` +
-                                    `(window.performance.getEntriesByType('resource').map(r=>r.name).find(u=>u.includes('/cy/school/'))?.match(/school\\/(\\d+)/)?.[1])||` +
-                                    `prompt('Enter UDISE School ID (digits after /school/ in URL):');` +
-                                    `if(!id){alert('School ID required.');return;}` +
-                                    `let r=await fetch('/p0/api/cy/snapshot/students/all/'+id,{credentials:'include'});` +
-                                    `let j=await r.json();let s=j.data||j.students||j.result||j;` +
-                                    `if(!Array.isArray(s)||!s.length){` +
-                                    `r=await fetch('/p0/api/cy/students/all/'+id,{credentials:'include'});` +
-                                    `j=await r.json();s=j.data||j.students||j.result||j;}` +
-                                    `if(!Array.isArray(s)||!s.length){alert('0 students found. Open Student->All Students in UDISE first.');return;}` +
-                                    `let res=await fetch('${this.ingestUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({school_id:${this.schoolId},token:'${this.token}',udise_code:'${this.udiseCode}',students:s})});` +
-                                    `let d=await res.json();` +
-                                    `if(d.ok){alert('🎉 '+d.message+'\\nRedirecting to dashboard...');location.href=d.redirect||'${this.dashUrl}';}` +
-                                    `else{alert('❌ Sync error: '+(d.error||'Unknown error'));}` +
-                                    `}catch(e){alert('Error: '+e.message);}})();`;
-                            },
-
-                            copySnippet() {
-                                navigator.clipboard.writeText(this.bookmarklet).then(() => {
-                                    this.copied = true;
-                                    setTimeout(() => this.copied = false, 2500);
-                                });
-                            },
-
-                            async uploadUdiseJson(e) {
-                                const file = e.target.files[0];
-                                if (!file) return;
-                                this.loading = true;
-                                try {
-                                    const text = await file.text();
-                                    const json = JSON.parse(text);
-                                    const students = Array.isArray(json) ? json : (json.data || json.students || []);
-                                    if (!students.length) {
-                                        alert('No student records found in JSON file.');
-                                        this.loading = false;
-                                        return;
-                                    }
-                                    const res = await fetch('{{ route('udise.ingest') }}', {
-                                        method: 'POST',
-                                        headers: {
-                                            'Content-Type': 'application/json',
-                                            'X-CSRF-TOKEN': CSRF
-                                        },
-                                        body: JSON.stringify({
-                                            school_id: this.schoolId,
-                                            token: this.token,
-                                            udise_code: this.udiseCode,
-                                            students: students
-                                        })
-                                    });
-                                    const data = await res.json();
-                                    if (data.ok) {
-                                        alert('✅ ' + data.message);
-                                        window.location.reload();
-                                    } else {
-                                        alert('❌ ' + (data.error || 'Failed to import UDISE data.'));
-                                        this.loading = false;
-                                    }
-                                } catch(err) {
-                                    alert('❌ Error reading file: ' + err.message);
-                                    this.loading = false;
-                                }
-                            },
-
-                            startPolling() {
-                                this.syncing = true;
-                                if (this.pollTimer) clearInterval(this.pollTimer);
-                                this.pollTimer = setInterval(() => this.pollIngest(), 2500);
-                            },
-
-                            async pollIngest() {
-                                try {
-                                    const r = await fetch('{{ route('udise.ingest_poll') }}', { headers: { 'Accept': 'application/json' } });
-                                    const d = await r.json();
-                                    if (d.ok && d.synced) {
-                                        clearInterval(this.pollTimer);
-                                        this.syncing = false;
-                                        alert('✅ Sync complete! ' + d.total + ' students loaded. Reloading dashboard…');
-                                        window.location.reload();
-                                    }
-                                } catch(e) {}
-                            },
-
                             async skipUdise() {
                                 this.loading = true;
                                 const r = await fetch('{{ route('school.udise.skip') }}', {
@@ -315,85 +331,88 @@
                             }
                          }">
 
-                        {{-- Card A: UDISE Console Sync --}}
-                        <div class="bg-white rounded-2xl shadow-xs border-2 border-emerald-500/60 p-6 flex flex-col justify-between">
-                            <div>
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 mb-3">
-                                    🌐 UDISE+ Console Sync (Recommended)
-                                </span>
-                                <h3 class="text-base font-bold text-slate-900 mb-1.5">Fetch Students via Console Snippet</h3>
-                                <p class="text-xs text-slate-500 leading-relaxed mb-4">
-                                    UDISE+ uses strict cross-origin security. The most reliable way is to run a one-line script directly in the UDISE+ browser console.
-                                </p>
+                        {{-- Card A: UDISE+ Auto-Sync Chrome Extension --}}
+                        <div class="bg-white rounded-2xl shadow-xs border-2 border-indigo-500/80 p-6 sm:p-7 flex flex-col justify-between relative overflow-hidden">
+                            <!-- Background soft accent -->
+                            <div class="absolute -top-12 -right-12 w-40 h-40 bg-indigo-50 rounded-full blur-2xl pointer-events-none"></div>
 
-                                {{-- Step-by-step --}}
-                                <ol class="space-y-3 text-xs mb-4">
-                                    <li class="flex gap-3">
-                                        <span class="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">1</span>
+                            <div class="relative space-y-4">
+                                <div class="flex items-center justify-between flex-wrap gap-2">
+                                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-800">
+                                        ⚡ Automated Background Sync (Recommended)
+                                    </span>
+                                    <span class="text-[10px] font-bold text-slate-400">Chrome Extension v1.0</span>
+                                </div>
+
+                                <div>
+                                    <h3 class="text-lg font-black text-slate-900 tracking-tight">UDISE+ Auto-Sync Chrome Extension</h3>
+                                    <p class="text-xs text-slate-600 mt-1 leading-relaxed">
+                                        No manual JSON downloads or console pasting. The official HPC Assist Chrome Extension automatically detects your school on UDISE+ and syncs all enrolled students directly to your dashboard.
+                                    </p>
+                                </div>
+
+                                <!-- Big Download CTA Button -->
+                                <div class="p-4 bg-gradient-to-br from-indigo-50 via-slate-50 to-indigo-50/50 rounded-2xl border border-indigo-200/80 space-y-3">
+                                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                         <div>
-                                            <div class="font-semibold text-slate-800">Log in to UDISE+ SDMS</div>
-                                            <a href="https://sdms.udiseplus.gov.in/" target="_blank"
-                                               class="text-indigo-600 hover:underline font-medium">Open UDISE+ →</a>
-                                            <span class="text-slate-500"> → Sign in → go to <strong>Student → All Students</strong></span>
-                                        </div>
-                                    </li>
-                                    <li class="flex gap-3">
-                                        <span class="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">2</span>
-                                        <div>
-                                            <div class="font-semibold text-slate-800">Open Console &amp; enable pasting</div>
-                                            <div class="text-slate-500">Press <kbd class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono border border-slate-300">F12</kbd> → Console tab → type <kbd class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono border border-slate-300">allow pasting</kbd> → Enter</div>
-                                        </div>
-                                    </li>
-                                    <li class="flex gap-3">
-                                        <span class="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">3</span>
-                                        <div class="w-full">
-                                            <div class="font-semibold text-slate-800 mb-1.5">Copy &amp; paste this snippet → Enter</div>
-                                            <div class="relative">
-                                                <div class="bg-slate-50 hover:bg-slate-100/70 rounded-xl px-3.5 py-2.5 pr-20 font-mono text-[9px] text-slate-700 break-all leading-relaxed overflow-hidden max-h-16 border border-slate-200 select-all transition">
-                                                    <span x-text="bookmarklet"></span>
-                                                </div>
-                                                <button @click="copySnippet()"
-                                                        class="absolute top-2 right-2 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition shadow-2xs active:scale-95"
-                                                        :class="copied ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50 hover:border-slate-400'">
-                                                    <span x-text="copied ? '✓ Copied' : 'Copy'"></span>
-                                                </button>
+                                            <div class="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                                                <span>📦</span> Pre-packaged Chrome Extension
+                                            </div>
+                                            <div class="text-[11px] text-slate-500 mt-0.5">
+                                                Ready to load in any Chromium browser (Chrome, Edge, Brave)
                                             </div>
                                         </div>
-                                    </li>
-                                    <li class="flex gap-3">
-                                        <span class="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">4</span>
-                                        <div>
-                                            <div class="font-semibold text-slate-800">Auto-uploads &amp; redirects to HPC</div>
-                                            <div class="text-slate-500">The script automatically uploads all students to your HPC Assist dashboard and redirects you to Step 2!</div>
-                                        </div>
-                                    </li>
-                                </ol>
+                                        <a href="{{ route('extension.download') }}"
+                                           class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs sm:text-sm font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-indigo-500/25 transition active:scale-95 shrink-0">
+                                            <span>⬇️</span> Download Extension (.zip)
+                                        </a>
+                                    </div>
+                                </div>
 
-                                {{-- Direct Upload Option --}}
-                                <div class="p-3 bg-emerald-50/80 rounded-xl border border-emerald-200/80 mb-4">
-                                    <label class="block text-[11px] font-bold text-emerald-950 mb-1 flex items-center gap-1.5">
-                                        <span>📁</span> Already have UDISE JSON file? Upload it directly:
-                                    </label>
-                                    <input type="file" accept=".json" @change="uploadUdiseJson($event)"
-                                           class="block w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer">
+                                <!-- 3 Simple Steps -->
+                                <div class="space-y-2.5 pt-1">
+                                    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500">How to install &amp; sync (30 seconds):</div>
+                                    <ol class="space-y-2.5 text-xs text-slate-600">
+                                        <li class="flex items-start gap-2.5">
+                                            <span class="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center mt-0.5">1</span>
+                                            <div>
+                                                <strong class="text-slate-800">Download &amp; Extract</strong>
+                                                <p class="text-[11px] text-slate-500">Click the button above to download <code class="text-indigo-600 font-mono bg-indigo-50 px-1 py-0.5 rounded">hpc-assist-udise-extension.zip</code> and unzip it.</p>
+                                            </div>
+                                        </li>
+                                        <li class="flex items-start gap-2.5">
+                                            <span class="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center mt-0.5">2</span>
+                                            <div>
+                                                <strong class="text-slate-800">Load Unpacked in Chrome</strong>
+                                                <p class="text-[11px] text-slate-500">Go to <code class="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-700">chrome://extensions</code>, enable <strong>Developer mode</strong> (top-right), and click <strong>Load unpacked</strong> to select the unzipped folder.</p>
+                                            </div>
+                                        </li>
+                                        <li class="flex items-start gap-2.5">
+                                            <span class="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center mt-0.5">3</span>
+                                            <div>
+                                                <strong class="text-slate-800">Log into UDISE+ &amp; Auto-Sync</strong>
+                                                <p class="text-[11px] text-slate-500">Open <a href="https://sdms.udiseplus.gov.in/" target="_blank" class="text-indigo-600 font-bold hover:underline">sdms.udiseplus.gov.in</a> and sign in. The extension automatically syncs your students and brings you to Step 2!</p>
+                                            </div>
+                                        </li>
+                                    </ol>
                                 </div>
                             </div>
-                            <div class="space-y-2 pt-3 border-t border-slate-100">
-                                <button @click="startPolling()"
-                                        :disabled="syncing || loading"
-                                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold transition shadow-sm active:scale-95 text-white"
-                                        :class="syncing ? 'bg-amber-500 cursor-wait' : 'bg-emerald-600 hover:bg-emerald-700'">
-                                    <span x-text="syncing ? '⏳ Waiting for sync completion…' : '✅ I\'ve pasted the snippet — check for sync'"></span>
-                                </button>
+
+                            <!-- Bottom Action Links -->
+                            <div class="pt-5 mt-4 border-t border-slate-100 flex items-center gap-3 flex-wrap">
                                 <a href="https://sdms.udiseplus.gov.in/" target="_blank"
-                                   class="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 transition">
-                                    🌐 Open UDISE+ SDMS
+                                   class="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition active:scale-95">
+                                    🌐 Open UDISE+ SDMS Portal →
                                 </a>
+                                <button onclick="window.location.reload()"
+                                        class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition active:scale-95">
+                                    🔄 Refresh Dashboard
+                                </button>
                             </div>
                         </div>
 
                         {{-- Card B: Skip --}}
-                        <div class="bg-white rounded-2xl shadow-xs border border-slate-200 hover:border-slate-300 transition p-6 flex flex-col justify-between">
+                        <div class="bg-white rounded-2xl shadow-xs border border-slate-200 hover:border-slate-300 transition p-6 sm:p-7 flex flex-col justify-between">
                             <div>
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 mb-3">
                                     Manual / Offline Mode
@@ -402,15 +421,15 @@
                                 <p class="text-xs text-slate-600 leading-relaxed mb-4">
                                     No UDISE login? Proceed directly to HPC — download blank Excel templates, fill student data offline, and upload.
                                 </p>
-                                <ul class="space-y-1.5 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4">
-                                    <li>✓ No government portal credentials needed</li>
-                                    <li>✓ Download official blank HPC Excel template</li>
-                                    <li>✓ Full manual entry, upload &amp; evaluation features</li>
+                                <ul class="space-y-1.5 text-xs text-slate-600 bg-slate-50 p-3.5 rounded-xl border border-slate-200 mb-4">
+                                    <li class="flex items-center gap-2"><span class="text-emerald-600 font-bold">✓</span> No government portal credentials needed</li>
+                                    <li class="flex items-center gap-2"><span class="text-emerald-600 font-bold">✓</span> Download official blank HPC Excel template</li>
+                                    <li class="flex items-center gap-2"><span class="text-emerald-600 font-bold">✓</span> Full manual entry, upload &amp; evaluation features</li>
                                 </ul>
                             </div>
-                            <div class="pt-3 border-t border-slate-100">
+                            <div class="pt-4 border-t border-slate-100">
                                 <button @click="skipUdise()"
-                                        :disabled="loading || syncing"
+                                        :disabled="loading"
                                         class="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 transition shadow-xs active:scale-95">
                                     ➡️ Skip UDISE &amp; Continue to Step 2
                                 </button>
@@ -575,15 +594,25 @@
                             </p>
                         </div>
 
-                        <!-- Template Buttons -->
-                        <div class="flex items-center gap-2.5 flex-wrap">
+                        <!-- Template Buttons & Config Links -->
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <a href="#seeder-working-days"
+                               class="inline-flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs border border-slate-200 transition"
+                               title="Configure school working days per month">
+                                📅 Working Days ({{ $workingDays->total_days ?? 222 }}d)
+                            </a>
+                            <a href="#seeder-max-marks"
+                               class="inline-flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs border border-slate-200 transition"
+                               title="Configure curricular max marks">
+                                🎯 Max Marks Defaults
+                            </a>
                             <a href="{{ route('hpc.template.download') }}"
-                               class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
-                                📥 Download Blank Template (.xlsx)
+                               class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
+                                📥 Blank Template (.xlsx)
                             </a>
                             <a href="{{ route('hpc.template.download_udise') }}"
-                               class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
-                                📥 Download with UDISE Data (.xlsx)
+                               class="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
+                                📥 Template with UDISE (.xlsx)
                             </a>
                         </div>
                     </div>
@@ -1435,6 +1464,141 @@
                     }
                 } catch(e) {}
             }, 2000);
+        }
+
+        // ─── Working Days Defaults Management ─────────────────────────────────────
+        const wdMonthKeys = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
+
+        function recalcWorkingDaysTotal() {
+            let total = 0;
+            wdMonthKeys.forEach(m => {
+                const inp = document.getElementById('wd-' + m);
+                const val = inp ? parseInt(inp.value, 10) : 0;
+                total += (isNaN(val) ? 0 : val);
+            });
+            const disp = document.getElementById('wd-total-display');
+            if (disp) disp.innerText = total;
+            return total;
+        }
+
+        function resetWorkingDaysToStandard() {
+            const standard = {
+                apr: 20, may: 22, jun: 10, jul: 20, aug: 22, sep: 21,
+                oct: 19, nov: 20, dec: 15, jan: 15, feb: 20, mar: 18
+            };
+            wdMonthKeys.forEach(m => {
+                const inp = document.getElementById('wd-' + m);
+                if (inp) inp.value = standard[m];
+            });
+            recalcWorkingDaysTotal();
+            showWdStatus('Reset to standard calendar (222 days). Click "Save Defaults" to persist.', 'text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg inline-block');
+        }
+
+        async function saveWorkingDays() {
+            const btn = document.getElementById('btn-save-wd');
+            const oldHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span>⏳ Saving...</span>';
+            }
+
+            const payload = {};
+            wdMonthKeys.forEach(m => {
+                const inp = document.getElementById('wd-' + m);
+                payload[m] = inp ? parseInt(inp.value, 10) : 0;
+            });
+
+            try {
+                const res = await fetch('{{ route('hpc.teacher.working_days.update') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showWdStatus('✓ ' + data.message + ' Total: ' + (data.data.total_days || recalcWorkingDaysTotal()) + ' Days.', 'text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg inline-block');
+                } else {
+                    showWdStatus('✕ ' + (data.error || 'Failed to save working days.'), 'text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg inline-block');
+                }
+            } catch (err) {
+                showWdStatus('✕ Network error: ' + err.message, 'text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg inline-block');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = oldHtml;
+                }
+            }
+        }
+
+        function showWdStatus(msg, classes) {
+            const el = document.getElementById('wd-status-msg');
+            if (!el) return;
+            el.className = 'mt-3 text-xs font-semibold ' + classes;
+            el.innerText = msg;
+            el.classList.remove('hidden');
+        }
+
+        // ─── Curricular Max Marks Defaults Management ──────────────────────────────
+        const mmSubjectKeys = ['l1_max', 'l2_max', 'l3_max', 'm_max', 'sci_max', 'soc_max', 'art_max', 'pe_max'];
+
+        function presetMaxMarks(val) {
+            mmSubjectKeys.forEach(k => {
+                const inp = document.getElementById('mm-' + k);
+                if (inp) inp.value = val;
+            });
+            showMmStatus('Preset applied: All subjects set to ' + val + ' marks. Click "Save Defaults" to persist.', 'text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg inline-block');
+        }
+
+        async function saveMaxMarks() {
+            const btn = document.getElementById('btn-save-mm');
+            const oldHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span>⏳ Saving...</span>';
+            }
+
+            const payload = {};
+            mmSubjectKeys.forEach(k => {
+                const inp = document.getElementById('mm-' + k);
+                payload[k] = inp ? parseInt(inp.value, 10) : 50;
+            });
+
+            try {
+                const res = await fetch('{{ route('hpc.teacher.max_marks.update') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showMmStatus('✓ ' + data.message + ' (All student rows in newly downloaded Excel will reflect these marks)', 'text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg inline-block');
+                } else {
+                    showMmStatus('✕ ' + (data.message || 'Failed to save max marks.'), 'text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg inline-block');
+                }
+            } catch (err) {
+                showMmStatus('✕ Network error: ' + err.message, 'text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg inline-block');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = oldHtml;
+                }
+            }
+        }
+
+        function showMmStatus(msg, classes) {
+            const el = document.getElementById('mm-status-msg');
+            if (!el) return;
+            el.className = 'mt-3 text-xs font-semibold ' + classes;
+            el.innerText = msg;
+            el.classList.remove('hidden');
         }
 
         document.addEventListener('DOMContentLoaded', () => {

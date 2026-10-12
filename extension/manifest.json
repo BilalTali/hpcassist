@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "HPC Assist - UDISE+ Sync",
+  "version": "1.0.0",
+  "description": "One-click or automatic student data extractor with unmasked APAAR IDs for HPC Assist.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://sdms.udiseplus.gov.in/*",
+    "https://ctetmonktest.fun/*",
+    "http://127.0.0.1:8000/*"
+  ],
+  "action": {
+    "default_title": "HPC Assist UDISE+ Sync"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://sdms.udiseplus.gov.in/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

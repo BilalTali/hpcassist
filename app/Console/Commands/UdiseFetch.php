@@ -46,7 +46,7 @@ class UdiseFetch extends Command
         $this->info("⏳ Checking for active UDISE+ SDMS login (timeout: {$timeout}s)...");
 
         $udiseHandle = null;
-        while ((time() - startTime) < $timeout) {
+        while ((time() - $startTime) < $timeout) {
             $handles = $driver->getWindowHandles();
             foreach ($handles as $h) {
                 $driver->switchTo()->window($h);

@@ -58,7 +58,7 @@ class RegisteredUserController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        $school = \App\Models\School::create([
+        $school = School::create([
             'user_id'        => $user->id,
             'name'           => $request->school_name,
             'udise_code'     => preg_replace('/[^0-9]/', '', $request->udise_code),
@@ -70,7 +70,7 @@ class RegisteredUserController extends Controller
         ]);
 
         // Create initial default teacher (Principal / Head Incharge)
-        \App\Models\Teacher::create([
+        Teacher::create([
             'school_id'    => $school->id,
             'name'         => $request->principal_name,
             'designation'  => 'Headmaster / Principal',

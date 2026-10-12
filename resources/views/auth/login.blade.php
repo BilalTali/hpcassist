@@ -40,7 +40,7 @@
                            required 
                            autofocus 
                            autocomplete="username" 
-                           placeholder="principal@school.gov.in" />
+                           placeholder="principal@schoolportal.edu.in" />
                 </div>
                 <x-input-error :messages="$errors->get('email')" class="mt-1.5" />
             </div>

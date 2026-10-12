@@ -65,7 +65,7 @@
                            value="{{ old('school_name') }}" 
                            required 
                            autofocus 
-                           placeholder="e.g. Govt Middle School Sugin" />
+                           placeholder="e.g. Central Model Higher Secondary School" />
                     <x-input-error :messages="$errors->get('school_name')" class="mt-1" />
                 </div>
 
@@ -82,7 +82,7 @@
                                value="{{ old('udise_code') }}" 
                                required 
                                maxlength="15" 
-                               placeholder="e.g. 01041800702" />
+                               placeholder="e.g. 01020304050" />
                         <p class="text-[11px] text-slate-400 mt-1">11-digit school national code.</p>
                         <x-input-error :messages="$errors->get('udise_code')" class="mt-1" />
                     </div>
@@ -97,7 +97,7 @@
                                type="text" 
                                name="district" 
                                value="{{ old('district') }}" 
-                               placeholder="e.g. Pulwama / Kakapora" />
+                               placeholder="e.g. Central District / North Zone" />
                         <x-input-error :messages="$errors->get('district')" class="mt-1" />
                     </div>
                 </div>
@@ -121,7 +121,7 @@
                                name="principal_name" 
                                value="{{ old('principal_name') }}" 
                                required 
-                               placeholder="e.g. Mohammad Amin" />
+                               placeholder="e.g. Dr. Ramesh Kumar / Principal Name" />
                         <x-input-error :messages="$errors->get('principal_name')" class="mt-1" />
                     </div>
 
@@ -135,7 +135,7 @@
                                type="tel" 
                                name="phone" 
                                value="{{ old('phone') }}" 
-                               placeholder="e.g. 9419012345" />
+                               placeholder="e.g. 9876543210" />
                         <x-input-error :messages="$errors->get('phone')" class="mt-1" />
                     </div>
                 </div>
@@ -152,7 +152,7 @@
                            value="{{ old('email') }}" 
                            required 
                            autocomplete="username" 
-                           placeholder="school.incharge@bms.school.gov.in" />
+                           placeholder="principal@schoolportal.edu.in" />
                     <p class="text-[11px] text-slate-400 mt-1">This email serves as the primary master login identifier.</p>
                     <x-input-error :messages="$errors->get('email')" class="mt-1" />
                 </div>

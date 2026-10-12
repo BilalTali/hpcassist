@@ -36,7 +36,7 @@ class RegisteredUserController extends Controller
             $request->merge(['school_name' => $request->input('name')]);
         }
         if (! $request->filled('udise_code')) {
-            $request->merge(['udise_code' => '01041800702']);
+            $request->merge(['udise_code' => '01010100101']);
         }
         if (! $request->filled('principal_name')) {
             $request->merge(['principal_name' => $request->input('name') ?: 'School Incharge']);

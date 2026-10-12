@@ -11,6 +11,11 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 
+/**
+ * Class UdiseController
+ *
+ * @package App\Http\Controllers
+ */
 class UdiseController extends Controller
 {
     private string $chromedriverUrl = 'http://127.0.0.1:9515';

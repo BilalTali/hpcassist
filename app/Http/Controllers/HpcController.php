@@ -13,6 +13,11 @@ use PhpOffice\PhpSpreadsheet\Style\Font;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 
+/**
+ * Class HpcController
+ *
+ * @package App\Http\Controllers
+ */
 class HpcController extends Controller
 {
     // ─── Dashboard View ───────────────────────────────────────────────────────

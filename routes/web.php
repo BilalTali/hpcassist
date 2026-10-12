@@ -1,8 +1,8 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\HpcController;
 use App\Http\Controllers\HpcTeacherController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SchoolManageController;
 use App\Http\Controllers\UdiseController;
 use Illuminate\Support\Facades\Route;

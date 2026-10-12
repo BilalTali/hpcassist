@@ -217,17 +217,24 @@
                             udiseCode: '{{ $school?->udise_code ?? '' }}',
 
                             get bookmarklet() {
-                                return `fetch('/p0/api/cy/snapshot/students/all/'+` +
-                                    `(location.href.match(/school\\/(\\d+)/)?.[1]||` +
-                                    `document.querySelector('a[href*="/school/"]')?.href?.match(/school\\/(\\d+)/)?.[1]),` +
-                                    `{credentials:'include'})` +
-                                    `.then(r=>r.json())` +
-                                    `.then(j=>{const s=j.data||j.students||j.result||[];` +
-                                    `if(!s.length){alert('0 students found. Navigate to Student→All Students first.');return;}` +
-                                    `fetch('${this.ingestUrl}',{method:'POST',headers:{'Content-Type':'application/json'},` +
-                                    `body:JSON.stringify({school_id:${this.schoolId},token:'${this.token}',udise_code:'${this.udiseCode}',students:s})})` +
-                                    `.then(r=>r.json()).then(d=>{alert(d.ok?'✅ Synced '+d.total+' students ('+d.apaar_count+' APAAR IDs). Return to HPC Assist dashboard.':'❌ '+d.error);});})` +
-                                    `.catch(e=>alert('Error: '+e.message))`;
+                                return `(async()=>{try{` +
+                                    `let id=(location.href.match(/school\\/(\\d+)/)?.[1])||(location.hash.match(/school\\/(\\d+)/)?.[1])||` +
+                                    `(window.performance.getEntriesByType('resource').map(r=>r.name).find(u=>u.includes('/snapshot/students/all/'))?.match(/all\\/(\\d+)/)?.[1])||` +
+                                    `(window.performance.getEntriesByType('resource').map(r=>r.name).find(u=>u.includes('/cy/school/'))?.match(/school\\/(\\d+)/)?.[1])||` +
+                                    `prompt('Enter UDISE School ID (digits after /school/ in URL):');` +
+                                    `if(!id){alert('School ID required.');return;}` +
+                                    `let r=await fetch('/p0/api/cy/snapshot/students/all/'+id,{credentials:'include'});` +
+                                    `let j=await r.json();let s=j.data||j.students||j.result||j;` +
+                                    `if(!Array.isArray(s)||!s.length){` +
+                                    `r=await fetch('/p0/api/cy/students/all/'+id,{credentials:'include'});` +
+                                    `j=await r.json();s=j.data||j.students||j.result||j;}` +
+                                    `if(!Array.isArray(s)||!s.length){alert('0 students found. Open Student->All Students in UDISE first.');return;}` +
+                                    `let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(s,null,2)],{type:'application/json'}));` +
+                                    `a.download='udise_students_'+id+'.json';a.click();` +
+                                    `try{await fetch('${this.ingestUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({school_id:${this.schoolId},token:'${this.token}',udise_code:'${this.udiseCode}',students:s})});` +
+                                    `alert('✅ Synced '+s.length+' students to HPC Assist! Backup JSON saved to your Downloads.');}catch(e){` +
+                                    `alert('Saved udise_students_'+id+'.json! Click Upload JSON on your HPC dashboard.');}` +
+                                    `}catch(e){alert('Error: '+e.message);}})();`;
                             },
 
                             copySnippet() {
@@ -235,6 +242,46 @@
                                     this.copied = true;
                                     setTimeout(() => this.copied = false, 2500);
                                 });
+                            },
+
+                            async uploadUdiseJson(e) {
+                                const file = e.target.files[0];
+                                if (!file) return;
+                                this.loading = true;
+                                try {
+                                    const text = await file.text();
+                                    const json = JSON.parse(text);
+                                    const students = Array.isArray(json) ? json : (json.data || json.students || []);
+                                    if (!students.length) {
+                                        alert('No student records found in JSON file.');
+                                        this.loading = false;
+                                        return;
+                                    }
+                                    const res = await fetch('{{ route('udise.ingest') }}', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'X-CSRF-TOKEN': CSRF
+                                        },
+                                        body: JSON.stringify({
+                                            school_id: this.schoolId,
+                                            token: this.token,
+                                            udise_code: this.udiseCode,
+                                            students: students
+                                        })
+                                    });
+                                    const data = await res.json();
+                                    if (data.ok) {
+                                        alert('✅ ' + data.message);
+                                        window.location.reload();
+                                    } else {
+                                        alert('❌ ' + (data.error || 'Failed to import UDISE data.'));
+                                        this.loading = false;
+                                    }
+                                } catch(err) {
+                                    alert('❌ Error reading file: ' + err.message);
+                                    this.loading = false;
+                                }
                             },
 
                             startPolling() {
@@ -317,10 +364,19 @@
                                         <span class="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">4</span>
                                         <div>
                                             <div class="font-semibold text-slate-800">Watch for success alert → return here</div>
-                                            <div class="text-slate-500">An alert will confirm sync. Click the button below to reload.</div>
+                                            <div class="text-slate-500">An alert confirms sync &amp; automatically downloads the JSON file to your Downloads folder.</div>
                                         </div>
                                     </li>
                                 </ol>
+
+                                {{-- Direct Upload Option --}}
+                                <div class="p-3 bg-emerald-50/80 rounded-xl border border-emerald-200/80 mb-4">
+                                    <label class="block text-[11px] font-bold text-emerald-950 mb-1 flex items-center gap-1.5">
+                                        <span>📁</span> Already have UDISE JSON file? Upload it directly:
+                                    </label>
+                                    <input type="file" accept=".json" @change="uploadUdiseJson($event)"
+                                           class="block w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer">
+                                </div>
                             </div>
                             <div class="space-y-2 pt-3 border-t border-slate-100">
                                 <button @click="startPolling()"

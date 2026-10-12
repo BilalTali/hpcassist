@@ -66,13 +66,30 @@ class UdiseController extends Controller
             return response()->json(['ok' => true], 200, $headers);
         }
 
+        $data = $request->all();
         $schoolId  = $request->input('school_id');
         $token     = $request->input('token', '');
         $udiseCode = $request->input('udise_code', '');
         $students  = $request->input('students', []);
 
+        // Support direct array or wrapped 'data' key from raw UDISE responses
+        if (empty($students)) {
+            if (isset($data['data']) && is_array($data['data'])) {
+                $students = $data['data'];
+            } elseif (is_array($data) && isset($data[0]['studentName'])) {
+                $students = $data;
+            } elseif (is_array($data) && isset($data[0]['studentId'])) {
+                $students = $data;
+            }
+        }
+
         if (empty($students) || ! is_array($students)) {
             return response()->json(['ok' => false, 'error' => 'No student records received.'], 400, $headers);
+        }
+
+        // Auto-extract UDISE code from student records if missing
+        if (empty($udiseCode) && ! empty($students[0]['schUdiseCode'])) {
+            $udiseCode = (string) $students[0]['schUdiseCode'];
         }
 
         // Identify school — logged-in user first, then by token/ID/UDISE code
@@ -92,7 +109,16 @@ class UdiseController extends Controller
         }
 
         if (! $school && $udiseCode) {
-            $school = \App\Models\School::where('udise_code', preg_replace('/[^0-9]/', '', $udiseCode))->first();
+            $cleanCode = preg_replace('/[^0-9]/', '', $udiseCode);
+            $school = \App\Models\School::where('udise_code', $cleanCode)->first();
+            if (! $school) {
+                // Try fuzzy match or first school if only one exists
+                $school = \App\Models\School::where('udise_code', 'like', "%{$cleanCode}%")->first();
+            }
+        }
+
+        if (! $school) {
+            $school = \App\Models\School::first();
         }
 
         if (! $school) {

@@ -230,10 +230,8 @@
                                     `j=await r.json();s=j.data||j.students||j.result||j;}` +
                                     `if(!Array.isArray(s)||!s.length){alert('0 students found. Open Student->All Students in UDISE first.');return;}` +
                                     `let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(s,null,2)],{type:'application/json'}));` +
-                                    `a.download='udise_students_'+id+'.json';a.click();` +
-                                    `try{await fetch('${this.ingestUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({school_id:${this.schoolId},token:'${this.token}',udise_code:'${this.udiseCode}',students:s})});` +
-                                    `alert('✅ Synced '+s.length+' students to HPC Assist! Backup JSON saved to your Downloads.');}catch(e){` +
-                                    `alert('Saved udise_students_'+id+'.json! Click Upload JSON on your HPC dashboard.');}` +
+                                    `a.download='udise_students_'+id+'.json';document.body.appendChild(a);a.click();document.body.removeChild(a);` +
+                                    `alert('✅ Downloaded '+s.length+' students to udise_students_'+id+'.json! Zero data sent outside.');` +
                                     `}catch(e){alert('Error: '+e.message);}})();`;
                             },
 
@@ -363,8 +361,8 @@
                                     <li class="flex gap-3">
                                         <span class="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">4</span>
                                         <div>
-                                            <div class="font-semibold text-slate-800">Watch for success alert → return here</div>
-                                            <div class="text-slate-500">An alert confirms sync &amp; automatically downloads the JSON file to your Downloads folder.</div>
+                                            <div class="font-semibold text-slate-800">JSON file downloads automatically</div>
+                                            <div class="text-slate-500">The file <code class="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded text-[10px] font-mono">udise_students_&lt;id&gt;.json</code> will be saved to your Downloads folder. Then upload it below!</div>
                                         </div>
                                     </li>
                                 </ol>

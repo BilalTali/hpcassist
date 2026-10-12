@@ -12,6 +12,8 @@ class SchoolMaxMark extends Model
     protected $table = 'school_max_marks';
 
     protected $fillable = [
+        'school_id',
+        'stage',
         'academic_year',
         'l1_max',
         'l2_max',
@@ -42,8 +44,21 @@ class SchoolMaxMark extends Model
         return ['l1', 'l2', 'l3', 'm', 'sci', 'soc', 'art', 'pe'];
     }
 
-    public static function subjectLabels(): array
+    public static function subjectLabels(?string $stage = 'middle'): array
     {
+        if ($stage === 'preparatory') {
+            return [
+                'l1'  => 'Language 1 (R1)',
+                'l2'  => 'Language 2 (R2)',
+                'l3'  => 'Language 3 / Regional',
+                'm'   => 'Mathematics',
+                'sci' => 'The World Around Us (EVS)',
+                'soc' => 'Social & Environmental',
+                'art' => 'Art Education',
+                'pe'  => 'Physical & Health Education',
+            ];
+        }
+
         return [
             'l1'  => 'Language 1 (R1)',
             'l2'  => 'Language 2 (R2)',
@@ -70,13 +85,19 @@ class SchoolMaxMark extends Model
         ];
     }
 
-    public static function getDefault(): self
+    public static function getDefault(?string $stage = 'middle'): self
     {
-        $record = self::where('is_default', true)->latest()->first();
+        $stage = $stage ?: 'middle';
+        $record = self::where('stage', $stage)->first();
 
         if (! $record) {
             $record = self::create(array_merge(
-                ['academic_year' => '2025-2026', 'is_default' => true, 'remarks' => 'Default Curricular Max Marks'],
+                [
+                    'stage'         => $stage,
+                    'academic_year' => '2025-2026',
+                    'is_default'    => true,
+                    'remarks'       => ucfirst($stage) . ' Stage Curricular Max Marks'
+                ],
                 self::defaultMarks()
             ));
         }

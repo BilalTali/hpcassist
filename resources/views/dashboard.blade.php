@@ -34,13 +34,9 @@
                         Setup In Progress
                     </span>
                 @endif
-                <a href="#seeder-working-days"
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 shadow-2xs transition">
-                    📅 Working Days ({{ $workingDays->total_days ?? 222 }}d)
-                </a>
-                <a href="#seeder-max-marks"
-                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 shadow-2xs transition">
-                    🎯 Max Marks
+                <a href="{{ route('school.academic_settings') }}"
+                   class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 shadow-2xs transition active:scale-95">
+                    ⚙️ Working Days &amp; Marks Settings
                 </a>
                 <a href="{{ route('hpc.teacher.dashboard') }}"
                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition">
@@ -145,106 +141,6 @@
                         </div>
                     </button>
 
-                </div>
-            </div>
-
-            <!-- ── SEEDER CONFIGURATIONS: SCHOOL WORKING DAYS & CURRICULAR MAX MARKS ── -->
-            @php
-                $calMonths = [
-                    'apr' => 'Apr', 'may' => 'May', 'jun' => 'Jun',
-                    'jul' => 'Jul', 'aug' => 'Aug', 'sep' => 'Sep',
-                    'oct' => 'Oct', 'nov' => 'Nov', 'dec' => 'Dec',
-                    'jan' => 'Jan', 'feb' => 'Feb', 'mar' => 'Mar',
-                ];
-                $curricularSubjects = [
-                    'l1_max'  => ['name' => 'Lang 1', 'full' => 'Language 1 (R1)'],
-                    'l2_max'  => ['name' => 'Lang 2', 'full' => 'Language 2 (R2)'],
-                    'l3_max'  => ['name' => 'Lang 3', 'full' => 'Language 3 (R3)'],
-                    'm_max'   => ['name' => 'Maths',  'full' => 'Mathematics'],
-                    'sci_max' => ['name' => 'Sci',    'full' => 'Science'],
-                    'soc_max' => ['name' => 'Soc Sci','full' => 'Social Science'],
-                    'art_max' => ['name' => 'Art Ed', 'full' => 'Art Education'],
-                    'pe_max'  => ['name' => 'PE',     'full' => 'PE & Well Being'],
-                ];
-            @endphp
-            <div id="seeder-config-section" class="grid grid-cols-1 lg:grid-cols-2 gap-4 scroll-mt-6">
-                <!-- CARD A: SCHOOL WORKING DAYS CONFIGURATION -->
-                <div id="seeder-working-days" class="bg-white rounded-2xl shadow-xs border border-slate-200 p-4 hover:border-slate-300 transition scroll-mt-6">
-                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 gap-2 flex-wrap">
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                                <span>📅</span> School Working Days Calendar
-                            </span>
-                            <span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                                AY {{ $workingDays->academic_year ?? '2025-2026' }}
-                            </span>
-                            <span class="text-xs text-slate-500 font-medium">
-                                Total: <strong id="wd-total-display" class="font-mono text-indigo-700 font-extrabold">{{ $workingDays->total_days ?? 222 }}</strong> Days
-                            </span>
-                        </div>
-                        <div class="flex items-center gap-1.5">
-                            <button onclick="resetWorkingDaysToStandard()"
-                                    class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold transition"
-                                    title="Reset to seeded 222 working days">
-                                ↺ Reset 222d
-                            </button>
-                            <button onclick="saveWorkingDays()" id="btn-save-wd"
-                                    class="inline-flex items-center gap-1 px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold shadow-xs transition active:scale-95">
-                                <span>💾 Save Defaults</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- 12 Monthly Compact Inline Grid -->
-                    <div class="grid grid-cols-6 sm:grid-cols-12 gap-1.5 pt-3">
-                        @foreach($calMonths as $mKey => $mLabel)
-                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-center">
-                                <div class="text-[9px] font-bold uppercase text-slate-500 leading-none">{{ $mLabel }}</div>
-                                <input type="number" id="wd-{{ $mKey }}" min="0" max="31"
-                                       value="{{ $workingDays->{$mKey} ?? 20 }}"
-                                       oninput="recalcWorkingDaysTotal()"
-                                       class="w-full text-center font-bold text-xs font-mono p-0.5 border border-slate-300 rounded mt-1 text-slate-900 bg-white focus:ring-1 focus:ring-indigo-500">
-                            </div>
-                        @endforeach
-                    </div>
-                    <div id="wd-status-msg" class="mt-2 text-xs font-semibold hidden"></div>
-                </div>
-
-                <!-- CARD B: CURRICULAR MAX MARKS CONFIGURATION -->
-                <div id="seeder-max-marks" class="bg-white rounded-2xl shadow-xs border border-slate-200 p-4 hover:border-slate-300 transition scroll-mt-6">
-                    <div class="flex items-center justify-between pb-2 border-b border-slate-100 gap-2 flex-wrap">
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                                <span>🎯</span> Curricular Max Marks Defaults
-                            </span>
-                            <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                                HPC Credit
-                            </span>
-                        </div>
-                        <div class="flex items-center gap-1.5">
-                            <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-0.5 text-[10px] font-semibold text-slate-600">
-                                <button type="button" onclick="presetMaxMarks(50)" class="px-2 py-0.5 hover:bg-white rounded transition" title="Set all to 50">50</button>
-                                <button type="button" onclick="presetMaxMarks(100)" class="px-2 py-0.5 hover:bg-white rounded transition" title="Set all to 100">100</button>
-                            </div>
-                            <button onclick="saveMaxMarks()" id="btn-save-mm"
-                                    class="inline-flex items-center gap-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold shadow-xs transition active:scale-95">
-                                <span>💾 Save Defaults</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- 8 Subjects Compact Inline Grid -->
-                    <div class="grid grid-cols-4 sm:grid-cols-8 gap-1.5 pt-3">
-                        @foreach($curricularSubjects as $sKey => $sMeta)
-                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-center">
-                                <div class="text-[9px] font-bold uppercase text-slate-500 leading-none truncate" title="{{ $sMeta['full'] }}">{{ $sMeta['name'] }}</div>
-                                <input type="number" id="mm-{{ $sKey }}" min="1" max="100"
-                                       value="{{ $maxMarks->{$sKey} ?? 50 }}"
-                                       class="w-full text-center font-bold text-xs font-mono p-0.5 border border-slate-300 rounded mt-1 text-slate-900 bg-white focus:ring-1 focus:ring-emerald-500">
-                            </div>
-                        @endforeach
-                    </div>
-                    <div id="mm-status-msg" class="mt-2 text-xs font-semibold hidden"></div>
                 </div>
             </div>
 
@@ -596,15 +492,10 @@
 
                         <!-- Template Buttons & Config Links -->
                         <div class="flex items-center gap-2 flex-wrap">
-                            <a href="#seeder-working-days"
-                               class="inline-flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs border border-slate-200 transition"
-                               title="Configure school working days per month">
-                                📅 Working Days ({{ $workingDays->total_days ?? 222 }}d)
-                            </a>
-                            <a href="#seeder-max-marks"
-                               class="inline-flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs border border-slate-200 transition"
-                               title="Configure curricular max marks">
-                                🎯 Max Marks Defaults
+                            <a href="{{ route('school.academic_settings') }}"
+                               class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs border border-slate-200 transition"
+                               title="Configure stage-wise school working days and curricular max marks">
+                                ⚙️ Working Days &amp; Marks Settings
                             </a>
                             <a href="{{ route('hpc.template.download') }}"
                                class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
@@ -1464,141 +1355,6 @@
                     }
                 } catch(e) {}
             }, 2000);
-        }
-
-        // ─── Working Days Defaults Management ─────────────────────────────────────
-        const wdMonthKeys = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
-
-        function recalcWorkingDaysTotal() {
-            let total = 0;
-            wdMonthKeys.forEach(m => {
-                const inp = document.getElementById('wd-' + m);
-                const val = inp ? parseInt(inp.value, 10) : 0;
-                total += (isNaN(val) ? 0 : val);
-            });
-            const disp = document.getElementById('wd-total-display');
-            if (disp) disp.innerText = total;
-            return total;
-        }
-
-        function resetWorkingDaysToStandard() {
-            const standard = {
-                apr: 20, may: 22, jun: 10, jul: 20, aug: 22, sep: 21,
-                oct: 19, nov: 20, dec: 15, jan: 15, feb: 20, mar: 18
-            };
-            wdMonthKeys.forEach(m => {
-                const inp = document.getElementById('wd-' + m);
-                if (inp) inp.value = standard[m];
-            });
-            recalcWorkingDaysTotal();
-            showWdStatus('Reset to standard calendar (222 days). Click "Save Defaults" to persist.', 'text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg inline-block');
-        }
-
-        async function saveWorkingDays() {
-            const btn = document.getElementById('btn-save-wd');
-            const oldHtml = btn ? btn.innerHTML : '';
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<span>⏳ Saving...</span>';
-            }
-
-            const payload = {};
-            wdMonthKeys.forEach(m => {
-                const inp = document.getElementById('wd-' + m);
-                payload[m] = inp ? parseInt(inp.value, 10) : 0;
-            });
-
-            try {
-                const res = await fetch('{{ route('hpc.teacher.working_days.update') }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': CSRF,
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                if (data.ok) {
-                    showWdStatus('✓ ' + data.message + ' Total: ' + (data.data.total_days || recalcWorkingDaysTotal()) + ' Days.', 'text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg inline-block');
-                } else {
-                    showWdStatus('✕ ' + (data.error || 'Failed to save working days.'), 'text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg inline-block');
-                }
-            } catch (err) {
-                showWdStatus('✕ Network error: ' + err.message, 'text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg inline-block');
-            } finally {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = oldHtml;
-                }
-            }
-        }
-
-        function showWdStatus(msg, classes) {
-            const el = document.getElementById('wd-status-msg');
-            if (!el) return;
-            el.className = 'mt-3 text-xs font-semibold ' + classes;
-            el.innerText = msg;
-            el.classList.remove('hidden');
-        }
-
-        // ─── Curricular Max Marks Defaults Management ──────────────────────────────
-        const mmSubjectKeys = ['l1_max', 'l2_max', 'l3_max', 'm_max', 'sci_max', 'soc_max', 'art_max', 'pe_max'];
-
-        function presetMaxMarks(val) {
-            mmSubjectKeys.forEach(k => {
-                const inp = document.getElementById('mm-' + k);
-                if (inp) inp.value = val;
-            });
-            showMmStatus('Preset applied: All subjects set to ' + val + ' marks. Click "Save Defaults" to persist.', 'text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg inline-block');
-        }
-
-        async function saveMaxMarks() {
-            const btn = document.getElementById('btn-save-mm');
-            const oldHtml = btn ? btn.innerHTML : '';
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<span>⏳ Saving...</span>';
-            }
-
-            const payload = {};
-            mmSubjectKeys.forEach(k => {
-                const inp = document.getElementById('mm-' + k);
-                payload[k] = inp ? parseInt(inp.value, 10) : 50;
-            });
-
-            try {
-                const res = await fetch('{{ route('hpc.teacher.max_marks.update') }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': CSRF,
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json();
-                if (data.ok) {
-                    showMmStatus('✓ ' + data.message + ' (All student rows in newly downloaded Excel will reflect these marks)', 'text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg inline-block');
-                } else {
-                    showMmStatus('✕ ' + (data.message || 'Failed to save max marks.'), 'text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg inline-block');
-                }
-            } catch (err) {
-                showMmStatus('✕ Network error: ' + err.message, 'text-rose-800 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-lg inline-block');
-            } finally {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = oldHtml;
-                }
-            }
-        }
-
-        function showMmStatus(msg, classes) {
-            const el = document.getElementById('mm-status-msg');
-            if (!el) return;
-            el.className = 'mt-3 text-xs font-semibold ' + classes;
-            el.innerText = msg;
-            el.classList.remove('hidden');
         }
 
         document.addEventListener('DOMContentLoaded', () => {

@@ -542,11 +542,25 @@ class HpcTeacherController extends Controller
         ]);
     }
 
-    // ─── School Working Days Defaults Management ──────────────────────────────
+    // ─── School Working Days & Curricular Max Marks Settings ──────────────────
+
+    public function academicSettings(Request $request)
+    {
+        $school   = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
+        $middleWd = SchoolWorkingDay::getDefault('middle');
+        $prepWd   = SchoolWorkingDay::getDefault('preparatory');
+        $middleMm = SchoolMaxMark::getDefault('middle');
+        $prepMm   = SchoolMaxMark::getDefault('preparatory');
+
+        return view('school.academic-settings', compact(
+            'school', 'middleWd', 'prepWd', 'middleMm', 'prepMm'
+        ));
+    }
 
     public function getWorkingDays(Request $request)
     {
-        $wd = SchoolWorkingDay::getDefault();
+        $stage = $request->query('stage', 'middle');
+        $wd = SchoolWorkingDay::getDefault($stage);
         return response()->json([
             'ok'   => true,
             'data' => $wd,
@@ -556,6 +570,7 @@ class HpcTeacherController extends Controller
     public function updateWorkingDays(Request $request)
     {
         $data = $request->validate([
+            'stage'         => 'nullable|string|in:middle,preparatory',
             'academic_year' => 'nullable|string|max:20',
             'apr'           => 'required|integer|min:0|max:31',
             'may'           => 'required|integer|min:0|max:31',
@@ -572,7 +587,9 @@ class HpcTeacherController extends Controller
             'remarks'       => 'nullable|string|max:255',
         ]);
 
-        $wd = SchoolWorkingDay::getDefault();
+        $stage = $data['stage'] ?? 'middle';
+        $wd = SchoolWorkingDay::getDefault($stage);
+        $data['stage'] = $stage;
         $data['academic_year'] = $data['academic_year'] ?? $wd->academic_year ?? '2025-2026';
         $data['total_days'] = array_sum([
             $data['apr'], $data['may'], $data['jun'], $data['jul'], $data['aug'], $data['sep'],
@@ -584,7 +601,7 @@ class HpcTeacherController extends Controller
 
         return response()->json([
             'ok'      => true,
-            'message' => 'Default school working days updated successfully!',
+            'message' => ucfirst($stage) . ' Stage working days (' . $data['total_days'] . ' days) saved successfully!',
             'data'    => $wd->fresh(),
         ]);
     }
@@ -593,18 +610,20 @@ class HpcTeacherController extends Controller
 
     public function getMaxMarks(Request $request)
     {
-        $mm = SchoolMaxMark::getDefault();
+        $stage = $request->query('stage', 'middle');
+        $mm = SchoolMaxMark::getDefault($stage);
         return response()->json([
             'ok'     => true,
             'data'   => $mm,
             'map'    => $mm->toSubjectMap(),
-            'labels' => SchoolMaxMark::subjectLabels(),
+            'labels' => SchoolMaxMark::subjectLabels($stage),
         ]);
     }
 
     public function updateMaxMarks(Request $request)
     {
         $data = $request->validate([
+            'stage'         => 'nullable|string|in:middle,preparatory',
             'academic_year' => 'nullable|string|max:20',
             'l1_max'        => 'required|integer|min:1|max:100',
             'l2_max'        => 'required|integer|min:1|max:100',
@@ -617,7 +636,9 @@ class HpcTeacherController extends Controller
             'remarks'       => 'nullable|string|max:255',
         ]);
 
-        $mm = SchoolMaxMark::getDefault();
+        $stage = $data['stage'] ?? 'middle';
+        $mm = SchoolMaxMark::getDefault($stage);
+        $data['stage'] = $stage;
         $data['academic_year'] = $data['academic_year'] ?? $mm->academic_year ?? '2025-2026';
         $data['is_default'] = true;
 
@@ -625,7 +646,7 @@ class HpcTeacherController extends Controller
 
         return response()->json([
             'ok'      => true,
-            'message' => 'Default curricular max marks updated successfully!',
+            'message' => ucfirst($stage) . ' Stage curricular max marks updated successfully!',
             'data'    => $mm->fresh(),
             'map'     => $mm->fresh()->toSubjectMap(),
         ]);

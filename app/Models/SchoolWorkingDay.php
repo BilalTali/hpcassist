@@ -12,6 +12,8 @@ class SchoolWorkingDay extends Model
     protected $table = 'school_working_days';
 
     protected $fillable = [
+        'school_id',
+        'stage',
         'academic_year',
         'apr',
         'may',
@@ -88,21 +90,19 @@ class SchoolWorkingDay extends Model
         return $map;
     }
 
-    public static function getDefault(): self
+    public static function getDefault(?string $stage = 'middle'): self
     {
-        $record = self::where('is_default', true)->first();
-
-        if (! $record) {
-            $record = self::first();
-        }
+        $stage = $stage ?: 'middle';
+        $record = self::where('stage', $stage)->first();
 
         if (! $record) {
             $defaults = self::defaultDays();
             $record = self::create(array_merge([
+                'stage'         => $stage,
                 'academic_year' => '2025-2026',
                 'is_default'    => true,
                 'total_days'    => array_sum($defaults),
-                'remarks'       => 'Default Standard Academic Calendar',
+                'remarks'       => ucfirst($stage) . ' Stage Academic Calendar',
             ], $defaults));
         }
 

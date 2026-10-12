@@ -212,6 +212,7 @@
                             pollTimer: null,
                             copied: false,
                             ingestUrl: '{{ url('/udise/ingest') }}',
+                            dashUrl: '{{ route('dashboard', ['step' => 2]) }}',
                             schoolId: {{ $school?->id ?? 0 }},
                             token: '{{ $schoolToken ?? '' }}',
                             udiseCode: '{{ $school?->udise_code ?? '' }}',
@@ -229,9 +230,10 @@
                                     `r=await fetch('/p0/api/cy/students/all/'+id,{credentials:'include'});` +
                                     `j=await r.json();s=j.data||j.students||j.result||j;}` +
                                     `if(!Array.isArray(s)||!s.length){alert('0 students found. Open Student->All Students in UDISE first.');return;}` +
-                                    `let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(s,null,2)],{type:'application/json'}));` +
-                                    `a.download='udise_students_'+id+'.json';document.body.appendChild(a);a.click();document.body.removeChild(a);` +
-                                    `alert('✅ Downloaded '+s.length+' students to udise_students_'+id+'.json! Zero data sent outside.');` +
+                                    `let res=await fetch('${this.ingestUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({school_id:${this.schoolId},token:'${this.token}',udise_code:'${this.udiseCode}',students:s})});` +
+                                    `let d=await res.json();` +
+                                    `if(d.ok){alert('🎉 '+d.message+'\\nRedirecting to dashboard...');location.href=d.redirect||'${this.dashUrl}';}` +
+                                    `else{alert('❌ Sync error: '+(d.error||'Unknown error'));}` +
                                     `}catch(e){alert('Error: '+e.message);}})();`;
                             },
 
@@ -361,8 +363,8 @@
                                     <li class="flex gap-3">
                                         <span class="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">4</span>
                                         <div>
-                                            <div class="font-semibold text-slate-800">JSON file downloads automatically</div>
-                                            <div class="text-slate-500">The file <code class="text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded text-[10px] font-mono">udise_students_&lt;id&gt;.json</code> will be saved to your Downloads folder. Then upload it below!</div>
+                                            <div class="font-semibold text-slate-800">Auto-uploads &amp; redirects to HPC</div>
+                                            <div class="text-slate-500">The script automatically uploads all students to your HPC Assist dashboard and redirects you to Step 2!</div>
                                         </div>
                                     </li>
                                 </ol>

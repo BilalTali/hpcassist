@@ -3,6 +3,8 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\HpcController;
 use App\Http\Controllers\HpcTeacherController;
+use App\Http\Controllers\SchoolManageController;
+use App\Http\Controllers\UdiseController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -50,13 +52,13 @@ Route::middleware('auth')->group(function () {
     })->name('dashboard');
 
     // ── School & Multi-Teacher Management ─────────────────────────────────────
-    Route::post('/school/update',               [\App\Http\Controllers\SchoolManageController::class, 'updateSchool'])->name('school.update');
-    Route::get('/school/teachers',              [\App\Http\Controllers\SchoolManageController::class, 'getTeachers'])->name('school.teachers');
-    Route::post('/school/teachers',             [\App\Http\Controllers\SchoolManageController::class, 'storeTeacher'])->name('school.teachers.store');
-    Route::post('/school/teachers/{id}/update', [\App\Http\Controllers\SchoolManageController::class, 'updateTeacher'])->name('school.teachers.update');
-    Route::post('/school/teachers/{id}/delete', [\App\Http\Controllers\SchoolManageController::class, 'deleteTeacher'])->name('school.teachers.delete');
-    Route::post('/school/udise/skip',            [\App\Http\Controllers\SchoolManageController::class, 'skipUdise'])->name('school.udise.skip');
-    Route::post('/school/udise/reset',           [\App\Http\Controllers\SchoolManageController::class, 'resetUdise'])->name('school.udise.reset');
+    Route::post('/school/update',               [SchoolManageController::class, 'updateSchool'])->name('school.update');
+    Route::get('/school/teachers',              [SchoolManageController::class, 'getTeachers'])->name('school.teachers');
+    Route::post('/school/teachers',             [SchoolManageController::class, 'storeTeacher'])->name('school.teachers.store');
+    Route::post('/school/teachers/{id}/update', [SchoolManageController::class, 'updateTeacher'])->name('school.teachers.update');
+    Route::post('/school/teachers/{id}/delete', [SchoolManageController::class, 'deleteTeacher'])->name('school.teachers.delete');
+    Route::post('/school/udise/skip',            [SchoolManageController::class, 'skipUdise'])->name('school.udise.skip');
+    Route::post('/school/udise/reset',           [SchoolManageController::class, 'resetUdise'])->name('school.udise.reset');
 
     // ── HPC Universal Student & Excel Routes ──────────────────────────────────
     Route::get('/dashboard/hpc',           [HpcController::class, 'dashboard'])->name('hpc.dashboard');
@@ -96,12 +98,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/hpc/teacher/max-marks/update',     [HpcTeacherController::class, 'updateMaxMarks'])->name('hpc.teacher.max_marks.update');
 
     // ── UDISE+ SDMS Automation Routes ─────────────────────────────────────────
-    Route::post('/udise/session/start',             [\App\Http\Controllers\UdiseController::class, 'startSession'])->name('udise.session.start');
-    Route::post('/udise/students/fetch',            [\App\Http\Controllers\UdiseController::class, 'fetchStudents'])->name('udise.students.fetch');
-    Route::match(['GET', 'POST'], '/udise/session/check-and-fetch', [\App\Http\Controllers\UdiseController::class, 'checkLoginAndFetch'])->name('udise.session.check_fetch');
-    Route::get('/udise/session/check',                               [\App\Http\Controllers\UdiseController::class, 'checkLoginAndFetch'])->name('udise.session.check');
-    Route::get('/udise/status',                     [\App\Http\Controllers\UdiseController::class, 'status'])->name('udise.status');
-    Route::get('/udise/students/download',          [\App\Http\Controllers\UdiseController::class, 'download'])->name('udise.students.download');
+    Route::post('/udise/session/start',             [UdiseController::class, 'startSession'])->name('udise.session.start');
+    Route::post('/udise/students/fetch',            [UdiseController::class, 'fetchStudents'])->name('udise.students.fetch');
+    Route::match(['GET', 'POST'], '/udise/session/check-and-fetch', [UdiseController::class, 'checkLoginAndFetch'])->name('udise.session.check_fetch');
+    Route::get('/udise/session/check',                               [UdiseController::class, 'checkLoginAndFetch'])->name('udise.session.check');
+    Route::get('/udise/status',                     [UdiseController::class, 'status'])->name('udise.status');
+    Route::get('/udise/students/download',          [UdiseController::class, 'download'])->name('udise.students.download');
 
     // ── User Profile ──────────────────────────────────────────────────────────
     Route::get('/profile',    [ProfileController::class, 'edit'])->name('profile.edit');

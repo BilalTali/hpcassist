@@ -208,20 +208,39 @@
                          x-data="{
                             syncing: false,
                             loading: false,
-                            statusType: 'idle',
-                            statusTitle: '',
-                            statusMsg: '',
+                            showSnippet: false,
                             pollTimer: null,
-                            bridgeUrl: '{{ route('udise.bridge', ['school_id' => $school?->id ?? 0, 'token' => $schoolToken ?? '', 'udise_code' => $school?->udise_code ?? '']) }}',
+                            copied: false,
+                            ingestUrl: '{{ url('/udise/ingest') }}',
+                            schoolId: {{ $school?->id ?? 0 }},
+                            token: '{{ $schoolToken ?? '' }}',
+                            udiseCode: '{{ $school?->udise_code ?? '' }}',
 
-                            openBridge() {
+                            get bookmarklet() {
+                                return `fetch('/p0/api/cy/snapshot/students/all/'+` +
+                                    `(location.href.match(/school\\/(\\d+)/)?.[1]||` +
+                                    `document.querySelector('a[href*="/school/"]')?.href?.match(/school\\/(\\d+)/)?.[1]),` +
+                                    `{credentials:'include'})` +
+                                    `.then(r=>r.json())` +
+                                    `.then(j=>{const s=j.data||j.students||j.result||[];` +
+                                    `if(!s.length){alert('0 students found. Navigate to Student→All Students first.');return;}` +
+                                    `fetch('${this.ingestUrl}',{method:'POST',headers:{'Content-Type':'application/json'},` +
+                                    `body:JSON.stringify({school_id:${this.schoolId},token:'${this.token}',udise_code:'${this.udiseCode}',students:s})})` +
+                                    `.then(r=>r.json()).then(d=>{alert(d.ok?'✅ Synced '+d.total+' students ('+d.apaar_count+' APAAR IDs). Return to HPC Assist dashboard.':'❌ '+d.error);});})` +
+                                    `.catch(e=>alert('Error: '+e.message))`;
+                            },
+
+                            copySnippet() {
+                                navigator.clipboard.writeText(this.bookmarklet).then(() => {
+                                    this.copied = true;
+                                    setTimeout(() => this.copied = false, 2500);
+                                });
+                            },
+
+                            startPolling() {
                                 this.syncing = true;
-                                this.statusType = 'waiting';
-                                this.statusTitle = 'UDISE+ Sync in Progress…';
-                                this.statusMsg = 'Complete your login in the UDISE+ tab. This page will auto-refresh once students are fetched.';
-                                window.open(this.bridgeUrl, 'udise_bridge_tab', 'width=560,height=700');
                                 if (this.pollTimer) clearInterval(this.pollTimer);
-                                this.pollTimer = setInterval(() => this.pollIngest(), 2000);
+                                this.pollTimer = setInterval(() => this.pollIngest(), 2500);
                             },
 
                             async pollIngest() {
@@ -230,10 +249,9 @@
                                     const d = await r.json();
                                     if (d.ok && d.synced) {
                                         clearInterval(this.pollTimer);
-                                        this.statusType = 'success';
-                                        this.statusTitle = 'Sync Complete!';
-                                        this.statusMsg = d.total + ' students & ' + d.apaar_count + ' APAAR IDs fetched. Reloading…';
-                                        setTimeout(() => window.location.reload(), 1200);
+                                        this.syncing = false;
+                                        alert('✅ Sync complete! ' + d.total + ' students loaded. Reloading dashboard…');
+                                        window.location.reload();
                                     }
                                 } catch(e) {}
                             },
@@ -250,41 +268,71 @@
                             }
                          }">
 
-                        {{-- Card A: Connect to UDISE+ --}}
-                        <div class="bg-white rounded-2xl shadow-xs border-2 border-emerald-500/60 hover:border-emerald-600 transition p-6 flex flex-col justify-between">
+                        {{-- Card A: UDISE Console Sync --}}
+                        <div class="bg-white rounded-2xl shadow-xs border-2 border-emerald-500/60 p-6 flex flex-col justify-between">
                             <div>
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 mb-3">
-                                    Connect to UDISE+ &amp; Auto-Fetch
+                                    🌐 UDISE+ Console Sync (Recommended)
                                 </span>
-                                <h3 class="text-base font-bold text-slate-900 mb-2">Fetch Student Roster from UDISE+ SDMS</h3>
-                                <p class="text-xs text-slate-600 leading-relaxed mb-4">
-                                    Click the button below. A UDISE+ login page opens. Sign in with your school credentials — students, APAAR IDs and PEN numbers are fetched automatically within seconds.
+                                <h3 class="text-base font-bold text-slate-900 mb-1.5">Fetch Students via Console Snippet</h3>
+                                <p class="text-xs text-slate-500 leading-relaxed mb-4">
+                                    UDISE+ uses strict cross-origin security. The most reliable way is to run a one-line script directly in the UDISE+ browser console.
                                 </p>
-                                <ul class="space-y-1.5 text-xs text-slate-700 bg-emerald-50/60 p-3 rounded-xl border border-emerald-100 mb-4">
-                                    <li>✓ Auto-fetches all students, DOBs &amp; grades</li>
-                                    <li>✓ Retrieves unmasked 12-digit APAAR IDs</li>
-                                    <li>✓ Generates pre-filled HPC submission template</li>
-                                    <li>✓ Works without any copy-paste or console commands</li>
-                                </ul>
+
+                                {{-- Step-by-step --}}
+                                <ol class="space-y-3 text-xs mb-4">
+                                    <li class="flex gap-3">
+                                        <span class="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">1</span>
+                                        <div>
+                                            <div class="font-semibold text-slate-800">Log in to UDISE+ SDMS</div>
+                                            <a href="https://sdms.udiseplus.gov.in/" target="_blank"
+                                               class="text-indigo-600 hover:underline font-medium">Open UDISE+ →</a>
+                                            <span class="text-slate-500"> → Sign in → go to <strong>Student → All Students</strong></span>
+                                        </div>
+                                    </li>
+                                    <li class="flex gap-3">
+                                        <span class="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">2</span>
+                                        <div>
+                                            <div class="font-semibold text-slate-800">Open Console &amp; enable pasting</div>
+                                            <div class="text-slate-500">Press <kbd class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono border border-slate-300">F12</kbd> → Console tab → type <kbd class="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono border border-slate-300">allow pasting</kbd> → Enter</div>
+                                        </div>
+                                    </li>
+                                    <li class="flex gap-3">
+                                        <span class="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">3</span>
+                                        <div class="w-full">
+                                            <div class="font-semibold text-slate-800 mb-1.5">Copy &amp; paste this snippet → Enter</div>
+                                            <div class="relative">
+                                                <div class="bg-slate-900 rounded-lg px-3 py-2 pr-16 font-mono text-[9px] text-emerald-400 break-all leading-relaxed overflow-hidden max-h-14 border border-slate-700">
+                                                    <span x-text="bookmarklet"></span>
+                                                </div>
+                                                <button @click="copySnippet()"
+                                                        class="absolute top-1.5 right-1.5 px-2 py-1 rounded text-[9px] font-bold transition"
+                                                        :class="copied ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'">
+                                                    <span x-text="copied ? '✓ Copied' : 'Copy'"></span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </li>
+                                    <li class="flex gap-3">
+                                        <span class="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">4</span>
+                                        <div>
+                                            <div class="font-semibold text-slate-800">Watch for success alert → return here</div>
+                                            <div class="text-slate-500">An alert will confirm sync. Click the button below to reload.</div>
+                                        </div>
+                                    </li>
+                                </ol>
                             </div>
                             <div class="space-y-2 pt-3 border-t border-slate-100">
-                                <button @click="openBridge()"
+                                <button @click="startPolling()"
                                         :disabled="syncing || loading"
-                                        class="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-sm font-bold transition shadow-sm active:scale-95 text-white"
+                                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-bold transition shadow-sm active:scale-95 text-white"
                                         :class="syncing ? 'bg-amber-500 cursor-wait' : 'bg-emerald-600 hover:bg-emerald-700'">
-                                    <span x-text="syncing ? '⏳ Waiting for UDISE+ Login…' : '🚀 Connect to UDISE+ & Auto-Sync'"></span>
+                                    <span x-text="syncing ? '⏳ Waiting for sync completion…' : '✅ I\'ve pasted the snippet — check for sync'"></span>
                                 </button>
-
-                                <div x-show="statusType !== 'idle'" x-transition
-                                     class="p-3 rounded-xl text-xs border"
-                                     :class="{
-                                         'bg-amber-50 text-amber-900 border-amber-200': statusType === 'waiting',
-                                         'bg-emerald-50 text-emerald-900 border-emerald-200': statusType === 'success',
-                                         'bg-rose-50 text-rose-900 border-rose-200': statusType === 'error',
-                                     }">
-                                    <div class="font-bold" x-text="statusTitle"></div>
-                                    <div class="mt-0.5 opacity-80" x-text="statusMsg"></div>
-                                </div>
+                                <a href="https://sdms.udiseplus.gov.in/" target="_blank"
+                                   class="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 transition">
+                                    🌐 Open UDISE+ SDMS
+                                </a>
                             </div>
                         </div>
 

@@ -349,12 +349,12 @@
                                         <div class="w-full">
                                             <div class="font-semibold text-slate-800 mb-1.5">Copy &amp; paste this snippet → Enter</div>
                                             <div class="relative">
-                                                <div class="bg-slate-900 rounded-lg px-3 py-2 pr-16 font-mono text-[9px] text-emerald-400 break-all leading-relaxed overflow-hidden max-h-14 border border-slate-700">
+                                                <div class="bg-slate-50 hover:bg-slate-100/70 rounded-xl px-3.5 py-2.5 pr-20 font-mono text-[9px] text-slate-700 break-all leading-relaxed overflow-hidden max-h-16 border border-slate-200 select-all transition">
                                                     <span x-text="bookmarklet"></span>
                                                 </div>
                                                 <button @click="copySnippet()"
-                                                        class="absolute top-1.5 right-1.5 px-2 py-1 rounded text-[9px] font-bold transition"
-                                                        :class="copied ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'">
+                                                        class="absolute top-2 right-2 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition shadow-2xs active:scale-95"
+                                                        :class="copied ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50 hover:border-slate-400'">
                                                     <span x-text="copied ? '✓ Copied' : 'Copy'"></span>
                                                 </button>
                                             </div>

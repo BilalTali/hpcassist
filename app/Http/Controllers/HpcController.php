@@ -12,6 +12,7 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Font;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 /**
  * Class HpcController
@@ -74,8 +75,10 @@ class HpcController extends Controller
 
         $sheet = $this->buildStudentSpreadsheet($udiseStudents);
 
+        $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $udiseCode = $school?->udise_code ?? 'template';
         $filename = (! empty($udiseStudents))
-            ? 'hpc_students_01041800702_from_udise.xlsx'
+            ? "hpc_students_{$udiseCode}_from_udise.xlsx"
             : 'hpc_students_template.xlsx';
 
         $writer = new Xlsx($sheet);
@@ -166,12 +169,12 @@ class HpcController extends Controller
                         $dob = "{$m[3]}/{$m[2]}/{$m[1]}";
                     }
 
-                    // 3. Email (use UDISE email or generate valid unique student email)
+                    // 3. Email (use valid student email with @gmail.com, not gov.in)
                     $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL) ? trim($st['email']) : '';
-                    if (empty($email)) {
+                    if (empty($email) || str_contains(strtolower($email), 'gov.in')) {
                         $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
                         $cleanPen   = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
-                        $email      = "{$cleanFirst}.{$cleanPen}@bms.school.gov.in";
+                        $email      = "{$cleanFirst}.{$cleanPen}@gmail.com";
                     }
 
                     // 4. Grade mapped from classDesc
@@ -209,7 +212,7 @@ class HpcController extends Controller
             }
         } else {
             // Sample row (Row 3)
-            $sample = ['Aarav', 'Sharma', '15/08/2012', 'aarav.sharma@example.com', 'Grade 6', 'A', '123456789012'];
+            $sample = ['Aarav', 'Sharma', '15/08/2012', 'aarav.sharma@gmail.com', 'Grade 6', 'A', '123456789012'];
             $sampleStyle = [
                 'font'      => ['color' => ['argb' => 'FF334155'], 'size' => 10],
                 'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFF8FAFC']],
@@ -294,19 +297,23 @@ class HpcController extends Controller
         return $sheet;
     }
 
-    public function preloadUdise(Request $request)
+    public function preloadUdise(?Request $request = null, $school = null, ?array $customStudents = null)
     {
-        $udiseStudents = $this->getUdiseStudents();
+        if (! $school && \Illuminate\Support\Facades\Auth::check()) {
+            $school = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
+        }
+
+        $udiseStudents = $customStudents ?? $this->getUdiseStudents($school);
         if (empty($udiseStudents)) {
             return response()->json([
                 'ok'    => false,
-                'error' => 'No UDISE student records found. Please sync from http://127.0.0.1:8000/dashboard first.',
+                'error' => 'No UDISE student records found for this school.',
             ], 404);
         }
 
-        // 1. Generate and save storage/app/hpc/students.xlsx
+        // 1. Generate and save students.xlsx in school storage
         $spreadsheet = $this->buildStudentSpreadsheet($udiseStudents);
-        $dir = storage_path('app/hpc');
+        $dir = $this->getSchoolStorageDir($school);
         @mkdir($dir, 0755, true);
         $fullPath = $dir . '/students.xlsx';
         $writer = new Xlsx($spreadsheet);
@@ -330,10 +337,10 @@ class HpcController extends Controller
             }
 
             $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL) ? trim($st['email']) : '';
-            if (empty($email)) {
+            if (empty($email) || str_contains(strtolower($email), 'gov.in')) {
                 $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
                 $cleanPen   = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
-                $email      = "{$cleanFirst}.{$cleanPen}@bms.school.gov.in";
+                $email      = "{$cleanFirst}.{$cleanPen}@gmail.com";
             }
 
             $rawClass = trim($st['classDesc'] ?? '');
@@ -355,7 +362,7 @@ class HpcController extends Controller
             ];
         }
 
-        file_put_contents(storage_path('app/hpc/preview.json'), json_encode($preview, JSON_PRETTY_PRINT));
+        file_put_contents($this->getPreviewFile($school), json_encode($preview, JSON_PRETTY_PRINT));
 
         return response()->json([
             'ok'      => true,
@@ -368,16 +375,67 @@ class HpcController extends Controller
         ]);
     }
 
-    public function getUdiseStudents(): array
+    public function getSchoolStorageDir($school = null): string
     {
-        $file = storage_path('app/hpc/udise_students_1007827_raw.json');
-        if (file_exists($file)) {
-            return json_decode(file_get_contents($file), true) ?: [];
+        if (! $school && \Illuminate\Support\Facades\Auth::check()) {
+            $school = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
         }
 
-        $files = glob(storage_path('app/hpc/udise_students_*_raw.json'));
-        if (! empty($files)) {
-            return json_decode(file_get_contents($files[0]), true) ?: [];
+        if ($school) {
+            $dir = storage_path('app/hpc/schools/' . $school->id);
+            if (! is_dir($dir)) {
+                @mkdir($dir, 0755, true);
+            }
+            return $dir;
+        }
+
+        return storage_path('app/hpc');
+    }
+
+    public function getPreviewFile($school = null): string
+    {
+        if (! $school && \Illuminate\Support\Facades\Auth::check()) {
+            $school = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
+        }
+
+        if ($school) {
+            $schoolDir = $this->getSchoolStorageDir($school);
+            $schoolPreview = $schoolDir . '/preview.json';
+            if (file_exists($schoolPreview)) {
+                return $schoolPreview;
+            }
+            // Only school with UDISE 01041800702 can read the cached root preview file
+            if ($school->udise_code === '01041800702' && file_exists(storage_path('app/hpc/preview.json'))) {
+                return storage_path('app/hpc/preview.json');
+            }
+            return $schoolPreview;
+        }
+
+        return storage_path('app/hpc/preview.json');
+    }
+
+    public function getUdiseStudents($school = null): array
+    {
+        if (! $school && \Illuminate\Support\Facades\Auth::check()) {
+            $school = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
+        }
+
+        if ($school) {
+            $schoolDir = $this->getSchoolStorageDir($school);
+            $schoolRaw = $schoolDir . '/udise_students_raw.json';
+            if (file_exists($schoolRaw)) {
+                return json_decode(file_get_contents($schoolRaw), true) ?: [];
+            }
+
+            // ONLY school with UDISE 01041800702 can read the cached 129 student roster
+            if ($school->udise_code === '01041800702') {
+                $legacyFile = storage_path('app/hpc/udise_students_1007827_raw.json');
+                if (file_exists($legacyFile)) {
+                    return json_decode(file_get_contents($legacyFile), true) ?: [];
+                }
+            }
+
+            return [];
         }
 
         return [];
@@ -422,11 +480,7 @@ class HpcController extends Controller
             return response()->json(['ok' => false, 'error' => 'Please upload a valid Excel (.xlsx, .xls) file.']);
         }
 
-        $dir = storage_path('app/hpc');
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-
+        $dir = $this->getSchoolStorageDir();
         $fullPath = $dir . '/students.xlsx';
         $uploadedFile->move($dir, 'students.xlsx');
 
@@ -438,28 +492,91 @@ class HpcController extends Controller
             $ws  = $ss->getActiveSheet();
             $max = $ws->getHighestDataRow();
 
-            // We start reading from row 3 (skip row 1 header and row 2 note)
-            for ($r = 3; $r <= $max; $r++) {
-                $firstName = trim((string) $ws->getCell("A{$r}")->getValue());
-                $lastName  = trim((string) $ws->getCell("B{$r}")->getValue());
-
-                // Read DOB
-                $dobCell  = $ws->getCell("C{$r}");
-                $dobValue = $dobCell->getValue();
-                if (ExcelDate::isDateTime($dobCell)) {
-                    $dob = ExcelDate::excelToDateTimeObject($dobValue)->format('d/m/Y');
-                } else {
-                    $dob = trim((string) $dobCell->getFormattedValue());
+            // Detect if uploaded file is a UDISE+ export spreadsheet
+            $udiseCols = [];
+            $headerRow = 0;
+            for ($testRow = 1; $testRow <= min(6, $max); $testRow++) {
+                $cells = [];
+                for ($col = 1; $col <= 26; $col++) {
+                    $ltr = Coordinate::stringFromColumnIndex($col);
+                    $val = strtolower(trim((string) $ws->getCell("{$ltr}{$testRow}")->getValue()));
+                    if ($val !== '') $cells[$val] = $ltr;
                 }
+                $hasStudentName = false;
+                $hasPenOrApaar = false;
+                foreach ($cells as $k => $ltr) {
+                    if (str_contains($k, 'student') && str_contains($k, 'name')) $hasStudentName = true;
+                    if (str_contains($k, 'pen') || str_contains($k, 'apaar') || str_contains($k, 'permanent education')) $hasPenOrApaar = true;
+                }
+                if ($hasStudentName && $hasPenOrApaar) {
+                    $headerRow = $testRow;
+                    foreach ($cells as $k => $ltr) {
+                        if (str_contains($k, 'student') && str_contains($k, 'name')) $udiseCols['name'] = $ltr;
+                        elseif (str_contains($k, 'apaar')) $udiseCols['apaar'] = $ltr;
+                        elseif (str_contains($k, 'pen') || str_contains($k, 'permanent education')) $udiseCols['pen'] = $ltr;
+                        elseif (str_contains($k, 'class') || str_contains($k, 'grade')) $udiseCols['grade'] = $ltr;
+                        elseif (str_contains($k, 'section')) $udiseCols['section'] = $ltr;
+                        elseif (str_contains($k, 'birth') || $k === 'dob') $udiseCols['dob'] = $ltr;
+                        elseif (str_contains($k, 'email')) $udiseCols['email'] = $ltr;
+                    }
+                    break;
+                }
+            }
 
-                $email   = trim((string) $ws->getCell("D{$r}")->getValue());
-                $grade   = trim((string) $ws->getCell("E{$r}")->getValue());
-                $section = trim((string) $ws->getCell("F{$r}")->getValue());
-                $apaarId = trim((string) $ws->getCell("G{$r}")->getValue());
+            $isUdise = ($headerRow > 0 && isset($udiseCols['name']));
+            $startRow = $isUdise ? ($headerRow + 1) : 3;
+            $gradeMap = $this->getGradeMap();
 
-                // Skip sample row if untouched, or skip completely empty row
-                if ($firstName === '' && $email === '' && $grade === '') {
-                    continue;
+            for ($r = $startRow; $r <= $max; $r++) {
+                if ($isUdise) {
+                    $fullName = trim((string) $ws->getCell(($udiseCols['name'] ?? 'A') . $r)->getValue());
+                    if ($fullName === '') continue;
+                    $parts = preg_split('/\s+/', $fullName);
+                    $firstName = $parts[0] ?? 'Student';
+                    $lastName = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
+
+                    $dobCell = isset($udiseCols['dob']) ? $ws->getCell($udiseCols['dob'] . $r) : null;
+                    if ($dobCell && ExcelDate::isDateTime($dobCell)) {
+                        $dob = ExcelDate::excelToDateTimeObject($dobCell->getValue())->format('d/m/Y');
+                    } else {
+                        $dob = $dobCell ? trim((string) $dobCell->getFormattedValue()) : '';
+                    }
+
+                    $pen = isset($udiseCols['pen']) ? preg_replace('/[^0-9]/', '', (string)$ws->getCell($udiseCols['pen'] . $r)->getValue()) : (string)$r;
+                    $rawEmail = isset($udiseCols['email']) ? trim((string)$ws->getCell($udiseCols['email'] . $r)->getValue()) : '';
+                    if (empty($rawEmail) || str_contains(strtolower($rawEmail), 'gov.in') || !filter_var($rawEmail, FILTER_VALIDATE_EMAIL)) {
+                        $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
+                        $email = "{$cleanFirst}.{$pen}@gmail.com";
+                    } else {
+                        $email = $rawEmail;
+                    }
+
+                    $rawGrade = isset($udiseCols['grade']) ? trim((string)$ws->getCell($udiseCols['grade'] . $r)->getValue()) : 'Grade 6';
+                    $grade = $gradeMap[$rawGrade] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawGrade)] ?? 'Grade 6');
+                    $section = isset($udiseCols['section']) ? (trim((string)$ws->getCell($udiseCols['section'] . $r)->getValue()) ?: 'A') : 'A';
+                    $apaarId = isset($udiseCols['apaar']) ? preg_replace('/[^0-9]/', '', (string)$ws->getCell($udiseCols['apaar'] . $r)->getValue()) : '';
+                } else {
+                    $firstName = trim((string) $ws->getCell("A{$r}")->getValue());
+                    $lastName  = trim((string) $ws->getCell("B{$r}")->getValue());
+
+                    // Read DOB
+                    $dobCell  = $ws->getCell("C{$r}");
+                    $dobValue = $dobCell->getValue();
+                    if (ExcelDate::isDateTime($dobCell)) {
+                        $dob = ExcelDate::excelToDateTimeObject($dobValue)->format('d/m/Y');
+                    } else {
+                        $dob = trim((string) $dobCell->getFormattedValue());
+                    }
+
+                    $email   = trim((string) $ws->getCell("D{$r}")->getValue());
+                    $grade   = trim((string) $ws->getCell("E{$r}")->getValue());
+                    $section = trim((string) $ws->getCell("F{$r}")->getValue());
+                    $apaarId = trim((string) $ws->getCell("G{$r}")->getValue());
+
+                    // Skip sample row if untouched, or skip completely empty row
+                    if ($firstName === '' && $email === '' && $grade === '') {
+                        continue;
+                    }
                 }
 
                 $rowErrors = [];
@@ -485,7 +602,7 @@ class HpcController extends Controller
                 }
 
                 $preview[] = [
-                    'row'        => $r,
+                    'row'        => count($preview) + 1,
                     'first_name' => $firstName,
                     'last_name'  => $lastName,
                     'name'       => trim("{$firstName} {$lastName}"),
@@ -506,7 +623,21 @@ class HpcController extends Controller
         }
 
         // Save preview for the automation runner
-        file_put_contents(storage_path('app/hpc/preview.json'), json_encode($preview, JSON_PRETTY_PRINT));
+        file_put_contents($this->getPreviewFile(), json_encode($preview, JSON_PRETTY_PRINT));
+        $this->syncSpreadsheetFromPreview($preview);
+
+        if (\Illuminate\Support\Facades\Auth::check()) {
+            $userSchool = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
+            if ($userSchool) {
+                $apaarCount = count(array_filter($preview, fn($s) => !empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12));
+                $userSchool->update([
+                    'udise_status'         => 'synced',
+                    'udise_synced_at'      => now(),
+                    'udise_students_count' => count($preview),
+                    'udise_apaar_count'    => $apaarCount,
+                ]);
+            }
+        }
 
         return response()->json([
             'ok'      => true,
@@ -575,7 +706,7 @@ class HpcController extends Controller
         try {
             $sheet = $this->buildStudentSpreadsheet($preview);
             $writer = new Xlsx($sheet);
-            $dir = storage_path('app/hpc');
+            $dir = $this->getSchoolStorageDir();
             @mkdir($dir, 0755, true);
             $writer->save($dir . '/students.xlsx');
         } catch (\Throwable $e) {
@@ -585,7 +716,7 @@ class HpcController extends Controller
 
     public function saveStudent(Request $request)
     {
-        $previewFile = storage_path('app/hpc/preview.json');
+        $previewFile = $this->getPreviewFile();
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
 
         $index = $request->input('index');
@@ -624,7 +755,7 @@ class HpcController extends Controller
 
     public function deleteStudent(Request $request)
     {
-        $previewFile = storage_path('app/hpc/preview.json');
+        $previewFile = $this->getPreviewFile();
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
 
         $index = (int) $request->input('index');
@@ -661,7 +792,7 @@ class HpcController extends Controller
             $preview[] = $this->validateStudentRow($item, $i + 1);
         }
 
-        $previewFile = storage_path('app/hpc/preview.json');
+        $previewFile = $this->getPreviewFile();
         file_put_contents($previewFile, json_encode($preview, JSON_PRETTY_PRINT));
         $this->syncSpreadsheetFromPreview($preview);
 
@@ -682,7 +813,7 @@ class HpcController extends Controller
 
     public function runStart(Request $request)
     {
-        $previewFile = storage_path('app/hpc/preview.json');
+        $previewFile = $this->getPreviewFile();
         if (! file_exists($previewFile)) {
             return response()->json(['ok' => false, 'error' => 'No student data found. Please upload an Excel file first.']);
         }
@@ -697,7 +828,7 @@ class HpcController extends Controller
         $total = count($validStudents);
 
         // Initialize run_results.json
-        $resultsFile = storage_path('app/hpc/run_results.json');
+        $resultsFile = $this->getSchoolStorageDir() . '/run_results.json';
         $init = [
             'started'    => true,
             'done'       => false,
@@ -726,7 +857,7 @@ class HpcController extends Controller
 
     public function runStatus()
     {
-        $file = storage_path('app/hpc/run_results.json');
+        $file = $this->getSchoolStorageDir() . '/run_results.json';
         if (! file_exists($file)) {
             return response()->json(['started' => false, 'results' => []]);
         }
@@ -739,7 +870,7 @@ class HpcController extends Controller
 
     public function runReset()
     {
-        $file = storage_path('app/hpc/run_results.json');
+        $file = $this->getSchoolStorageDir() . '/run_results.json';
         if (file_exists($file)) {
             unlink($file);
         }
@@ -761,7 +892,7 @@ class HpcController extends Controller
                             'id'    => 'school_' . $dbSchool->id,
                             'name'  => $dbSchool->name,
                             'udise' => $dbSchool->udise_code,
-                            'dir'   => 'chrome-profile',
+                            'dir'   => 'schools/' . $dbSchool->id . '/chrome-profile',
                         ]
                     ]
                 ];
@@ -780,7 +911,7 @@ class HpcController extends Controller
             'schools' => [
                 [
                     'id'   => 'default',
-                    'name' => 'BMS PWC Sugin',
+                    'name' => 'Default School',
                     'dir'  => 'chrome-profile',
                 ]
             ]
@@ -801,8 +932,21 @@ class HpcController extends Controller
         return $data['schools'][0] ?? ['id' => 'default', 'name' => 'Default School', 'dir' => 'chrome-profile'];
     }
 
-    public function getActiveProfileDir(): string
+    public function getActiveProfileDir($school = null): string
     {
+        if (! $school && \Illuminate\Support\Facades\Auth::check()) {
+            $school = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
+        }
+
+        if ($school) {
+            $dir = storage_path('app/hpc/schools/' . $school->id . '/chrome-profile');
+            // If school is #1 and legacy chrome-profile exists, preserve compatibility
+            if (! is_dir($dir) && $school->id === 1 && is_dir(storage_path('app/hpc/chrome-profile'))) {
+                return storage_path('app/hpc/chrome-profile');
+            }
+            return $dir;
+        }
+
         $active = $this->getActiveSchool();
         $dir = $active['dir'] ?? 'chrome-profile';
         return storage_path('app/hpc/' . $dir);
@@ -900,12 +1044,20 @@ class HpcController extends Controller
         $profileDir = $this->getActiveProfileDir();
 
         // Kill Chrome processes associated with active profile or chromedriver
-        exec("pkill -f 'storage/app/hpc' 2>/dev/null");
-        exec("pkill -f 'drivers/chromedriver' 2>/dev/null");
+        if (function_exists('exec')) {
+            @exec("pkill -f 'storage/app/hpc' 2>/dev/null");
+            @exec("pkill -f 'drivers/chromedriver' 2>/dev/null");
+        }
 
         // Delete active profile directory to wipe cookies/cache for this school
         if (is_dir($profileDir)) {
-            exec("rm -rf " . escapeshellarg($profileDir));
+            if (function_exists('exec')) {
+                @exec("rm -rf " . escapeshellarg($profileDir));
+            } else {
+                $files = glob($profileDir . '/*');
+                foreach ($files as $f) { if (is_file($f)) @unlink($f); }
+                @rmdir($profileDir);
+            }
         }
 
         return response()->json(['ok' => true, 'message' => 'Session ended for the active school profile. You can log in with new credentials.']);
@@ -913,15 +1065,25 @@ class HpcController extends Controller
 
     public function startSession()
     {
-        $loginUrl   = config('hpc.login_url');
+        $loginUrl   = config('hpc.login_url', 'https://hpc.parakh.ncert.gov.in/en/login');
         $profileDir = $this->getActiveProfileDir();
         @mkdir($profileDir, 0777, true);
+        @file_put_contents($profileDir . '/session_active.txt', now()->toIso8601String());
 
-        // Open visible Chrome with this school's profile in background
-        exec("nohup '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --user-data-dir=" . escapeshellarg($profileDir) . " " . escapeshellarg($loginUrl) . " > /dev/null 2>&1 &");
+        // Open visible Chrome with this school's profile in background if supported
+        if (function_exists('exec')) {
+            $macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+            if (file_exists($macChrome)) {
+                @exec("nohup '{$macChrome}' --user-data-dir=" . escapeshellarg($profileDir) . " " . escapeshellarg($loginUrl) . " > /dev/null 2>&1 &");
+            }
+        }
 
         $active = $this->getActiveSchool();
-        return response()->json(['ok' => true, 'message' => "Chrome opened for {$active['name']}. Please log in to your portal."]);
+        return response()->json([
+            'ok'      => true,
+            'url'     => $loginUrl,
+            'message' => "HPC School session connected for {$active['name']}. Please log into the portal.",
+        ]);
     }
 
     // ─── Dynamic Form Discovery: Fetch fields of any URL ─────────────────────

@@ -27,3 +27,4 @@ Thumbs.db
 scratch_*
 extracted_*.txt
 .gemini/
+*.xlsx

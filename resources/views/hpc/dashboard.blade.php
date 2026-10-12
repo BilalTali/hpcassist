@@ -155,7 +155,7 @@
                             <div class="bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
                                 <div class="text-slate-400 font-semibold text-[10px]">EMAIL &rarr;</div>
                                 <div class="font-bold text-slate-800">Email *</div>
-                                <div class="text-[10px] text-slate-500 truncate" title="{first}.{pen}@bms.school.gov.in">{name}.{pen}@bms..</div>
+                                <div class="text-[10px] text-slate-500 truncate" title="{first}.{pen}@gmail.com">{name}.{pen}@gmail..</div>
                             </div>
                         </div>
                     </div>
@@ -552,7 +552,7 @@
                         <label class="block text-xs font-semibold text-slate-700">Email Address <span class="text-rose-500">*</span></label>
                         <button type="button" onclick="autoGenEmail()" class="text-[11px] text-indigo-600 hover:underline">⚡ Auto-generate</button>
                     </div>
-                    <input type="email" id="modal-email" required placeholder="student.code@bms.school.gov.in"
+                    <input type="email" id="modal-email" required placeholder="student.code@gmail.com"
                            class="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-indigo-500 font-mono">
                 </div>
 
@@ -1185,7 +1185,7 @@
         function autoGenEmail() {
             const first = (document.getElementById('modal-first-name').value || 'student').toLowerCase().replace(/[^a-z0-9]/g, '');
             const code = Math.floor(1000000000 + Math.random() * 9000000000);
-            document.getElementById('modal-email').value = `${first}.${code}@bms.school.gov.in`;
+            document.getElementById('modal-email').value = `${first}.${code}@gmail.com`;
         }
 
         async function handleStudentFormSubmit(e) {

@@ -59,6 +59,6 @@ class User extends Authenticatable
 
     public function getEffectiveSchool(): ?School
     {
-        return $this->school ?? School::first();
+        return $this->school;
     }
 }

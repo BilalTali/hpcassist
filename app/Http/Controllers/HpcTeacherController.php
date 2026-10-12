@@ -639,18 +639,18 @@ class HpcTeacherController extends Controller
             $user = \Illuminate\Support\Facades\Auth::user();
             $dbSchool = $user->getEffectiveSchool();
             if ($dbSchool) {
-                $dbTeachers = $dbSchool->teachers()->where('is_active', true)->get()->map(function($t) {
+                $dbTeachers = $dbSchool->teachers()->where('is_active', true)->get()->map(function($t) use ($dbSchool) {
                     return [
                         'id'    => 'teacher_' . $t->id,
                         'name'  => $t->name . ($t->designation ? ' (' . $t->designation . ')' : ''),
-                        'dir'   => 'teacher-profiles/teacher_' . $t->id,
+                        'dir'   => 'schools/' . $dbSchool->id . '/teacher-profiles/teacher_' . $t->id,
                         'db_id' => $t->id,
                     ];
                 })->toArray();
 
                 if (empty($dbTeachers)) {
                     $dbTeachers = [
-                        ['id' => 'teacher_default', 'name' => $dbSchool->principal_name ?: 'Teacher', 'dir' => 'teacher-profile']
+                        ['id' => 'teacher_default', 'name' => $dbSchool->principal_name ?: 'Teacher', 'dir' => 'schools/' . $dbSchool->id . '/teacher-profiles/teacher_default']
                     ];
                 }
 
@@ -663,7 +663,7 @@ class HpcTeacherController extends Controller
                             'id'             => 'school_' . $dbSchool->id,
                             'name'           => $dbSchool->name,
                             'udise'          => $dbSchool->udise_code,
-                            'dir'            => 'chrome-profile',
+                            'dir'            => 'schools/' . $dbSchool->id . '/chrome-profile',
                             'teachers'       => $dbTeachers,
                             'active_teacher' => $activeTeacherId,
                         ]
@@ -716,10 +716,24 @@ class HpcTeacherController extends Controller
         return $school['teachers'][0] ?? ['id' => 'teacher_default', 'name' => 'Teacher', 'dir' => 'teacher-profile'];
     }
 
-    public function getActiveTeacherProfileDir(): string
+    public function getActiveTeacherProfileDir(?\App\Models\School $school = null): string
     {
+        if (! $school && \Illuminate\Support\Facades\Auth::check()) {
+            $school = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
+        }
+
         $teacher = $this->getActiveTeacher();
         $dir = $teacher['dir'] ?? 'teacher-profile';
+
+        if ($school && ! str_starts_with($dir, 'schools/')) {
+            $dir = 'schools/' . $school->id . '/' . $dir;
+        }
+
+        // If school is #1 and legacy teacher-profile directory exists, fallback for compatibility
+        if ($school && $school->id === 1 && ! is_dir(storage_path('app/hpc/' . $dir)) && is_dir(storage_path('app/hpc/teacher-profile'))) {
+            return storage_path('app/hpc/teacher-profile');
+        }
+
         return storage_path('app/hpc/' . $dir);
     }
 
@@ -795,21 +809,39 @@ class HpcTeacherController extends Controller
 
     public function startSession()
     {
-        $loginUrl   = config('hpc.login_url');
+        $loginUrl   = config('hpc.login_url', 'https://hpc.parakh.ncert.gov.in/en/login');
         $profileDir = $this->getActiveTeacherProfileDir();
         @mkdir($profileDir, 0777, true);
+        @file_put_contents($profileDir . '/session_active.txt', now()->toIso8601String());
 
-        exec("nohup '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --user-data-dir=" . escapeshellarg($profileDir) . " " . escapeshellarg($loginUrl) . " > /dev/null 2>&1 &");
+        if (function_exists('exec')) {
+            $macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+            if (file_exists($macChrome)) {
+                @exec("nohup '{$macChrome}' --user-data-dir=" . escapeshellarg($profileDir) . " " . escapeshellarg($loginUrl) . " > /dev/null 2>&1 &");
+            }
+        }
 
         $teacher = $this->getActiveTeacher();
-        return response()->json(['ok' => true, 'message' => "Chrome opened for Teacher {$teacher['name']}."]);
+        return response()->json([
+            'ok'      => true,
+            'url'     => $loginUrl,
+            'message' => "Teacher session connected for {$teacher['name']}. Please sign in to the PARAKH portal."
+        ]);
     }
 
     public function endSession()
     {
         $profileDir = $this->getActiveTeacherProfileDir();
-        exec("pkill -f " . escapeshellarg($profileDir) . " 2>/dev/null");
-        if (is_dir($profileDir)) exec("rm -rf " . escapeshellarg($profileDir));
+        if (function_exists('exec')) {
+            @exec("pkill -f " . escapeshellarg($profileDir) . " 2>/dev/null");
+        }
+        if (is_dir($profileDir)) {
+            $files = glob($profileDir . '/*');
+            foreach ($files as $file) {
+                if (is_file($file)) @unlink($file);
+            }
+            @rmdir($profileDir);
+        }
         return response()->json(['ok' => true, 'message' => "Session ended for active teacher profile."]);
     }
 

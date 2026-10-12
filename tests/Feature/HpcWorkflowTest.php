@@ -61,8 +61,7 @@ class HpcWorkflowTest extends TestCase
         $response = $this->actingAs($user)->get('/dashboard');
         $response->assertStatus(200);
         $response->assertSee('Govt Middle School Test');
-        $response->assertSee('Option A');
-        $response->assertSee('Option B');
+        $response->assertSee('UDISE+');
         $response->assertSee('Skip UDISE');
     }
 
@@ -202,5 +201,28 @@ class HpcWorkflowTest extends TestCase
         ]);
         $deleteResponse->assertStatus(200);
         $deleteResponse->assertJson(['ok' => true]);
+    }
+
+    public function test_udise_bridge_and_poll(): void
+    {
+        [$user, $school] = $this->createSchoolUser();
+
+        // Bridge page renders publicly
+        $bridgeResponse = $this->get('/udise/bridge?school_id=' . $school->id);
+        $bridgeResponse->assertStatus(200);
+
+        // Poll endpoint for authenticated user
+        $pollResponse = $this->actingAs($user)->getJson('/udise/ingest-poll');
+        $pollResponse->assertStatus(200);
+        $pollResponse->assertJson(['ok' => true, 'synced' => false]);
+    }
+
+    public function test_school_can_kill_all_sessions(): void
+    {
+        [$user, $school] = $this->createSchoolUser();
+
+        $response = $this->actingAs($user)->postJson('/school/sessions/kill-all');
+        $response->assertStatus(200);
+        $response->assertJson(['ok' => true]);
     }
 }

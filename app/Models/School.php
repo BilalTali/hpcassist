@@ -87,4 +87,75 @@ class School extends Model
         }
         return $dir;
     }
+
+    /**
+     * Terminate all browser processes and delete all session files for this school.
+     */
+    public function killAllHpcSessions(): void
+    {
+        $schoolStorageDir = storage_path('app/hpc/schools/' . $this->id);
+
+        // 1. Terminate running browser/ChromeDriver processes associated with this school
+        if (function_exists('exec')) {
+            @exec("pkill -f " . escapeshellarg($schoolStorageDir) . " 2>/dev/null");
+            if ($this->id === 1) {
+                @exec("pkill -f " . escapeshellarg(storage_path('app/hpc/chrome-profile')) . " 2>/dev/null");
+                @exec("pkill -f " . escapeshellarg(storage_path('app/hpc/teacher-profile')) . " 2>/dev/null");
+                @exec("pkill -f " . escapeshellarg(storage_path('app/hpc/teacher-profiles')) . " 2>/dev/null");
+            }
+        }
+
+        // 2. Wipe active School HPC session profile
+        $schoolProfileDir = $schoolStorageDir . '/chrome-profile';
+        if (is_dir($schoolProfileDir)) {
+            self::wipeDirectory($schoolProfileDir);
+            @rmdir($schoolProfileDir);
+        }
+
+        // 3. Wipe all Teacher HPC session profiles for this school
+        $teacherProfilesBase = $schoolStorageDir . '/teacher-profiles';
+        if (is_dir($teacherProfilesBase)) {
+            self::wipeDirectory($teacherProfilesBase);
+            @rmdir($teacherProfilesBase);
+        }
+
+        // 4. Legacy clean up for School #1 if present
+        if ($this->id === 1) {
+            $legacyDirs = [
+                storage_path('app/hpc/chrome-profile'),
+                storage_path('app/hpc/teacher-profile'),
+                storage_path('app/hpc/teacher-profiles'),
+            ];
+            foreach ($legacyDirs as $ldir) {
+                if (is_dir($ldir)) {
+                    self::wipeDirectory($ldir);
+                    @rmdir($ldir);
+                }
+            }
+        }
+    }
+
+    public static function wipeDirectory(string $dir): void
+    {
+        if (! is_dir($dir)) {
+            return;
+        }
+
+        try {
+            $items = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST
+            );
+
+            foreach ($items as $item) {
+                if ($item->isDir()) {
+                    @rmdir($item->getRealPath());
+                } else {
+                    @unlink($item->getRealPath());
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Error wiping directory ' . $dir . ': ' . $e->getMessage());
+        }
+    }
 }

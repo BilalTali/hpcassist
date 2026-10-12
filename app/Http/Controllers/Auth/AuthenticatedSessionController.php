@@ -32,10 +32,18 @@ class AuthenticatedSessionController extends Controller
     }
 
     /**
-     * Destroy an authenticated session.
+     * Destroy an authenticated session and kill all HPC sessions for the school.
      */
     public function destroy(Request $request): RedirectResponse
     {
+        $user = Auth::user();
+        if ($user) {
+            $school = $user->getEffectiveSchool();
+            if ($school) {
+                $school->killAllHpcSessions();
+            }
+        }
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();

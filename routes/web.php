@@ -14,6 +14,12 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+// ── Public UDISE bridge & ingest (no auth required) ─────────────────────────
+// Bridge page: opened in user's own browser tab to handle UDISE login & fetch
+Route::get('/udise/bridge', [UdiseController::class, 'bridge'])->name('udise.bridge');
+// Ingest: called by bridge page JS after fetching students (CSRF-exempt via bootstrap/app.php)
+Route::match(['post','options'], '/udise/ingest', [UdiseController::class, 'ingest'])->name('udise.ingest');
+
 Route::middleware('auth')->group(function () {
     // ── School Central Dashboard ──────────────────────────────────────────────
     Route::get('/dashboard', function () {
@@ -22,32 +28,52 @@ Route::middleware('auth')->group(function () {
         $teachers = $school ? $school->teachers()->orderBy('id')->get() : collect();
 
         $hpcController = app(HpcController::class);
-        $udiseStudents = $hpcController->getUdiseStudents();
-        $udiseCount = count($udiseStudents);
-        $udiseApaarCount = count(array_filter($udiseStudents, fn($s) => !empty($s['apaarId']) && ctype_digit((string)$s['apaarId']) && strlen((string)$s['apaarId']) === 12));
-
-        $previewFile = storage_path('app/hpc/preview.json');
+        $previewFile = $school ? $hpcController->getPreviewFile($school) : storage_path('app/hpc/preview.json');
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
 
-        $resultsFile = storage_path('app/hpc/run_results.json');
+        $udiseStudents = $school ? $hpcController->getUdiseStudents($school) : [];
+        $udiseCount = count($udiseStudents);
+        if ($udiseCount === 0 && count($preview) > 0) {
+            $udiseCount = count($preview);
+        }
+        if ($udiseCount === 0 && !empty($school?->udise_students_count)) {
+            $udiseCount = (int)$school->udise_students_count;
+        }
+
+        $udiseApaarCount = count(array_filter($udiseStudents, fn($s) => !empty($s['apaarId']) && ctype_digit((string)$s['apaarId']) && strlen((string)$s['apaarId']) === 12));
+        if ($udiseApaarCount === 0 && count($preview) > 0) {
+            $udiseApaarCount = count(array_filter($preview, fn($s) => !empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12));
+        }
+        if ($udiseApaarCount === 0 && !empty($school?->udise_apaar_count)) {
+            $udiseApaarCount = (int)$school->udise_apaar_count;
+        }
+
+        $schoolStorageDir = $school ? $hpcController->getSchoolStorageDir($school) : storage_path('app/hpc');
+        $resultsFile = $schoolStorageDir . '/run_results.json';
         $lastRun = file_exists($resultsFile) ? json_decode(file_get_contents($resultsFile), true) : null;
 
         $hasFields = file_exists(storage_path('app/hpc/fields.json'));
-        $schoolProfileDir = $hpcController->getActiveProfileDir();
-        $hasSchoolProfile = is_dir($schoolProfileDir) && count(scandir($schoolProfileDir)) > 2;
+        $schoolProfileDir = $hpcController->getActiveProfileDir($school);
+        $hasSchoolProfile = is_dir($schoolProfileDir) && (
+            file_exists($schoolProfileDir . '/session_active.txt') || (count(scandir($schoolProfileDir)) > 2)
+        );
         $currentFormUrl = file_exists(storage_path('app/hpc/current_form.txt'))
             ? trim(file_get_contents(storage_path('app/hpc/current_form.txt')))
             : config('hpc.add_student_url');
 
         $hpcTeacherController = app(HpcTeacherController::class);
         $activeTeacher = $hpcTeacherController->getActiveTeacher();
-        $teacherProfileDir = $hpcTeacherController->getActiveTeacherProfileDir();
-        $hasTeacherProfile = is_dir($teacherProfileDir) && count(scandir($teacherProfileDir)) > 2;
+        $teacherProfileDir = $hpcTeacherController->getActiveTeacherProfileDir($school);
+        $hasTeacherProfile = is_dir($teacherProfileDir) && (
+            file_exists($teacherProfileDir . '/session_active.txt') || (count(scandir($teacherProfileDir)) > 2)
+        );
+
+        $schoolToken = $school ? substr(hash('sha256', $school->id . '_' . $school->udise_code . '_' . config('app.key')), 0, 32) : '';
 
         return view('dashboard', compact(
             'school', 'teachers', 'udiseCount', 'udiseApaarCount', 'udiseStudents',
             'preview', 'lastRun', 'hasFields', 'hasSchoolProfile', 'currentFormUrl',
-            'activeTeacher', 'hasTeacherProfile'
+            'activeTeacher', 'hasTeacherProfile', 'schoolToken'
         ));
     })->name('dashboard');
 
@@ -59,6 +85,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/school/teachers/{id}/delete', [SchoolManageController::class, 'deleteTeacher'])->name('school.teachers.delete');
     Route::post('/school/udise/skip',            [SchoolManageController::class, 'skipUdise'])->name('school.udise.skip');
     Route::post('/school/udise/reset',           [SchoolManageController::class, 'resetUdise'])->name('school.udise.reset');
+    Route::post('/school/udise/sync-existing',   [SchoolManageController::class, 'syncExistingUdise'])->name('school.udise.sync_existing');
+    Route::post('/school/sessions/kill-all',     [SchoolManageController::class, 'killAllSessions'])->name('school.sessions.kill_all');
+
 
     // ── HPC Universal Student & Excel Routes ──────────────────────────────────
     Route::get('/dashboard/hpc',           [HpcController::class, 'dashboard'])->name('hpc.dashboard');
@@ -97,13 +126,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/hpc/teacher/max-marks',             [HpcTeacherController::class, 'getMaxMarks'])->name('hpc.teacher.max_marks.get');
     Route::post('/hpc/teacher/max-marks/update',     [HpcTeacherController::class, 'updateMaxMarks'])->name('hpc.teacher.max_marks.update');
 
-    // ── UDISE+ SDMS Automation Routes ─────────────────────────────────────────
-    Route::post('/udise/session/start',             [UdiseController::class, 'startSession'])->name('udise.session.start');
-    Route::post('/udise/students/fetch',            [UdiseController::class, 'fetchStudents'])->name('udise.students.fetch');
-    Route::match(['GET', 'POST'], '/udise/session/check-and-fetch', [UdiseController::class, 'checkLoginAndFetch'])->name('udise.session.check_fetch');
-    Route::get('/udise/session/check',                               [UdiseController::class, 'checkLoginAndFetch'])->name('udise.session.check');
-    Route::get('/udise/status',                     [UdiseController::class, 'status'])->name('udise.status');
-    Route::get('/udise/students/download',          [UdiseController::class, 'download'])->name('udise.students.download');
+    // ── UDISE+ Auth-Required Routes ───────────────────────────────────────────
+    Route::post('/udise/session/start',  function() { return response()->json(['ok'=>true]); })->name('udise.session.start');
+    Route::match(['GET','POST'], '/udise/session/check-and-fetch', function() {
+        return response()->json(['ok'=>true,'logged_in'=>false,'state'=>'no_chrome','message'=>'Use the UDISE+ Auto-Sync button.']);
+    })->name('udise.session.check_fetch');
+    Route::get('/udise/ingest-poll',     [UdiseController::class, 'ingestPoll'])->name('udise.ingest_poll');
+    Route::get('/udise/status',          [UdiseController::class, 'status'])->name('udise.status');
+    Route::get('/udise/students/download',[UdiseController::class, 'download'])->name('udise.students.download');
 
     // ── User Profile ──────────────────────────────────────────────────────────
     Route::get('/profile',    [ProfileController::class, 'edit'])->name('profile.edit');

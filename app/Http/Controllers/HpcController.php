@@ -1040,19 +1040,25 @@ class HpcController extends Controller
                 ->first();
         }
 
-        // 2. Match by 12-digit APAAR ID if present (only if name matches or not yet matched)
+        // 2. Match by 12-digit APAAR ID if present (only if name is actually similar >= 70%)
         if (! $student && $apaar && strlen($apaar) === 12) {
             $existing = Student::where('school_id', $school->id)->where('apaar_id', $apaar)->first();
-            if ($existing && (empty($name) || soundex($existing->name) === soundex($name) || similar_text(strtolower($existing->name), strtolower($name)) > 3)) {
-                $student = $existing;
+            if ($existing) {
+                similar_text(strtolower($existing->name), strtolower($name), $simPct);
+                if (empty($name) || soundex($existing->first_name) === soundex($firstName) || $simPct >= 70) {
+                    $student = $existing;
+                }
             }
         }
 
-        // 3. Match by PEN code if APAAR did not match
+        // 3. Match by PEN code if APAAR did not match (only if name is actually similar >= 70%)
         if (! $student && ! empty($pen)) {
             $existing = Student::where('school_id', $school->id)->where('pen_code', $pen)->first();
-            if ($existing && (empty($name) || soundex($existing->name) === soundex($name) || similar_text(strtolower($existing->name), strtolower($name)) > 3)) {
-                $student = $existing;
+            if ($existing) {
+                similar_text(strtolower($existing->name), strtolower($name), $simPct);
+                if (empty($name) || soundex($existing->first_name) === soundex($firstName) || $simPct >= 70) {
+                    $student = $existing;
+                }
             }
         }
 

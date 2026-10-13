@@ -73,11 +73,27 @@ class HpcController extends Controller
 
         $isForcedBlank = $request->query('blank') === '1';
 
-        $udiseStudents = ($wantsUdise && ! $isForcedBlank) ? $this->getUdiseStudents() : [];
+        $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $udiseStudents = [];
+
+        if ($wantsUdise && ! $isForcedBlank && $school) {
+            if ($school->students()->exists()) {
+                $udiseStudents = $school->students()->orderBy('id')->get()->map(fn($st) => [
+                    'first_name' => $st->first_name,
+                    'last_name'  => $st->last_name,
+                    'dob'        => $st->dob,
+                    'email'      => $st->email,
+                    'grade'      => $st->grade,
+                    'section'    => $st->section,
+                    'apaar_id'   => $st->apaar_id,
+                ])->all();
+            } else {
+                $udiseStudents = $this->getUdiseStudents($school);
+            }
+        }
 
         $sheet = $this->buildStudentSpreadsheet($udiseStudents);
 
-        $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         $udiseCode = $school?->udise_code ?? 'template';
         $filename = (! empty($udiseStudents))
             ? "hpc_students_{$udiseCode}_from_udise.xlsx"
@@ -408,15 +424,7 @@ class HpcController extends Controller
 
         if ($school) {
             $schoolDir = $this->getSchoolStorageDir($school);
-            $schoolPreview = $schoolDir . '/preview.json';
-            if (file_exists($schoolPreview)) {
-                return $schoolPreview;
-            }
-            // Only school with UDISE 01041800702 can read the cached root preview file
-            if ($school->udise_code === '01041800702' && file_exists(storage_path('app/hpc/preview.json'))) {
-                return storage_path('app/hpc/preview.json');
-            }
-            return $schoolPreview;
+            return $schoolDir . '/preview.json';
         }
 
         return storage_path('app/hpc/preview.json');
@@ -433,14 +441,6 @@ class HpcController extends Controller
             $schoolRaw = $schoolDir . '/udise_students_raw.json';
             if (file_exists($schoolRaw)) {
                 return json_decode(file_get_contents($schoolRaw), true) ?: [];
-            }
-
-            // ONLY school with UDISE 01041800702 can read the cached 129 student roster
-            if ($school->udise_code === '01041800702') {
-                $legacyFile = storage_path('app/hpc/udise_students_1007827_raw.json');
-                if (file_exists($legacyFile)) {
-                    return json_decode(file_get_contents($legacyFile), true) ?: [];
-                }
             }
 
             return [];

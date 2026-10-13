@@ -81,29 +81,29 @@
                         </div>
                     </button>
 
-                    <!-- STEP 2 TAB: HPC SCHOOL CONNECT & RECORD SESSION -->
+                    <!-- STEP 2 TAB: STUDENT DATA & ROSTER -->
                     <button @click="setStep(2)"
                             type="button"
                             class="flex items-center gap-3 p-3 rounded-xl transition text-left relative overflow-hidden"
-                            :class="currentStep === 2 ? 'bg-indigo-50 border-2 border-indigo-600 shadow-xs' : 'bg-slate-50 hover:bg-slate-100 border border-slate-200/80'">
+                            :class="currentStep === 2 ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-50 hover:bg-slate-100 border border-slate-200/80'">
                         <div class="w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm shrink-0"
-                             :class="currentStep === 2 ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'">
+                             :class="currentStep === 2 ? 'bg-white text-indigo-700' : 'bg-slate-200 text-slate-700'">
                             2
                         </div>
                         <div class="min-w-0">
-                            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Step 2</div>
-                            <div class="text-xs font-bold text-slate-900 truncate">HPC School Connect</div>
-                            <div class="text-[10px] font-medium text-slate-500 truncate">
-                                @if(!empty($hasSchoolProfile))
-                                    <span class="text-emerald-600 font-bold">✓ Session Recorded</span>
+                            <div class="text-[10px] font-bold uppercase tracking-wider" :class="currentStep === 2 ? 'text-indigo-200' : 'text-slate-400'">Step 2</div>
+                            <div class="text-xs font-bold truncate" :class="currentStep === 2 ? 'text-white' : 'text-slate-900'">Student Data &amp; Roster</div>
+                            <div class="text-[10px] font-medium truncate" :class="currentStep === 2 ? 'text-indigo-100' : 'text-slate-500'">
+                                @if(!empty($udiseCount) && $udiseCount > 0)
+                                    <span>✓ {{ $udiseCount }} Students Ready</span>
                                 @else
-                                    <span>Record Session</span>
+                                    <span>Templates &amp; Roster</span>
                                 @endif
                             </div>
                         </div>
                     </button>
 
-                    <!-- STEP 3 TAB: STUDENT DATA & HPC SUBMISSION -->
+                    <!-- STEP 3 TAB: HPC SCHOOL CONNECT & SUBMISSION -->
                     <button @click="setStep(3)"
                             type="button"
                             class="flex items-center gap-3 p-3 rounded-xl transition text-left relative overflow-hidden"
@@ -114,8 +114,14 @@
                         </div>
                         <div class="min-w-0">
                             <div class="text-[10px] font-bold uppercase tracking-wider" :class="currentStep === 3 ? 'text-indigo-200' : 'text-slate-400'">Step 3</div>
-                            <div class="text-xs font-bold truncate" :class="currentStep === 3 ? 'text-white' : 'text-slate-900'">Student Data &amp; Submit</div>
-                            <div class="text-[10px] font-medium truncate" :class="currentStep === 3 ? 'text-indigo-100' : 'text-slate-500'">Templates &amp; HPC Portal</div>
+                            <div class="text-xs font-bold truncate" :class="currentStep === 3 ? 'text-white' : 'text-slate-900'">HPC School Connect</div>
+                            <div class="text-[10px] font-medium truncate" :class="currentStep === 3 ? 'text-indigo-100' : 'text-slate-500'">
+                                @if(!empty($hasSchoolProfile))
+                                    <span class="text-emerald-400 font-bold">✓ Session Recorded</span>
+                                @else
+                                    <span>Record Session &amp; Submit</span>
+                                @endif
+                            </div>
                         </div>
                     </button>
 
@@ -337,142 +343,12 @@
 
             </div>
 
-
             <!-- ========================================================================= -->
-            <!-- STEP 2 CONTENT: HPC SCHOOL CONNECT & RECORD SESSION                       -->
+            <!-- STEP 2 CONTENT: STUDENT DATA, TEMPLATE SUITE & EVALUATION ROSTER          -->
             <!-- ========================================================================= -->
             <div x-show="currentStep === 2" x-transition class="space-y-6">
 
-                <!-- 2A. HPC School Portal Session & Connect Card -->
-                <div class="bg-white rounded-2xl shadow-xs border border-indigo-200 p-6 space-y-4">
-                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-600">PARAKH Portal Connection</div>
-                            <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
-                                <span>🌐 HPC School Portal Session</span>
-                                @if(!empty($hasSchoolProfile))
-                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-                                        ✓ Session Recorded &amp; Active
-                                    </span>
-                                @else
-                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-300">
-                                        No Active Session
-                                    </span>
-                                @endif
-                            </h3>
-                            <p class="text-xs text-slate-500 mt-0.5">
-                                Connect to the official PARAKH HPC portal (<code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700 font-mono">https://hpc.parakh.ncert.gov.in/en/login</code>) as School. The browser session is recorded and preserved securely.
-                            </p>
-                        </div>
-
-                        <!-- Session Action Buttons -->
-                        <div class="shrink-0 flex items-center gap-2.5 flex-wrap">
-                            @if(!empty($hasSchoolProfile))
-                                <button onclick="startHpcSchoolSession()"
-                                        class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs transition active:scale-95">
-                                    🚀 Reopen Chrome &amp; Reconnect
-                                </button>
-                                <button onclick="endHpcSchoolSession()"
-                                        class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs transition active:scale-95">
-                                    🚪 End School Session
-                                </button>
-                            @else
-                                <button onclick="startHpcSchoolSession()"
-                                        class="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
-                                    🚀 Connect to HPC School Portal &amp; Record Session
-                                </button>
-                            @endif
-                            <a href="{{ config('hpc.login_url') }}" target="_blank" rel="noopener noreferrer"
-                               class="inline-flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition">
-                                🔗 Portal ↗
-                            </a>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 2B. School Profile & Registration Details -->
-                <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-6">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                        <div>
-                            <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">School Registration Details</div>
-                            <h3 class="text-lg font-black text-slate-900">{{ $school?->name ?? 'My School' }}</h3>
-                        </div>
-                        <button onclick="openSchoolModal()"
-                                class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-300 transition active:scale-95">
-                            ✏️ Edit Profile Details
-                        </button>
-                    </div>
-
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 text-xs">
-                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
-                            <span class="text-slate-400 block font-medium">UDISE Code</span>
-                            <strong class="text-slate-800 font-mono text-sm">{{ $school?->udise_code ?? '—' }}</strong>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
-                            <span class="text-slate-400 block font-medium">Category</span>
-                            <strong class="text-slate-800 font-semibold text-sm">{{ $school?->category ?? 'Government School' }}</strong>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
-                            <span class="text-slate-400 block font-medium">Contact Phone</span>
-                            <strong class="text-slate-800 font-mono text-sm">{{ $school?->phone ?? '—' }}</strong>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
-                            <span class="text-slate-400 block font-medium">Location</span>
-                            <strong class="text-slate-800 font-semibold text-sm">{{ $school?->district ?? 'District' }}{{ $school?->state ? ', ' . $school->state : '' }}</strong>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 2B-2. Student Templates Download Hub (Two Official Links) -->
-                <div class="bg-white rounded-2xl shadow-xs border border-indigo-100 p-6 space-y-3">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div>
-                            <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-600">Student Template Generation</div>
-                            <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
-                                <span>📥 Official HPC Student Templates</span>
-                                @if(isset($udiseCount) && $udiseCount > 0)
-                                    <span class="text-xs font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full">
-                                        ✨ {{ $udiseCount }} Students Loaded
-                                    </span>
-                                @endif
-                            </h3>
-                            <p class="text-xs text-slate-500 mt-0.5">
-                                Download verified Excel evaluation sheets for student records, DOBs, and unmasked 12-digit APAAR IDs.
-                            </p>
-                        </div>
-                        <div class="flex items-center gap-2.5 flex-wrap">
-                            <a href="{{ route('hpc.template.download') }}"
-                               class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
-                                📄 Blank Template (.xlsx)
-                            </a>
-                            <a href="{{ route('hpc.template.download_udise') }}"
-                               class="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
-                                👥 Pre-filled UDISE Template (.xlsx)
-                            </a>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Step 2 Bottom Navigation -->
-                <div class="flex items-center justify-between pt-4 border-t border-slate-200">
-                    <button @click="setStep(1)"
-                            class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition active:scale-95">
-                        ← Back to Step 1: UDISE Login
-                    </button>
-                    <button @click="setStep(3)"
-                            class="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
-                        Proceed to Step 3: Student Data &amp; Submit ➔
-                    </button>
-                </div>
-            </div>
-
-            <!-- ========================================================================= -->
-            <!-- STEP 3 CONTENT: STUDENT DATA, TEMPLATE SUITE & HPC SUBMISSION             -->
-            <!-- ========================================================================= -->
-            <div x-show="currentStep === 3" x-transition class="space-y-6">
-
-                <!-- 3A. Template Download & Upload Hub -->
+                <!-- 2A. Template Download & Upload Hub -->
                 <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-6 space-y-4">
                     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                         <div>
@@ -519,27 +395,10 @@
                                 📤 Upload Completed Spreadsheet
                             </button>
                         </form>
-
-                        <!-- Batch Automation Runner Trigger -->
-                        <button onclick="startRun()" id="btn-run"
-                                class="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs shadow-sm transition active:scale-95">
-                            🚀 Run Automation &amp; Submit to HPC Portal
-                        </button>
-                    </div>
-
-                    <!-- Automation Live Progress Bar -->
-                    <div id="run-progress-box" class="hidden p-4 rounded-xl bg-slate-900 text-white space-y-2">
-                        <div class="flex items-center justify-between text-xs font-bold">
-                            <span id="run-status-text">⚡ Connecting to Chrome &amp; HPC Portal...</span>
-                            <span id="run-progress-percent">0%</span>
-                        </div>
-                        <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                            <div id="run-progress-bar" class="bg-emerald-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-                        </div>
                     </div>
                 </div>
 
-                <!-- 3B. Paginated Student Records Review -->
+                <!-- 2B. Paginated Student Records Review Table -->
                 <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-6 space-y-4">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
@@ -550,7 +409,7 @@
                                 </span>
                             </h3>
                             <p class="text-xs text-slate-500 mt-0.5">
-                                Review and edit individual records before portal submission. Displaying 20 records per page.
+                                Review, edit, or add individual student records before portal submission.
                             </p>
                         </div>
 
@@ -606,14 +465,148 @@
                         </div>
                     </div>
 
-                    <!-- Bottom Nav -->
+                    <!-- Step 2 Bottom Navigation -->
+                    <div class="flex items-center justify-between pt-4 border-t border-slate-100">
+                        <button @click="setStep(1)"
+                                class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition active:scale-95">
+                            ← Back to Step 1: UDISE Login
+                        </button>
+                        <button @click="setStep(3)"
+                                class="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
+                            Proceed to Step 3: HPC School Connect &amp; Submit ➔
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ========================================================================= -->
+            <!-- STEP 3 CONTENT: HPC SCHOOL CONNECT & AUTOMATED SUBMISSION                 -->
+            <!-- ========================================================================= -->
+            <div x-show="currentStep === 3" x-transition class="space-y-6">
+
+                <!-- 3A. HPC School Portal Session & Connect Card -->
+                <div class="bg-white rounded-2xl shadow-xs border border-indigo-200 p-6 space-y-4">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-600">PARAKH Portal Connection</div>
+                            <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
+                                <span>🌐 HPC School Portal Session</span>
+                                @if(!empty($hasSchoolProfile))
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                                        ✓ Session Recorded &amp; Active
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-300">
+                                        No Active Session
+                                    </span>
+                                @endif
+                            </h3>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                Connect to the official PARAKH HPC portal (<code class="bg-slate-100 px-1 py-0.5 rounded text-slate-700 font-mono">https://hpc.parakh.ncert.gov.in/en/login</code>) as School. The browser session is recorded and preserved securely.
+                            </p>
+                        </div>
+
+                        <!-- Session Action Buttons -->
+                        <div class="shrink-0 flex items-center gap-2.5 flex-wrap">
+                            @if(!empty($hasSchoolProfile))
+                                <button onclick="startHpcSchoolSession()"
+                                        class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs transition active:scale-95">
+                                    🚀 Reopen Chrome &amp; Reconnect
+                                </button>
+                                <button onclick="endHpcSchoolSession()"
+                                        class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold text-xs transition active:scale-95">
+                                    🚪 End School Session
+                                </button>
+                            @else
+                                <button onclick="startHpcSchoolSession()"
+                                        class="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
+                                    🚀 Connect to HPC School Portal &amp; Record Session
+                                </button>
+                            @endif
+                            <a href="{{ config('hpc.login_url') }}" target="_blank" rel="noopener noreferrer"
+                               class="inline-flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition">
+                                🔗 Portal ↗
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3B. School Profile & Registration Details -->
+                <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                        <div>
+                            <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">School Registration Details</div>
+                            <h3 class="text-lg font-black text-slate-900">{{ $school?->name ?? 'My School' }}</h3>
+                        </div>
+                        <button onclick="openSchoolModal()"
+                                class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-300 transition active:scale-95">
+                            ✏️ Edit Profile Details
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 text-xs">
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                            <span class="text-slate-400 block font-medium">UDISE Code</span>
+                            <strong class="text-slate-800 font-mono text-sm">{{ $school?->udise_code ?? '—' }}</strong>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                            <span class="text-slate-400 block font-medium">Category</span>
+                            <strong class="text-slate-800 font-semibold text-sm">{{ $school?->category ?? 'Government School' }}</strong>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                            <span class="text-slate-400 block font-medium">Contact Phone</span>
+                            <strong class="text-slate-800 font-mono text-sm">{{ $school?->phone ?? '—' }}</strong>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                            <span class="text-slate-400 block font-medium">Location</span>
+                            <strong class="text-slate-800 font-semibold text-sm">{{ $school?->district ?? 'District' }}{{ $school?->state ? ', ' . $school->state : '' }}</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3C. Batch Automation Submission Runner -->
+                <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-6 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-600">Automated Submission</div>
+                            <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
+                                <span>🚀 Submit Evaluations to HPC Portal</span>
+                                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                                    {{ count($preview) }} Students Queued
+                                </span>
+                            </h3>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                Launch automated Chrome session to fill and submit student evaluation records on the official portal.
+                            </p>
+                        </div>
+
+                        <button onclick="startRun()" id="btn-run"
+                                class="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs shadow-sm transition active:scale-95 shrink-0">
+                            🚀 Run Automation &amp; Submit to HPC Portal
+                        </button>
+                    </div>
+
+                    <!-- Automation Live Progress Bar -->
+                    <div id="run-progress-box" class="hidden p-4 rounded-xl bg-slate-900 text-white space-y-2">
+                        <div class="flex items-center justify-between text-xs font-bold">
+                            <span id="run-status-text">⚡ Connecting to Chrome &amp; HPC Portal...</span>
+                            <span id="run-progress-percent">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                            <div id="run-progress-bar" class="bg-emerald-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3 Bottom Navigation -->
                     <div class="flex items-center justify-between pt-4 border-t border-slate-100">
                         <button @click="setStep(2)"
-                                class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition">
-                            ← Back to Step 2
+                                class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition active:scale-95">
+                            ← Back to Step 2: Student Data &amp; Roster
                         </button>
                         <button @click="setStep(4)"
-                                class="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-xs transition">
+                                class="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
                             Proceed to Step 4: HPC Teacher Connect ➔
                         </button>
                     </div>
@@ -900,7 +893,7 @@
                     const url = new URL(window.location);
                     url.searchParams.set('step', s);
                     window.history.replaceState({}, '', url);
-                    if (s === 3) setTimeout(renderStudentTablePage, 50);
+                    if (s === 2) setTimeout(renderStudentTablePage, 50);
                 }
             };
         }

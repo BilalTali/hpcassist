@@ -30,48 +30,41 @@ Route::middleware('auth')->group(function () {
         $teachers = $school ? $school->teachers()->orderBy('id')->get() : collect();
 
         $hpcController = app(HpcController::class);
-        $previewFile = $school ? $hpcController->getPreviewFile($school) : storage_path('app/hpc/preview.json');
-        $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
+        $preview = [];
+        $udiseCount = 0;
+        $udiseApaarCount = 0;
 
-        // Check MySQL persistence for students (auto-run migration on server if not yet created)
         if ($school) {
-            if (! \Illuminate\Support\Facades\Schema::hasTable('students')) {
-                try {
-                    \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
-                } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::warning('Auto-migration failed: ' . $e->getMessage());
-                }
-            }
-
+            // 1. MySQL database is the primary source of truth for students
             if (\Illuminate\Support\Facades\Schema::hasTable('students')) {
                 $dbStudents = $school->students()->orderBy('id')->get();
                 if ($dbStudents->isNotEmpty()) {
                     $preview = $dbStudents->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
-                } elseif (count($preview) > 0) {
-                    // Auto-migrate legacy preview.json records into MySQL
-                    foreach ($preview as $pRow) {
-                        $hpcController->upsertStudentToDatabase($school, $pRow, 'legacy_import');
+                } else {
+                    // Check only this specific school's private preview file
+                    $schoolPreviewFile = $hpcController->getSchoolStorageDir($school) . '/preview.json';
+                    if (file_exists($schoolPreviewFile)) {
+                        $preview = json_decode(file_get_contents($schoolPreviewFile), true) ?? [];
+                        foreach ($preview as $pRow) {
+                            $hpcController->upsertStudentToDatabase($school, $pRow, 'legacy_import');
+                        }
                     }
                 }
+            }
+
+            // Exactly compute counts for this school
+            $udiseCount = count($preview);
+            if ($udiseCount === 0 && ! empty($school->udise_students_count)) {
+                $udiseCount = (int) $school->udise_students_count;
+            }
+
+            $udiseApaarCount = count(array_filter($preview, fn($s) => ! empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12));
+            if ($udiseApaarCount === 0 && ! empty($school->udise_apaar_count)) {
+                $udiseApaarCount = (int) $school->udise_apaar_count;
             }
         }
 
         $udiseStudents = $school ? $hpcController->getUdiseStudents($school) : [];
-        $udiseCount = count($udiseStudents);
-        if ($udiseCount === 0 && count($preview) > 0) {
-            $udiseCount = count($preview);
-        }
-        if ($udiseCount === 0 && !empty($school?->udise_students_count)) {
-            $udiseCount = (int)$school->udise_students_count;
-        }
-
-        $udiseApaarCount = count(array_filter($udiseStudents, fn($s) => !empty($s['apaarId']) && ctype_digit((string)$s['apaarId']) && strlen((string)$s['apaarId']) === 12));
-        if ($udiseApaarCount === 0 && count($preview) > 0) {
-            $udiseApaarCount = count(array_filter($preview, fn($s) => !empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12));
-        }
-        if ($udiseApaarCount === 0 && !empty($school?->udise_apaar_count)) {
-            $udiseApaarCount = (int)$school->udise_apaar_count;
-        }
 
         $schoolStorageDir = $school ? $hpcController->getSchoolStorageDir($school) : storage_path('app/hpc');
         $resultsFile = $schoolStorageDir . '/run_results.json';

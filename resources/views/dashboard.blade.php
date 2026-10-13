@@ -1670,12 +1670,18 @@
         return w ? (w.querySelector('.custom-dropdown-wrapper') || w.querySelector('.custom-dropdown-header') || w.querySelector('[role="combobox"], select')) : null;
     }
 
-    async function selectDd(trigger, targetValue, fallbacks = []) {
+    async function selectDd(kw, fallbackIndex, targetValue, fallbacks = []) {
+        let trigger = getDdByLabel(kw);
+        if (!trigger) {
+            const wrappers = Array.from(document.querySelectorAll('.custom-dropdown-wrapper'));
+            if (wrappers[fallbackIndex]) trigger = wrappers[fallbackIndex];
+        }
         if (!trigger) return false;
+
         if (trigger.tagName === 'SELECT') {
             const opt = Array.from(trigger.options).find(o => {
                 const txt = o.text.toLowerCase().trim();
-                const tgt = targetValue.toLowerCase().trim();
+                const tgt = String(targetValue).toLowerCase().trim();
                 return txt === tgt || txt.includes(tgt) || o.value.toLowerCase().trim() === tgt;
             });
             if (opt) {
@@ -1684,37 +1690,85 @@
                 return true;
             }
         }
+
         const header = trigger.querySelector('.custom-dropdown-header') || trigger;
+        try { header.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch(e) {}
+
+        const headerPropsKey = Object.keys(header).find(k => k.startsWith('__reactProps'));
+        if (headerPropsKey && typeof header[headerPropsKey]?.onClick === 'function') {
+            try { header[headerPropsKey].onClick({ stopPropagation: () => {}, preventDefault: () => {} }); } catch(e) {}
+        }
+        header.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        header.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
         header.click();
         await sleep(350);
 
         const candidates = [targetValue, ...fallbacks].map(s => String(s).toLowerCase().trim());
-        const options = Array.from(document.querySelectorAll('.custom-dropdown-item, [role="option"], li, div[class*="option" i], button[class*="option" i]')).filter(el => el.offsetParent !== null);
+        let options = Array.from(trigger.querySelectorAll('.custom-dropdown-item'))
+            .concat(Array.from(document.querySelectorAll('.custom-dropdown-menu .custom-dropdown-item, .custom-dropdown-item')));
+        options = Array.from(new Set(options)).filter(el => el.offsetParent !== null || el.textContent.trim().length > 0);
+
+        let found = null;
         for (const tgt of candidates) {
-            const found = options.find(el => {
+            found = options.find(el => {
                 const txt = el.textContent.toLowerCase().trim();
-                return txt === tgt || txt.startsWith(tgt) || txt.includes(tgt);
+                return txt === tgt || txt.startsWith(tgt) || txt.includes(tgt) || tgt.includes(txt);
             });
-            if (found) {
-                found.click();
-                await sleep(300);
-                return true;
-            }
+            if (found) break;
         }
-        const searchInp = document.querySelector('.dropdown-search-box input');
+
+        if (found) {
+            const itemPropsKey = Object.keys(found).find(k => k.startsWith('__reactProps'));
+            if (itemPropsKey && typeof found[itemPropsKey]?.onClick === 'function') {
+                try { found[itemPropsKey].onClick({ stopPropagation: () => {}, preventDefault: () => {} }); } catch(e) {}
+            }
+            found.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+            found.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+            found.click();
+            await sleep(350);
+            return true;
+        }
+
+        const searchInp = trigger.querySelector('.dropdown-search-box input') || document.querySelector('.dropdown-search-box input');
         if (searchInp) {
             setVal(searchInp, targetValue);
             await sleep(300);
             const filtered = Array.from(document.querySelectorAll('.custom-dropdown-item')).filter(el => el.offsetParent !== null);
             if (filtered.length > 0) {
-                filtered[0].click();
-                await sleep(300);
+                const item = filtered[0];
+                const itemPropsKey = Object.keys(item).find(k => k.startsWith('__reactProps'));
+                if (itemPropsKey && typeof item[itemPropsKey]?.onClick === 'function') {
+                    try { item[itemPropsKey].onClick({ stopPropagation: () => {}, preventDefault: () => {} }); } catch(e) {}
+                }
+                item.click();
+                await sleep(350);
                 return true;
             }
         }
-        document.body.click();
+
+        header.click();
         await sleep(150);
         return false;
+    }
+
+    function getGradeCandidates(gradeStr) {
+        const raw = String(gradeStr || 'Grade 1').trim();
+        const cleanNum = raw.replace(/\D/g, '');
+        const isBalvatika = raw.toLowerCase().includes('balvatika') || raw.toLowerCase().includes('pp') || raw.toLowerCase().includes('pre');
+        let candidates = [raw, raw.toLowerCase(), raw.toUpperCase()];
+        if (isBalvatika) {
+            const bNum = cleanNum || '1';
+            candidates.push(\`Balvatika \${bNum}\`, \`balvatika \${bNum}\`, \`Balvatika-\${bNum}\`, \`PP-\${bNum}\`, \`pp-\${bNum}\`, \`Pre-Primary \${bNum}\`, 'Balvatika');
+        } else if (cleanNum) {
+            const roman = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][parseInt(cleanNum, 10)] || cleanNum;
+            candidates.push(\`Grade \${cleanNum}\`, \`grade \${cleanNum}\`, \`Class \${cleanNum}\`, \`class \${cleanNum}\`, \`Grade \${roman}\`, \`Class \${roman}\`, roman, cleanNum);
+        }
+        return candidates;
+    }
+
+    function getSectionCandidates(sectionStr) {
+        const sec = String(sectionStr || 'A').toUpperCase().trim().replace(/[^A-Z]/g, '') || 'A';
+        return [\`Section \${sec}\`, \`section \${sec}\`, sec, sec.toLowerCase(), \`SECTION \${sec}\`, \`Section - \${sec}\`, \`Section-\${sec}\`];
     }
 
     for (let i = 0; i < students.length; i++) {
@@ -1722,13 +1776,6 @@
         const stName = s.name || ((s.first_name || '') + ' ' + (s.last_name || '')).trim() || 'Student';
         console.log(\`[\${i+1}/\${students.length}] Filling \${stName}...\`);
 
-        const allInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"])'));
-        const textInputs = allInputs.filter(inp => inp.getAttribute('maxlength') !== '1' && !inp.disabled);
-
-        const fName = findField('First Name') || (textInputs.length >= 1 ? textInputs[0] : null);
-        const lName = findField('Last Name') || (textInputs.length >= 2 ? textInputs[1] : null);
-        let email = findField('Email') || document.querySelector('input[type="email"]');
-        if (!email || email === fName || email === lName) {
         const writeInputs = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i]'));
         const allTextInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([maxlength="1"])')).filter(inp => !inp.disabled);
 
@@ -1742,13 +1789,6 @@
             return t.includes('birth') || t.includes('d-o-b') || t.includes('dob') || t.includes('जन्म');
         });
         const dobInp = dobLabel?.closest('.custom-input-label')?.querySelector('input') || document.querySelector('.react-datepicker__input-container input') || document.querySelector('input[placeholder*="Select" i]');
-
-        const allWrappers = Array.from(document.querySelectorAll('.custom-dropdown-wrapper'));
-        const allHeaders  = Array.from(document.querySelectorAll('.custom-dropdown-header, [role="combobox"], select')).filter(d => d.offsetParent !== null);
-
-        const genderInp = getDdByLabel('gender') || allWrappers[0] || allHeaders[0];
-        const grInp     = getDdByLabel('grade') || allWrappers[1] || allHeaders[1];
-        const secInp    = getDdByLabel('section') || allWrappers[2] || allHeaders[2];
 
         // 1. Names
         if (fName) setVal(fName, s.first_name || s.name?.split(' ')[0] || 'Student');
@@ -1783,20 +1823,19 @@
         }
 
         // 3. Gender (MANDATORY)
-        if (genderInp) {
-            let targetG = 'Female';
-            if (s.gender) {
-                const g = String(s.gender).toLowerCase().trim();
-                if (g.startsWith('m') || g.includes('boy')) targetG = 'Male';
-                else if (g.startsWith('f') || g.includes('girl')) targetG = 'Female';
-            } else {
-                const femaleNames = ['jan', 'akhter', 'begum', 'bano', 'fatima', 'zehra', 'kousar', 'maryam', 'aabroo', 'aaliya', 'adeeba', 'hafsa', 'insha', 'rabia', 'toiba', 'zaira', 'afreen', 'asma', 'nimrah', 'jannat', 'misbah', 'safoora', 'tahira', 'zenab', 'shazia', 'ayaz', 'ayat', 'muntaha', 'abreena', 'bilkeesa', 'bisma', 'farhat', 'mehnaz', 'ronak', 'rubeena', 'rukhsana', 'saimah', 'simran', 'tasleema', 'towseer', 'uzma'];
-                targetG = femaleNames.some(fn => stName.toLowerCase().includes(fn)) ? 'Female' : 'Male';
-            }
-            console.log('Setting Gender: ' + targetG);
-            await selectDd(genderInp, targetG, [targetG.toLowerCase(), targetG === 'Female' ? 'Girl' : 'Boy']);
-            await sleep(150);
+        let targetG = 'Female';
+        if (s.gender) {
+            const g = String(s.gender).toLowerCase().trim();
+            if (g.startsWith('m') || g.includes('boy')) targetG = 'Male';
+            else if (g.startsWith('f') || g.includes('girl')) targetG = 'Female';
+            else if (g.includes('other')) targetG = 'Other';
+        } else {
+            const femaleNames = ['jan', 'akhter', 'begum', 'bano', 'fatima', 'zehra', 'kousar', 'maryam', 'aabroo', 'aaliya', 'adeeba', 'hafsa', 'insha', 'rabia', 'toiba', 'zaira', 'afreen', 'asma', 'nimrah', 'jannat', 'misbah', 'safoora', 'tahira', 'zenab', 'shazia', 'ayaz', 'ayat', 'muntaha', 'abreena', 'bilkeesa', 'bisma', 'farhat', 'mehnaz', 'ronak', 'rubeena', 'rukhsana', 'saimah', 'simran', 'tasleema', 'towseer', 'uzma'];
+            targetG = femaleNames.some(fn => stName.toLowerCase().includes(fn)) ? 'Female' : 'Male';
         }
+        console.log('Setting Gender: ' + targetG);
+        await selectDd('gender', 0, targetG, [targetG.toLowerCase(), targetG.toUpperCase(), targetG === 'Female' ? 'Girl' : (targetG === 'Male' ? 'Boy' : 'Other')]);
+        await sleep(200);
 
         // 4. Email
         if (email && s.email && email !== fName) {
@@ -1811,28 +1850,38 @@
         }
 
         // 6. Grade
-        if (grInp) {
-            const rawGr = String(s.grade || 'Grade 1').toLowerCase();
-            console.log('Setting Grade: ' + (s.grade || 'Grade 1'));
-            await selectDd(grInp, rawGr, [rawGr, 'Grade 1', 'Balvatika 1']);
-            await sleep(400); // allow section options to update
-        }
+        const gradeCandidates = getGradeCandidates(s.grade);
+        console.log('Setting Grade: ' + (s.grade || 'Grade 1'));
+        await selectDd('grade', 1, s.grade || 'Grade 1', gradeCandidates);
+        await sleep(600); // Allow section options to update in React
 
         // 7. Section
-        if (secInp) {
-            const rawSec = String(s.section || 'A').toUpperCase().trim();
-            console.log('Setting Section: ' + rawSec);
-            await selectDd(secInp, rawSec, [\`SECTION \${rawSec}\`, rawSec, 'A']);
-            await sleep(150);
-        }
+        const secCandidates = getSectionCandidates(s.section);
+        console.log('Setting Section: ' + (s.section || 'A'));
+        await selectDd('section', 2, s.section || 'A', secCandidates);
+        await sleep(250);
 
         // 8. APAAR ID
         const apaar = String(s.apaar_id || '').replace(/\\D/g, '');
         if (apaar.length === 12) {
             const boxes = Array.from(document.querySelectorAll('.udise-codes input, input[name^="std_apaar_id"], input[maxlength="1"]')).slice(0, 12);
-            for (let b = 0; b < 12 && b < boxes.length; b++) {
-                setVal(boxes[b], apaar[b]);
-                await sleep(30);
+            if (boxes.length >= 12) {
+                try {
+                    const pasteDt = new DataTransfer();
+                    pasteDt.setData('text/plain', apaar);
+                    const pasteEv = new ClipboardEvent('paste', { clipboardData: pasteDt, bubbles: true, cancelable: true });
+                    boxes[0].dispatchEvent(pasteEv);
+                    await sleep(150);
+                } catch(e) {}
+
+                for (let b = 0; b < 12; b++) {
+                    setVal(boxes[b], apaar[b]);
+                    const propsKey = Object.keys(boxes[b]).find(k => k.startsWith('__reactProps'));
+                    if (propsKey && typeof boxes[b][propsKey]?.onChange === 'function') {
+                        try { boxes[b][propsKey].onChange({ target: boxes[b], currentTarget: boxes[b] }); } catch(e) {}
+                    }
+                    await sleep(30);
+                }
             }
         }
 

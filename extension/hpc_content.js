@@ -188,15 +188,23 @@
         };
     }
 
-    async function selectDropdownOption(trigger, targetValue, fallbacks = []) {
-        if (!trigger) return false;
+    async function selectDropdownOption(labelKeyword, fallbackIndex, targetValue, fallbacks = []) {
+        let trigger = getDropdownByLabel(labelKeyword);
+        if (!trigger) {
+            const wrappers = Array.from(document.querySelectorAll('.custom-dropdown-wrapper'));
+            if (wrappers[fallbackIndex]) trigger = wrappers[fallbackIndex];
+        }
+        if (!trigger) {
+            console.warn(`[HPC Assist] Dropdown not found for "${labelKeyword}"`);
+            return false;
+        }
 
         // Native select
         if (trigger.tagName === 'SELECT') {
             const opt = Array.from(trigger.options).find(o => {
                 const txt = o.text.toLowerCase().trim();
                 const val = o.value.toLowerCase().trim();
-                const tgt = targetValue.toLowerCase().trim();
+                const tgt = String(targetValue).toLowerCase().trim();
                 return txt === tgt || txt.includes(tgt) || val === tgt;
             });
             if (opt) {
@@ -208,56 +216,73 @@
 
         // Custom Dropdown: Click header/trigger to toggle open
         const header = trigger.querySelector('.custom-dropdown-header') || trigger;
+        try { header.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch(e) {}
+
+        const headerPropsKey = Object.keys(header).find(k => k.startsWith('__reactProps'));
+        if (headerPropsKey && typeof header[headerPropsKey]?.onClick === 'function') {
+            try { header[headerPropsKey].onClick({ stopPropagation: () => {}, preventDefault: () => {} }); } catch(e) {}
+        }
+        header.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+        header.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
         header.click();
         await sleep(350);
 
         const candidates = [targetValue, ...fallbacks].map(s => String(s).toLowerCase().trim());
-        const options = Array.from(document.querySelectorAll(
-            '.custom-dropdown-item, [role="option"], li, div[class*="option" i], div[class*="item" i], span[class*="option" i], p[class*="option" i], button[class*="option" i]'
-        )).filter(el => el.offsetParent !== null);
+        let options = Array.from(trigger.querySelectorAll('.custom-dropdown-item'))
+            .concat(Array.from(document.querySelectorAll('.custom-dropdown-menu .custom-dropdown-item, .custom-dropdown-item')));
+        options = Array.from(new Set(options)).filter(el => el.offsetParent !== null || el.textContent.trim().length > 0);
 
+        let found = null;
         for (const tgt of candidates) {
-            const found = options.find(el => {
+            found = options.find(el => {
                 const txt = el.textContent.toLowerCase().trim();
-                return txt === tgt || txt.startsWith(tgt) || txt.includes(tgt);
+                return txt === tgt || txt.startsWith(tgt) || txt.includes(tgt) || tgt.includes(txt);
             });
-            if (found) {
-                found.click();
-                await sleep(300);
-                return true;
+            if (found) break;
+        }
+
+        if (found) {
+            const itemPropsKey = Object.keys(found).find(k => k.startsWith('__reactProps'));
+            if (itemPropsKey && typeof found[itemPropsKey]?.onClick === 'function') {
+                try { found[itemPropsKey].onClick({ stopPropagation: () => {}, preventDefault: () => {} }); } catch(e) {}
             }
+            found.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+            found.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+            found.click();
+            await sleep(350);
+            return true;
         }
 
         // Search input fallback inside dropdown if search is enabled
-        const searchInp = document.querySelector('.dropdown-search-box input');
+        const searchInp = trigger.querySelector('.dropdown-search-box input') || document.querySelector('.dropdown-search-box input');
         if (searchInp) {
             setNativeValue(searchInp, targetValue);
             await sleep(300);
             const filtered = Array.from(document.querySelectorAll('.custom-dropdown-item')).filter(el => el.offsetParent !== null);
             if (filtered.length > 0) {
-                filtered[0].click();
-                await sleep(300);
+                const item = filtered[0];
+                const itemPropsKey = Object.keys(item).find(k => k.startsWith('__reactProps'));
+                if (itemPropsKey && typeof item[itemPropsKey]?.onClick === 'function') {
+                    try { item[itemPropsKey].onClick({ stopPropagation: () => {}, preventDefault: () => {} }); } catch(e) {}
+                }
+                item.click();
+                await sleep(350);
                 return true;
             }
         }
 
-        // Click outside if not matched to close
-        document.body.click();
+        header.click();
         await sleep(150);
         return false;
     }
 
-    async function fillGender(trigger, student) {
-        if (!trigger) {
-            console.warn('[HPC Assist] Gender trigger not found');
-            return;
-        }
-
+    async function fillGender(student) {
         let target = 'Female';
         if (student.gender) {
             const g = String(student.gender).toLowerCase().trim();
             if (g.startsWith('m') || g.includes('boy')) target = 'Male';
             else if (g.startsWith('f') || g.includes('girl')) target = 'Female';
+            else if (g.includes('other')) target = 'Other';
         } else {
             const name = (student.name || `${student.first_name || ''} ${student.last_name || ''}`).toLowerCase();
             const femaleNames = ['jan', 'akhter', 'begum', 'bano', 'fatima', 'zehra', 'kousar', 'maryam', 'aabroo', 'aaliya', 'adeeba', 'hafsa', 'insha', 'rabia', 'toiba', 'zaira', 'afreen', 'asma', 'nimrah', 'jannat', 'misbah', 'safoora', 'tahira', 'zenab', 'shazia', 'ayaz', 'ayat', 'muntaha', 'abreena', 'bilkeesa', 'bisma', 'farhat', 'mehnaz', 'ronak', 'rubeena', 'rukhsana', 'saimah', 'simran', 'tasleema', 'towseer', 'uzma'];
@@ -265,7 +290,11 @@
         }
 
         logStatus(`Setting Gender: ${target}...`);
-        await selectDropdownOption(trigger, target, [target.toLowerCase(), target === 'Female' ? 'Girl' : 'Boy']);
+        await selectDropdownOption('gender', 0, target, [
+            target.toLowerCase(),
+            target.toUpperCase(),
+            target === 'Female' ? 'Girl' : (target === 'Male' ? 'Boy' : 'Other')
+        ]);
     }
 
     async function fillDob(dobField, dobStr) {
@@ -471,6 +500,94 @@
         updateWidgetContent();
     }
 
+    function getGradeCandidates(gradeStr) {
+        const raw = String(gradeStr || 'Grade 1').trim();
+        const cleanNum = raw.replace(/\D/g, '');
+        const isBalvatika = raw.toLowerCase().includes('balvatika') || raw.toLowerCase().includes('pp') || raw.toLowerCase().includes('pre');
+        
+        let candidates = [raw, raw.toLowerCase(), raw.toUpperCase()];
+        if (isBalvatika) {
+            const bNum = cleanNum || '1';
+            candidates.push(
+                `Balvatika ${bNum}`,
+                `balvatika ${bNum}`,
+                `Balvatika-${bNum}`,
+                `PP-${bNum}`,
+                `pp-${bNum}`,
+                `Pre-Primary ${bNum}`,
+                'Balvatika',
+                'balvatika'
+            );
+        } else if (cleanNum) {
+            const roman = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][parseInt(cleanNum, 10)] || cleanNum;
+            candidates.push(
+                `Grade ${cleanNum}`,
+                `grade ${cleanNum}`,
+                `Class ${cleanNum}`,
+                `class ${cleanNum}`,
+                `Grade ${roman}`,
+                `Class ${roman}`,
+                roman,
+                cleanNum
+            );
+        }
+        return candidates;
+    }
+
+    function getSectionCandidates(sectionStr) {
+        const sec = String(sectionStr || 'A').toUpperCase().trim().replace(/[^A-Z]/g, '') || 'A';
+        return [
+            `Section ${sec}`,
+            `section ${sec}`,
+            sec,
+            sec.toLowerCase(),
+            `SECTION ${sec}`,
+            `Section - ${sec}`,
+            `Section-${sec}`
+        ];
+    }
+
+    async function fillApaarId(apaarStr) {
+        const cleanApaar = String(apaarStr || '').replace(/\D/g, '');
+        if (cleanApaar.length !== 12) {
+            return;
+        }
+
+        const boxes = Array.from(document.querySelectorAll('.udise-codes input, input[name^="std_apaar_id"], input[maxlength="1"]')).slice(0, 12);
+        if (boxes.length < 12) {
+            console.warn('[HPC Assist] Could not find 12 APAAR input boxes');
+            return;
+        }
+
+        logStatus(`Setting APAAR ID: ${cleanApaar}...`);
+
+        // 1. Try dispatching synthetic paste event on the first box
+        try {
+            const pasteDt = new DataTransfer();
+            pasteDt.setData('text/plain', cleanApaar);
+            const pasteEv = new ClipboardEvent('paste', {
+                clipboardData: pasteDt,
+                bubbles: true,
+                cancelable: true
+            });
+            boxes[0].dispatchEvent(pasteEv);
+            await sleep(150);
+        } catch(e) {}
+
+        // 2. Set each box individually to ensure React Hook Form state is updated
+        for (let b = 0; b < 12; b++) {
+            const box = boxes[b];
+            const digit = cleanApaar[b];
+            setNativeValue(box, digit);
+            
+            const propsKey = Object.keys(box).find(k => k.startsWith('__reactProps'));
+            if (propsKey && typeof box[propsKey]?.onChange === 'function') {
+                try { box[propsKey].onChange({ target: box, currentTarget: box }); } catch(e) {}
+            }
+            await sleep(30);
+        }
+    }
+
     async function processCurrentStudent() {
         if (!isRunning) return;
 
@@ -520,14 +637,12 @@
             // 2. Date of Birth
             if (fields.dob && student.dob) {
                 await fillDob(fields.dob, student.dob);
-                await sleep(150);
+                await sleep(200);
             }
 
             // 3. Gender (MANDATORY FIELD)
-            if (fields.genderTrigger) {
-                await fillGender(fields.genderTrigger, student);
-                await sleep(150);
-            }
+            await fillGender(student);
+            await sleep(200);
 
             // 4. Email
             if (fields.email && student.email && fields.email !== fields.firstName) {
@@ -542,32 +657,20 @@
             }
 
             // 6. Grade Dropdown
-            const rawGrade = String(student.grade || 'Grade 1').toLowerCase().trim();
-            if (fields.gradeTrigger) {
-                logStatus(`Setting Grade: ${student.grade || 'Grade 1'}...`);
-                await selectDropdownOption(fields.gradeTrigger, rawGrade, [rawGrade, 'Grade 1', 'Balvatika 1']);
-                await sleep(150);
-            }
+            const gradeCandidates = getGradeCandidates(student.grade);
+            logStatus(`Setting Grade: ${student.grade || 'Grade 1'}...`);
+            await selectDropdownOption('grade', 1, student.grade || 'Grade 1', gradeCandidates);
+            await sleep(600); // Allow section options to update in React state
 
             // 7. Section Dropdown
-            const rawSection = String(student.section || 'A').toUpperCase().trim();
-            if (fields.sectionTrigger) {
-                logStatus(`Setting Section: ${rawSection}...`);
-                await selectDropdownOption(fields.sectionTrigger, rawSection, [`SECTION ${rawSection}`, rawSection, 'A']);
-                await sleep(150);
-            }
+            const secCandidates = getSectionCandidates(student.section);
+            logStatus(`Setting Section: ${student.section || 'A'}...`);
+            await selectDropdownOption('section', 2, student.section || 'A', secCandidates);
+            await sleep(250);
 
             // 8. APAAR ID (12 character boxes)
-            const apaarId = String(student.apaar_id || '').replace(/\D/g, '');
-            if (apaarId.length === 12) {
-                const boxes = fields.apaarBoxes.length >= 12 ? fields.apaarBoxes : Array.from(document.querySelectorAll('input[maxlength="1"]')).slice(0, 12);
-                if (boxes.length === 12) {
-                    for (let b = 0; b < 12; b++) {
-                        setNativeValue(boxes[b], apaarId[b]);
-                        await sleep(40);
-                    }
-                }
-            }
+            await fillApaarId(student.apaar_id);
+            await sleep(200);
 
             // 9. Pre-Submission HTML5 Validation Check
             const form = document.querySelector('form');

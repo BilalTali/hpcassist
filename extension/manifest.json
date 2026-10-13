@@ -20,6 +20,7 @@
         "https://sdms.udiseplus.gov.in/*"
       ],
       "js": [
+        "config.js",
         "content.js"
       ],
       "run_at": "document_idle"

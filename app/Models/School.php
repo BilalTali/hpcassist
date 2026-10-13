@@ -15,6 +15,7 @@ class School extends Model
         'user_id',
         'name',
         'udise_code',
+        'udise_internal_id',
         'category',
         'principal_name',
         'phone',

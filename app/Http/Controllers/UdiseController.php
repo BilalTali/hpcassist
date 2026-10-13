@@ -30,15 +30,30 @@ class UdiseController extends Controller
      */
     public function downloadExtension()
     {
+        $school = Auth::user()?->getEffectiveSchool();
+        $schoolId = $school ? $school->id : 0;
+        $schoolUdise = $school ? $school->udise_code : '';
+        $schoolName = $school ? $school->name : '';
+        $schoolToken = $school ? substr(hash('sha256', $school->id . '_' . $school->udise_code . '_' . config('app.key')), 0, 32) : '';
+
         $zipPath = public_path('downloads/hpc-assist-udise-extension.zip');
-        if (! file_exists($zipPath) || filemtime(base_path('extension/content.js')) > filemtime($zipPath)) {
-            @mkdir(dirname($zipPath), 0755, true);
-            $zip = new \ZipArchive();
-            if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
-                $zip->addFile(base_path('extension/manifest.json'), 'manifest.json');
-                $zip->addFile(base_path('extension/content.js'), 'content.js');
-                $zip->close();
-            }
+        @mkdir(dirname($zipPath), 0755, true);
+
+        $configJs = "// HPC Assist pre-configuration (generated for " . addslashes($schoolName) . ")\n" .
+                    "window.__HPC_CONFIG = " . json_encode([
+                        'school_id'   => $schoolId,
+                        'school_name' => $schoolName,
+                        'udise_code'  => $schoolUdise,
+                        'token'       => $schoolToken,
+                        'server_url'  => url('/'),
+                    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . ";\n";
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
+            $zip->addFile(base_path('extension/manifest.json'), 'manifest.json');
+            $zip->addFile(base_path('extension/content.js'), 'content.js');
+            $zip->addFromString('config.js', $configJs);
+            $zip->close();
         }
 
         return response()->download($zipPath, 'hpc-assist-udise-extension.zip', [
@@ -73,7 +88,7 @@ class UdiseController extends Controller
 
     /**
      * Receive students array posted by the bridge page after fetching from UDISE.
-     * Also called by the console bookmarklet.
+     * Also called by the Chrome extension and console bookmarklet.
      */
     public function ingest(Request $request)
     {
@@ -87,11 +102,13 @@ class UdiseController extends Controller
             return response()->json(['ok' => true], 200, $headers);
         }
 
-        $data = $request->all();
-        $schoolId  = $request->input('school_id');
-        $token     = $request->input('token', '');
-        $udiseCode = $request->input('udise_code', '');
-        $students  = $request->input('students', []);
+        $data           = $request->all();
+        $schoolId       = $request->input('school_id');
+        $udiseSchoolId  = $request->input('udise_school_id');
+        $token          = (string) $request->input('token', '');
+        $udiseCode      = (string) $request->input('udise_code', '');
+        $schoolName     = (string) $request->input('school_name', '');
+        $students       = $request->input('students', []);
 
         // Support direct array or wrapped 'data' key from raw UDISE responses
         if (empty($students)) {
@@ -109,44 +126,106 @@ class UdiseController extends Controller
         }
 
         // Auto-extract UDISE code from student records if missing
-        if (empty($udiseCode) && ! empty($students[0]['schUdiseCode'])) {
-            $udiseCode = (string) $students[0]['schUdiseCode'];
-        }
-
-        // Identify school — logged-in user first, then by token/ID/UDISE code
-        $school = null;
-        if (Auth::check()) {
-            $school = Auth::user()->getEffectiveSchool();
-        }
-
-        if (! $school && $schoolId) {
-            $candidate = \App\Models\School::find($schoolId);
-            if ($candidate) {
-                $expectedToken = substr(hash('sha256', $candidate->id . '_' . $candidate->udise_code . '_' . config('app.key')), 0, 32);
-                if ($token === $expectedToken || $token === (string) $candidate->udise_code || empty($token)) {
-                    $school = $candidate;
+        if (empty($udiseCode)) {
+            foreach ($students as $st) {
+                if (! empty($st['schUdiseCode'])) {
+                    $udiseCode = (string) $st['schUdiseCode'];
+                    break;
                 }
             }
         }
 
-        if (! $school && $udiseCode) {
-            $cleanCode = preg_replace('/[^0-9]/', '', $udiseCode);
-            $school = \App\Models\School::where('udise_code', $cleanCode)->first();
-            if (! $school) {
-                // Try fuzzy match or first school if only one exists
-                $school = \App\Models\School::where('udise_code', 'like', "%{$cleanCode}%")->first();
+        // Auto-extract school name if missing
+        if (empty($schoolName)) {
+            foreach ($students as $st) {
+                if (! empty($st['schoolName'])) {
+                    $schoolName = (string) $st['schoolName'];
+                    break;
+                }
             }
         }
 
+        \Illuminate\Support\Facades\Log::info("UDISE ingest request received", [
+            'udise_code'      => $udiseCode,
+            'school_id'       => $schoolId,
+            'udise_school_id' => $udiseSchoolId,
+            'school_name'     => $schoolName,
+            'total_students'  => count($students),
+        ]);
+
+        // Identify school — multi-tiered resolution
+        $school = null;
+
+        // 1. Logged-in user in active web session
+        if (Auth::check()) {
+            $school = Auth::user()->getEffectiveSchool();
+        }
+
+        // 2. Token match
+        if (! $school && $token) {
+            foreach (\App\Models\School::all() as $candidate) {
+                $expectedToken = substr(hash('sha256', $candidate->id . '_' . $candidate->udise_code . '_' . config('app.key')), 0, 32);
+                if ($token === $expectedToken || $token === (string) $candidate->udise_code) {
+                    $school = $candidate;
+                    break;
+                }
+            }
+        }
+
+        // 3. By UDISE code (Exact or partial match)
+        if (! $school && $udiseCode) {
+            $cleanCode = preg_replace('/[^0-9]/', '', $udiseCode);
+            if (! empty($cleanCode)) {
+                $school = \App\Models\School::where('udise_code', $cleanCode)->first()
+                       ?: \App\Models\School::where('udise_code', 'like', "%{$cleanCode}%")->first();
+            }
+        }
+
+        // 4. By UDISE internal ID (e.g. 1007872 or 1007846)
+        if (! $school && ($udiseSchoolId || $schoolId)) {
+            $targetUdiseId = (string) ($udiseSchoolId ?: $schoolId);
+            $school = \App\Models\School::where('udise_internal_id', $targetUdiseId)->first();
+        }
+
+        // 5. By HPC Assist School Primary Key
+        if (! $school && $schoolId && is_numeric($schoolId)) {
+            $candidate = \App\Models\School::find((int) $schoolId);
+            if ($candidate) {
+                $school = $candidate;
+            }
+        }
+
+        // 6. By School Name
+        if (! $school && $schoolName) {
+            $cleanName = trim($schoolName);
+            if (! empty($cleanName)) {
+                $school = \App\Models\School::where('name', 'like', "%{$cleanName}%")->first();
+            }
+        }
+
+        // 7. Fallback if single school exists in system
         if (! $school && \App\Models\School::count() === 1) {
             $school = \App\Models\School::first();
         }
 
         if (! $school) {
+            \Illuminate\Support\Facades\Log::warning("UDISE ingest could not identify school", [
+                'udise_code'      => $udiseCode,
+                'school_id'       => $schoolId,
+                'udise_school_id' => $udiseSchoolId,
+                'school_name'     => $schoolName,
+            ]);
+
             return response()->json([
                 'ok'    => false,
-                'error' => "Cannot identify school for UDISE code '{$udiseCode}'. Please ensure a school is registered with this UDISE code in HPC Assist.",
+                'error' => "Cannot identify school for UDISE '{$udiseCode}'. Please check your 11-digit UDISE code in the HPC Assist widget and retry.",
             ], 404, $headers);
+        }
+
+        // Save / update udise_internal_id if discovered
+        $discoveredInternalId = (string) ($udiseSchoolId ?: ($schoolId > 1000 ? $schoolId : ''));
+        if (! empty($discoveredInternalId) && $school->udise_internal_id !== $discoveredInternalId) {
+            $school->update(['udise_internal_id' => $discoveredInternalId]);
         }
 
         // Persist raw students
@@ -158,7 +237,7 @@ class UdiseController extends Controller
         $totalStudents = count($students);
         $totalApaar    = count(array_filter($students, fn($s) => ! empty($s['apaarId']) && ctype_digit((string) $s['apaarId']) && strlen((string) $s['apaarId']) === 12));
 
-        // Build preview.json + students.xlsx
+        // Build preview.json + students.xlsx + MySQL database persistence
         $hpc = app(HpcController::class);
         $hpc->preloadUdise(null, $school, $students);
 
@@ -181,6 +260,13 @@ class UdiseController extends Controller
             'udise_synced_at'      => now(),
             'udise_students_count' => $totalStudents,
             'udise_apaar_count'    => $totalApaar,
+        ]);
+
+        \Illuminate\Support\Facades\Log::info("UDISE ingest successful", [
+            'school_id'      => $school->id,
+            'school_name'    => $school->name,
+            'total_students' => $totalStudents,
+            'total_apaar'    => $totalApaar,
         ]);
 
         return response()->json([

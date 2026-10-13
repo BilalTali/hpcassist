@@ -14,6 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'udise/*',
             'hpc/teacher/*',
+            'hpc/run/progress',
+            'hpc/students/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

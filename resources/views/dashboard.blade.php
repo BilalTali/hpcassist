@@ -607,10 +607,17 @@
                             </p>
                         </div>
 
-                        <button onclick="startRun()" id="btn-run"
-                                class="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs shadow-sm transition active:scale-95 shrink-0">
-                            🚀 Run Automation &amp; Submit to HPC Portal
-                        </button>
+                        <div class="flex items-center gap-2 flex-wrap shrink-0">
+                            <button onclick="startRun()" id="btn-run"
+                                    class="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs shadow-sm transition active:scale-95">
+                                🚀 Run Automation &amp; Submit to HPC Portal
+                            </button>
+                            <button onclick="copyConsoleScript()" type="button"
+                                    class="inline-flex items-center gap-1.5 px-3.5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl font-bold text-xs transition active:scale-95"
+                                    title="Copy a 1-click self-contained script to paste directly into the browser DevTools Console on the PARAKH portal">
+                                📋 Copy Console Script
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Automation Live Progress Bar -->
@@ -1408,7 +1415,7 @@
             try {
                 const res = await fetch("{{ route('hpc.run.start') }}", {
                     method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': CSRF }
+                    headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' }
                 });
                 const data = await res.json();
                 if (!data.ok) {
@@ -1418,33 +1425,168 @@
                     box.classList.add('hidden');
                     return;
                 }
+
+                // Cache student queue into localStorage for the Chrome extension
+                if (data.students && data.students.length > 0) {
+                    localStorage.setItem('hpc_student_queue', JSON.stringify({
+                        school_id: {{ $school?->id ?? 0 }},
+                        school_name: "{{ addslashes($school?->name ?? '') }}",
+                        students: data.students
+                    }));
+                    localStorage.setItem('hpc_submission_running', 'true');
+                    localStorage.setItem('hpc_student_index', '0');
+                }
+
+                if (data.launched_cli) {
+                    document.getElementById('run-status-text').textContent = '⚡ Server background automation running...';
+                } else {
+                    document.getElementById('run-status-text').textContent = '⚡ ' + (data.total || 0) + ' Students queued! Opening PARAKH Portal...';
+                    window.open(data.add_url || "https://hpc.parakh.ncert.gov.in/en/students/add", "_blank");
+                }
+
                 pollAutomationStatus();
             } catch(e) {
-                alert('Connection error');
+                alert('Connection error: ' + (e.message || 'Unable to connect to server'));
                 btn.disabled = false;
+                btn.textContent = '🚀 Run Automation & Submit to HPC Portal';
             }
         }
 
         function pollAutomationStatus() {
             const interval = setInterval(async () => {
                 try {
-                    const res = await fetch("{{ route('hpc.run.status') }}");
+                    const res = await fetch("{{ route('hpc.run.status') }}", {
+                        headers: { 'Accept': 'application/json' }
+                    });
                     const data = await res.json();
-                    if (data.running) {
-                        const pct = data.total > 0 ? Math.round((data.current / data.total) * 100) : 10;
+                    const isRunning = data.running || (data.started && !data.done);
+                    if (isRunning) {
+                        const total = data.total || 1;
+                        const current = data.current || data.processed || 0;
+                        const pct = Math.min(100, Math.round((current / total) * 100));
                         document.getElementById('run-progress-bar').style.width = pct + '%';
                         document.getElementById('run-progress-percent').textContent = pct + '%';
-                        document.getElementById('run-status-text').textContent = data.message || `Submitting student ${data.current} of ${data.total}...`;
-                    } else {
+                        document.getElementById('run-status-text').textContent = data.message || `Submitting student ${current} of ${total}...`;
+                    } else if (data.done) {
                         clearInterval(interval);
                         document.getElementById('run-progress-bar').style.width = '100%';
                         document.getElementById('run-progress-percent').textContent = '100%';
-                        document.getElementById('run-status-text').textContent = 'Automation Completed!';
+                        document.getElementById('run-status-text').textContent = 'Automation Completed! All students submitted.';
                         document.getElementById('btn-run').disabled = false;
                         document.getElementById('btn-run').textContent = '🚀 Run Automation & Submit to HPC Portal';
                     }
                 } catch(e) {}
             }, 2000);
+        }
+
+        async function copyConsoleScript() {
+            try {
+                const res = await fetch("{{ route('hpc.students.queue') }}", { headers: { 'Accept': 'application/json' } });
+                const data = await res.json();
+                if (!data.students || !data.students.length) {
+                    alert('No student queue found. Please upload or sync students first.');
+                    return;
+                }
+                const serverUrl = window.location.origin;
+                const schoolId = data.school_id;
+                const script = `/* HPC Assist - One-Click PARAKH Portal Auto-Submitter */
+(async function() {
+    const students = ${JSON.stringify(data.students)};
+    console.log('🚀 HPC Assist running for ' + students.length + ' students...');
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const setVal = (el, val) => {
+        const proto = Object.getPrototypeOf(el);
+        const set = Object.getOwnPropertyDescriptor(proto, 'value')?.set || Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        if (set) set.call(el, val); else el.value = val;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    for (let i = 0; i < students.length; i++) {
+        const s = students[i];
+        const stName = s.name || ((s.first_name || '') + ' ' + (s.last_name || '')).trim() || 'Student';
+        console.log(\`[\${i+1}/\${students.length}] Submitting \${stName}...\`);
+        const inputs = document.querySelectorAll('input[placeholder="Write here"]');
+        if (inputs.length >= 2) {
+            setVal(inputs[0], s.first_name || s.name?.split(' ')[0] || 'Student');
+            setVal(inputs[1], s.last_name || s.name?.split(' ').slice(1).join(' ') || '');
+            if (s.email && inputs[2]) setVal(inputs[2], s.email);
+
+            // DOB
+            const dobParts = String(s.dob || '').split(/[\\/\\-\\.]/);
+            if (dobParts.length === 3) {
+                const year = dobParts[0].length === 4 ? dobParts[0] : dobParts[2];
+                const month = (parseInt(dobParts[0].length === 4 ? dobParts[1] : dobParts[1], 10) - 1);
+                const day = parseInt(dobParts[0].length === 4 ? dobParts[2] : dobParts[0], 10);
+                const dobInp = document.querySelectorAll('input[placeholder="Select"]')[0];
+                if (dobInp) {
+                    dobInp.click();
+                    await sleep(350);
+                    const yrSel = document.querySelector('.react-datepicker__year-select');
+                    if (yrSel) { yrSel.value = year; yrSel.dispatchEvent(new Event('change', { bubbles: true })); }
+                    await sleep(150);
+                    const moSel = document.querySelector('.react-datepicker__month-select');
+                    if (moSel) { moSel.value = String(month); moSel.dispatchEvent(new Event('change', { bubbles: true })); }
+                    await sleep(200);
+                    const dayEl = Array.from(document.querySelectorAll('.react-datepicker__day:not(.react-datepicker__day--outside-month)')).find(d => d.innerText.trim() === String(day));
+                    if (dayEl) dayEl.click();
+                    await sleep(250);
+                }
+            }
+
+            // Grade
+            const dds = document.querySelectorAll('.custom-dropdown-header');
+            if (dds[0]) {
+                dds[0].click();
+                await sleep(300);
+                const target = String(s.grade || 'Grade 6').toLowerCase();
+                const item = Array.from(document.querySelectorAll('.custom-dropdown-item')).find(it => it.innerText.toLowerCase().includes(target));
+                if (item) item.click();
+                await sleep(200);
+            }
+
+            // Section
+            if (dds[1]) {
+                dds[1].click();
+                await sleep(300);
+                const targetSec = String(s.section || 'A').toUpperCase().trim();
+                const item = Array.from(document.querySelectorAll('.custom-dropdown-item')).find(it => it.innerText.toUpperCase().trim() === targetSec || it.innerText.toUpperCase().trim() === ('SECTION ' + targetSec));
+                if (item) item.click();
+                await sleep(200);
+            }
+
+            // APAAR
+            const apaar = String(s.apaar_id || '').replace(/\\D/g, '');
+            if (apaar.length === 12) {
+                const boxes = document.querySelectorAll('input[maxlength="1"]');
+                for (let b = 0; b < 12 && b < boxes.length; b++) setVal(boxes[b], apaar[b]);
+            }
+
+            // Save
+            await sleep(400);
+            const saveBtn = Array.from(document.querySelectorAll('button, input[type=submit]')).find(b => ((b.innerText || b.value || '').toLowerCase().includes('save') || (b.innerText || b.value || '').toLowerCase().includes('submit')) && !(b.innerText||'').toLowerCase().includes('another'));
+            if (saveBtn) saveBtn.click();
+
+            try {
+                await fetch('${serverUrl}/hpc/run/progress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ school_id: ${schoolId}, current: i+1, total: students.length, name: stName, status: 'success' })
+                });
+            } catch(e) {}
+        }
+        await sleep(2500);
+        if (i < students.length - 1) {
+            window.location.href = 'https://hpc.parakh.ncert.gov.in/en/students/add';
+            return;
+        }
+    }
+    alert('🎉 All ' + students.length + ' students submitted!');
+})();`;
+                await navigator.clipboard.writeText(script);
+                alert('📋 1-Click Console Automation Script Copied to Clipboard!\n\n1. Switch to your PARAKH Portal tab (https://hpc.parakh.ncert.gov.in/en/students/add)\n2. Press F12 (or Cmd+Option+J) to open DevTools Console\n3. Paste (Cmd+V) and press Enter\n\nIt will automatically enter all ' + data.students.length + ' students and report live progress!');
+            } catch(err) {
+                alert('Could not copy script: ' + err.message);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {

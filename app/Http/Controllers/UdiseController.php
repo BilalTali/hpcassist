@@ -52,6 +52,7 @@ class UdiseController extends Controller
         if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
             $zip->addFile(base_path('extension/manifest.json'), 'manifest.json');
             $zip->addFile(base_path('extension/content.js'), 'content.js');
+            $zip->addFile(base_path('extension/hpc_content.js'), 'hpc_content.js');
             $zip->addFromString('config.js', $configJs);
             $zip->close();
         }

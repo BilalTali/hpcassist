@@ -108,8 +108,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/hpc/template/download/udise', [HpcController::class, 'downloadTemplate'])->name('hpc.template.download_udise');
     Route::post('/hpc/upload',             [HpcController::class, 'upload'])->name('hpc.upload');
     Route::post('/hpc/run/start',          [HpcController::class, 'runStart'])->name('hpc.run.start');
+    Route::post('/hpc/run/progress',       [HpcController::class, 'runProgress'])->name('hpc.run.progress');
     Route::get('/hpc/run/status',          [HpcController::class, 'runStatus'])->name('hpc.run.status');
     Route::post('/hpc/run/reset',          [HpcController::class, 'runReset'])->name('hpc.run.reset');
+    Route::get('/hpc/students/queue',      [HpcController::class, 'getStudentQueue'])->name('hpc.students.queue');
     Route::post('/hpc/session/end',        [HpcController::class, 'endSession'])->name('hpc.session.end');
     Route::post('/hpc/session/start',      [HpcController::class, 'startSession'])->name('hpc.session.start');
     Route::post('/hpc/form/discover',      [HpcController::class, 'discoverForm'])->name('hpc.form.discover');

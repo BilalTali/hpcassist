@@ -542,13 +542,19 @@ class HpcTeacherController extends Controller
         $teacher   = $this->getActiveTeacher();
         $tArg      = !empty($teacher['id']) ? "--teacher={$teacher['id']}" : "";
 
-        $artisan = base_path('artisan');
-        $logFile = storage_path('logs/hpc_teacher_run.log');
-        $php     = PHP_BINARY;
+        $launchedCli = false;
+        if (function_exists('exec')) {
+            @exec("nohup {$php} {$artisan} hpc:teacher-run {$schoolArg} {$tArg} > {$logFile} 2>&1 &");
+            $launchedCli = true;
+        }
 
-        exec("nohup {$php} {$artisan} hpc:teacher-run {$schoolArg} {$tArg} > {$logFile} 2>&1 &");
-
-        return response()->json(['ok' => true, 'total' => $total]);
+        return response()->json([
+            'ok'           => true,
+            'total'        => $total,
+            'launched_cli' => $launchedCli,
+            'students'     => $validStudents,
+            'message'      => $launchedCli ? 'Background teacher assessment runner started.' : 'Evaluation queue ready.',
+        ]);
     }
 
     public function runStatus()
@@ -577,7 +583,11 @@ class HpcTeacherController extends Controller
         $php = PHP_BINARY;
         $cmd = escapeshellcmd("{$php} {$artisan} hpc:teacher-discover --skip-login " . ($stage ? "--stage=" . escapeshellarg($stage) : ""));
 
-        exec($cmd . ' 2>&1', $output, $exitCode);
+        $output = [];
+        $exitCode = 0;
+        if (function_exists('exec')) {
+            exec($cmd . ' 2>&1', $output, $exitCode);
+        }
 
         $studentsFile = storage_path('app/hpc/teacher_students.json');
         $students = file_exists($studentsFile) ? json_decode(file_get_contents($studentsFile), true) : [];

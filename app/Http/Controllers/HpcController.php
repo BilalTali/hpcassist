@@ -976,12 +976,22 @@ class HpcController extends Controller
 
     public function runStart(Request $request)
     {
-        $previewFile = $this->getPreviewFile();
-        if (! file_exists($previewFile)) {
-            return response()->json(['ok' => false, 'error' => 'No student data found. Please upload an Excel file first.']);
+        $school      = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $previewFile = $this->getPreviewFile($school);
+
+        $allStudents = [];
+        if (file_exists($previewFile)) {
+            $allStudents = json_decode(file_get_contents($previewFile), true) ?? [];
+        } elseif ($school && $school->students()->exists()) {
+            $allStudents = $school->students()->orderBy('id')->get()->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
+            @mkdir(dirname($previewFile), 0755, true);
+            file_put_contents($previewFile, json_encode($allStudents, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
         }
 
-        $allStudents   = json_decode(file_get_contents($previewFile), true) ?? [];
+        if (empty($allStudents)) {
+            return response()->json(['ok' => false, 'error' => 'No student data found. Please upload an Excel file or sync from UDISE first.']);
+        }
+
         $validStudents = array_values(array_filter($allStudents, fn($s) => empty($s['errors'])));
 
         if (empty($validStudents)) {
@@ -991,30 +1001,108 @@ class HpcController extends Controller
         $total = count($validStudents);
 
         // Initialize run_results.json
-        $resultsFile = $this->getSchoolStorageDir() . '/run_results.json';
+        $resultsFile = $this->getSchoolStorageDir($school) . '/run_results.json';
         $init = [
             'started'    => true,
+            'running'    => true,
             'done'       => false,
-            'login_wait' => true,
+            'login_wait' => false,
             'total'      => $total,
+            'current'    => 0,
             'processed'  => 0,
             'results'    => [],
             'started_at' => now()->toIso8601String(),
+            'message'    => "Queue ready: {$total} students queued for submission.",
         ];
         file_put_contents($resultsFile, json_encode($init, JSON_PRETTY_PRINT));
 
-        // Launch hpc:run command in the background scoped to current school
+        // Launch hpc:run command in the background if CLI execution is supported on this server
         $artisan     = base_path('artisan');
-        $school      = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         $schoolArg   = $school ? "--school={$school->id}" : "";
         $logFile     = storage_path('logs/hpc_run.log');
         $php         = PHP_BINARY;
+        $launchedCli = false;
 
-        exec("nohup {$php} {$artisan} hpc:run {$schoolArg} > {$logFile} 2>&1 &");
+        if (function_exists('exec')) {
+            @exec("nohup {$php} {$artisan} hpc:run {$schoolArg} > {$logFile} 2>&1 &");
+            $launchedCli = true;
+        }
 
         return response()->json([
-            'ok'    => true,
-            'total' => $total,
+            'ok'           => true,
+            'total'        => $total,
+            'launched_cli' => $launchedCli,
+            'students'     => $validStudents,
+            'add_url'      => config('hpc.add_student_url', 'https://hpc.parakh.ncert.gov.in/en/students/add'),
+            'message'      => $launchedCli ? 'Background server automation started.' : 'Student queue ready for browser-assisted submission.',
+        ]);
+    }
+
+    public function runProgress(Request $request)
+    {
+        $schoolId = $request->input('school_id');
+        $school   = $schoolId ? School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $resultsFile = $this->getSchoolStorageDir($school) . '/run_results.json';
+
+        $current = (int) $request->input('current', 0);
+        $total   = (int) $request->input('total', 0);
+        $name    = (string) $request->input('name', '');
+        $status  = (string) $request->input('status', 'success');
+        $message = (string) $request->input('message', '');
+        $done    = (bool) $request->input('done', false);
+
+        $data = file_exists($resultsFile) ? (json_decode(file_get_contents($resultsFile), true) ?? []) : [];
+        $data['started']   = true;
+        $data['running']   = ! $done;
+        $data['done']      = $done;
+        $data['current']   = $current;
+        $data['processed'] = $current;
+        if ($total > 0) {
+            $data['total'] = $total;
+        }
+        $data['message']   = $message ?: ($done ? 'Automation Completed! All students submitted.' : "Submitting {$name} ({$current}/{$total})...");
+
+        if ($name) {
+            $data['results'] = $data['results'] ?? [];
+            $data['results'][] = [
+                'name'    => $name,
+                'status'  => $status,
+                'message' => $message,
+                'time'    => now()->toIso8601String(),
+            ];
+        }
+
+        file_put_contents($resultsFile, json_encode($data, JSON_PRETTY_PRINT));
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function getStudentQueue(Request $request)
+    {
+        $schoolId = $request->input('school_id');
+        $school   = $schoolId ? School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+
+        if (! $school) {
+            return response()->json(['ok' => false, 'error' => 'School not found.'], 404);
+        }
+
+        $previewFile = $this->getPreviewFile($school);
+        $students    = [];
+        if (file_exists($previewFile)) {
+            $students = json_decode(file_get_contents($previewFile), true) ?? [];
+        } elseif ($school->students()->exists()) {
+            $students = $school->students()->orderBy('id')->get()->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
+        }
+
+        $valid = array_values(array_filter($students, fn($s) => empty($s['errors'])));
+
+        return response()->json([
+            'ok'          => true,
+            'school_id'   => $school->id,
+            'school_name' => $school->name,
+            'total'       => count($valid),
+            'students'    => $valid,
+            'add_url'     => config('hpc.add_student_url', 'https://hpc.parakh.ncert.gov.in/en/students/add'),
         ]);
     }
 
@@ -1132,9 +1220,11 @@ class HpcController extends Controller
             return response()->json(['ok' => false, 'error' => 'School profile not found.']);
         }
 
-        // Close running Chrome instances so user doesn't conflict
-        exec("pkill -f 'storage/app/hpc' 2>/dev/null");
-        exec("pkill -f 'drivers/chromedriver' 2>/dev/null");
+        // Close running Chrome instances if supported
+        if (function_exists('exec')) {
+            @exec("pkill -f 'storage/app/hpc' 2>/dev/null");
+            @exec("pkill -f 'drivers/chromedriver' 2>/dev/null");
+        }
 
         $data['active'] = $schoolId;
         file_put_contents(storage_path('app/hpc/schools.json'), json_encode($data, JSON_PRETTY_PRINT));
@@ -1163,9 +1253,11 @@ class HpcController extends Controller
         @mkdir(storage_path('app/hpc/' . $dir), 0777, true);
         file_put_contents(storage_path('app/hpc/schools.json'), json_encode($data, JSON_PRETTY_PRINT));
 
-        // Close running Chrome
-        exec("pkill -f 'storage/app/hpc' 2>/dev/null");
-        exec("pkill -f 'drivers/chromedriver' 2>/dev/null");
+        // Close running Chrome if supported
+        if (function_exists('exec')) {
+            @exec("pkill -f 'storage/app/hpc' 2>/dev/null");
+            @exec("pkill -f 'drivers/chromedriver' 2>/dev/null");
+        }
 
         return response()->json(['ok' => true, 'id' => $id, 'name' => $name, 'message' => "School '{$name}' added and selected."]);
     }
@@ -1189,7 +1281,13 @@ class HpcController extends Controller
         }
 
         if ($targetDir && is_dir($targetDir)) {
-            exec("rm -rf " . escapeshellarg($targetDir));
+            if (function_exists('exec')) {
+                @exec("rm -rf " . escapeshellarg($targetDir));
+            } else {
+                $files = glob($targetDir . '/*');
+                foreach ($files as $f) { if (is_file($f)) @unlink($f); }
+                @rmdir($targetDir);
+            }
         }
 
         $data['schools'] = $newList;
@@ -1267,11 +1365,18 @@ class HpcController extends Controller
         $php     = PHP_BINARY;
         $cmd     = escapeshellcmd("{$php} {$artisan} hpc:discover --skip-login --url=" . escapeshellarg($url));
 
-        exec($cmd . ' 2>&1', $output, $exitCode);
+        $output   = [];
+        $exitCode = 0;
+        if (function_exists('exec')) {
+            exec($cmd . ' 2>&1', $output, $exitCode);
+        }
 
         $fieldsFile = storage_path('app/hpc/fields.json');
         if (! file_exists($fieldsFile)) {
-            return response()->json(['ok' => false, 'error' => 'Discovery did not generate fields. Output: ' . implode("\n", $output)]);
+            $msg = ! function_exists('exec') 
+                ? 'CLI command execution is disabled on this server environment. Using default form field mappings.' 
+                : 'Discovery did not generate fields. Output: ' . implode("\n", $output);
+            return response()->json(['ok' => false, 'error' => $msg]);
         }
 
         $fieldsData = json_decode(file_get_contents($fieldsFile), true);

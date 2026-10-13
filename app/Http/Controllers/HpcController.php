@@ -1143,10 +1143,10 @@ class HpcController extends Controller
 
         $previewFile = $this->getPreviewFile($school);
         $students    = [];
-        if (file_exists($previewFile)) {
-            $students = json_decode(file_get_contents($previewFile), true) ?? [];
-        } elseif ($school->students()->exists()) {
+        if ($school->students()->exists()) {
             $students = $school->students()->orderBy('id')->get()->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
+        } elseif (file_exists($previewFile)) {
+            $students = json_decode(file_get_contents($previewFile), true) ?? [];
         }
 
         $valid = array_values(array_filter($students, fn($s) => empty($s['errors'])));

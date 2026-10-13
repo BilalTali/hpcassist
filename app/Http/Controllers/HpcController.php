@@ -386,10 +386,23 @@ class HpcController extends Controller
                 $dob = "{$m[3]}/{$m[2]}/{$m[1]}";
             }
 
+            $rawGen = trim((string)($st['genderDesc'] ?? ($st['gender'] ?? '')));
+            if ($rawGen === '1' || $rawGen === 1 || strtolower($rawGen) === 'male' || str_starts_with(strtolower($rawGen), 'm')) {
+                $gender = 'Male';
+            } elseif ($rawGen === '2' || $rawGen === 2 || strtolower($rawGen) === 'female' || str_starts_with(strtolower($rawGen), 'f')) {
+                $gender = 'Female';
+            } elseif ($rawGen === '3' || $rawGen === 3) {
+                $gender = 'Other';
+            } else {
+                $gender = $rawGen ?: 'Male';
+            }
+
+            $cleanPen    = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
+            $admissionNo = ! empty($st['admnNumber']) ? trim((string)$st['admnNumber']) : (! empty($st['admission_no']) ? trim((string)$st['admission_no']) : $cleanPen);
+
             $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL) ? trim($st['email']) : '';
             if (empty($email) || str_contains(strtolower($email), 'gov.in')) {
                 $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
-                $cleanPen   = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
                 $email      = "{$cleanFirst}.{$cleanPen}@gmail.com";
             }
 
@@ -399,25 +412,42 @@ class HpcController extends Controller
             $apaarId  = ! empty($st['apaarId']) ? (string) $st['apaarId'] : '';
 
             $preview[] = [
-                'row'        => $r,
-                'first_name' => $firstName,
-                'last_name'  => $lastName,
-                'name'       => trim("{$firstName} {$lastName}"),
-                'dob'        => $dob,
-                'email'      => $email,
-                'grade'      => $grade,
-                'section'    => $section,
-                'apaar_id'   => $apaarId,
-                'errors'     => [],
+                'row'              => $r,
+                'first_name'       => $firstName,
+                'last_name'        => $lastName,
+                'name'             => trim("{$firstName} {$lastName}"),
+                'dob'              => $dob,
+                'gender'           => $gender,
+                'email'            => $email,
+                'admission_no'     => $admissionNo,
+                'pen_code'         => $cleanPen,
+                'udise_student_id' => $st['studentId'] ?? null,
+                'grade'            => $grade,
+                'section'          => $section,
+                'apaar_id'         => $apaarId,
+                'errors'           => [],
             ];
         }
 
         file_put_contents($this->getPreviewFile($school), json_encode($preview, JSON_PRETTY_PRINT));
 
         if ($school) {
+            $syncedIds = [];
             foreach ($preview as $pRow) {
-                $this->upsertStudentToDatabase($school, $pRow, 'udise_sync');
+                $dbStudent = $this->upsertStudentToDatabase($school, $pRow, 'udise_sync');
+                $syncedIds[] = $dbStudent->id;
             }
+
+            // Remove any stale udise_sync records for this school that do not belong to this newly synced roster
+            Student::where('school_id', $school->id)
+                ->where('source', 'udise_sync')
+                ->whereNotIn('id', $syncedIds)
+                ->delete();
+
+            $school->update([
+                'udise_students_count' => count($syncedIds),
+                'udise_apaar_count'    => Student::where('school_id', $school->id)->whereNotNull('apaar_id')->where('apaar_id', '!=', '')->count(),
+            ]);
         }
 
         return response()->json([

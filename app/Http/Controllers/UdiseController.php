@@ -249,6 +249,17 @@ class UdiseController extends Controller
             }
         }
 
+        // Internal ID mismatch verification: verify payload's internal school ID matches this school
+        if ($school && $udiseSchoolId && ! empty($school->udise_internal_id)) {
+            if ((string)$school->udise_internal_id !== (string)$udiseSchoolId) {
+                $matchingInternalSchool = \App\Models\School::where('udise_internal_id', (string)$udiseSchoolId)->first();
+                if ($matchingInternalSchool) {
+                    \Illuminate\Support\Facades\Log::warning("UDISE ingest rerouted: payload internal ID {$udiseSchoolId} belongs to school {$matchingInternalSchool->id} ({$matchingInternalSchool->name}), not {$school->id} ({$school->name})");
+                    $school = $matchingInternalSchool;
+                }
+            }
+        }
+
         // Save / update udise_internal_id if discovered
         $discoveredInternalId = (string) ($udiseSchoolId ?: ($schoolId > 1000 ? $schoolId : ''));
         if (! empty($discoveredInternalId) && $school->udise_internal_id !== $discoveredInternalId) {

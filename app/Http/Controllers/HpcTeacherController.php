@@ -542,6 +542,9 @@ class HpcTeacherController extends Controller
         $teacher   = $this->getActiveTeacher();
         $tArg      = !empty($teacher['id']) ? "--teacher={$teacher['id']}" : "";
 
+        $artisan     = base_path('artisan');
+        $logFile     = storage_path('logs/hpc_teacher_run.log');
+        $php         = PHP_BINARY;
         $launchedCli = false;
         if (function_exists('exec')) {
             @exec("nohup {$php} {$artisan} hpc:teacher-run {$schoolArg} {$tArg} > {$logFile} 2>&1 &");

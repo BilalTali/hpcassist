@@ -1633,90 +1633,129 @@
     console.log('🚀 HPC Assist running for ' + students.length + ' students...');
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const setVal = (el, val) => {
+        if (!el) return;
         const proto = Object.getPrototypeOf(el);
         const set = Object.getOwnPropertyDescriptor(proto, 'value')?.set || Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
         if (set) set.call(el, val); else el.value = val;
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.dispatchEvent(new Event('blur', { bubbles: true }));
     };
+
+    function findField(labelText) {
+        const labels = Array.from(document.querySelectorAll('label, div, span, p'));
+        const l = labels.find(el => {
+            const txt = (el.innerText || '').toLowerCase().trim();
+            return txt.startsWith(labelText.toLowerCase()) && el.children.length === 0;
+        }) || labels.find(el => {
+            const txt = (el.innerText || '').toLowerCase().trim();
+            return txt.includes(labelText.toLowerCase()) && el.children.length <= 1;
+        });
+        if (!l) return null;
+        let parent = l.parentElement;
+        for (let i = 0; i < 4 && parent; i++) {
+            const c = parent.querySelector('input, select, .custom-dropdown-header, [role="combobox"]');
+            if (c && c !== l) return c;
+            parent = parent.parentElement;
+        }
+        return null;
+    }
+
     for (let i = 0; i < students.length; i++) {
         const s = students[i];
         const stName = s.name || ((s.first_name || '') + ' ' + (s.last_name || '')).trim() || 'Student';
         console.log(\`[\${i+1}/\${students.length}] Submitting \${stName}...\`);
-        const inputs = document.querySelectorAll('input[placeholder="Write here"]');
-        if (inputs.length >= 2) {
-            setVal(inputs[0], s.first_name || s.name?.split(' ')[0] || 'Student');
-            setVal(inputs[1], s.last_name || s.name?.split(' ').slice(1).join(' ') || '');
-            if (s.email && inputs[2]) setVal(inputs[2], s.email);
 
-            // DOB
-            const dobParts = String(s.dob || '').split(/[\\/\\-\\.]/);
-            if (dobParts.length === 3) {
-                const year = dobParts[0].length === 4 ? dobParts[0] : dobParts[2];
-                const month = (parseInt(dobParts[0].length === 4 ? dobParts[1] : dobParts[1], 10) - 1);
-                const day = parseInt(dobParts[0].length === 4 ? dobParts[2] : dobParts[0], 10);
-                const dobInp = document.querySelectorAll('input[placeholder="Select"]')[0];
-                if (dobInp) {
-                    dobInp.click();
-                    await sleep(350);
-                    const yrSel = document.querySelector('.react-datepicker__year-select');
-                    if (yrSel) { yrSel.value = year; yrSel.dispatchEvent(new Event('change', { bubbles: true })); }
-                    await sleep(150);
-                    const moSel = document.querySelector('.react-datepicker__month-select');
-                    if (moSel) { moSel.value = String(month); moSel.dispatchEvent(new Event('change', { bubbles: true })); }
-                    await sleep(200);
-                    const dayEl = Array.from(document.querySelectorAll('.react-datepicker__day:not(.react-datepicker__day--outside-month)')).find(d => d.innerText.trim() === String(day));
-                    if (dayEl) dayEl.click();
-                    await sleep(250);
-                }
-            }
+        const fName = findField('First Name') || document.querySelectorAll('input[placeholder="Write here"]')[0];
+        const lName = findField('Last Name') || document.querySelectorAll('input[placeholder="Write here"]')[1];
+        const email = findField('Email') || document.querySelector('input[type="email"]');
+        const dobInp = findField('Date of Birth') || document.querySelectorAll('input[placeholder="Select"]')[0];
+        const grInp = findField('Grade') || document.querySelectorAll('.custom-dropdown-header')[0];
+        const secInp = findField('Section') || document.querySelectorAll('.custom-dropdown-header')[1];
 
-            // Grade
-            const dds = document.querySelectorAll('.custom-dropdown-header');
-            if (dds[0]) {
-                dds[0].click();
-                await sleep(300);
-                const target = String(s.grade || 'Grade 6').toLowerCase();
-                const item = Array.from(document.querySelectorAll('.custom-dropdown-item')).find(it => it.innerText.toLowerCase().includes(target));
-                if (item) item.click();
-                await sleep(200);
-            }
+        if (fName) setVal(fName, s.first_name || s.name?.split(' ')[0] || 'Student');
+        if (lName) setVal(lName, s.last_name || s.name?.split(' ').slice(1).join(' ') || '');
+        if (email && s.email) setVal(email, s.email);
 
-            // Section
-            if (dds[1]) {
-                dds[1].click();
-                await sleep(300);
-                const targetSec = String(s.section || 'A').toUpperCase().trim();
-                const item = Array.from(document.querySelectorAll('.custom-dropdown-item')).find(it => it.innerText.toUpperCase().trim() === targetSec || it.innerText.toUpperCase().trim() === ('SECTION ' + targetSec));
-                if (item) item.click();
-                await sleep(200);
-            }
-
-            // APAAR
-            const apaar = String(s.apaar_id || '').replace(/\\D/g, '');
-            if (apaar.length === 12) {
-                const boxes = document.querySelectorAll('input[maxlength="1"]');
-                for (let b = 0; b < 12 && b < boxes.length; b++) setVal(boxes[b], apaar[b]);
-            }
-
-            // Save
-            await sleep(400);
-            const saveBtn = Array.from(document.querySelectorAll('button, input[type=submit]')).find(b => ((b.innerText || b.value || '').toLowerCase().includes('save') || (b.innerText || b.value || '').toLowerCase().includes('submit')) && !(b.innerText||'').toLowerCase().includes('another'));
-            if (saveBtn) saveBtn.click();
-
-            try {
-                await fetch('${serverUrl}/hpc/run/progress', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ school_id: ${schoolId}, current: i+1, total: students.length, name: stName, status: 'success' })
-                });
-            } catch(e) {}
+        // DOB
+        const dobParts = String(s.dob || '').split(/[\\/\\-\\.]/);
+        if (dobInp && dobParts.length === 3) {
+            const year = dobParts[0].length === 4 ? dobParts[0] : dobParts[2];
+            const month = (parseInt(dobParts[0].length === 4 ? dobParts[1] : dobParts[1], 10) - 1);
+            const day = parseInt(dobParts[0].length === 4 ? dobParts[2] : dobParts[0], 10);
+            setVal(dobInp, \`\${String(day).padStart(2,'0')}/\${String(month+1).padStart(2,'0')}/\${year}\`);
+            dobInp.click();
+            await sleep(350);
+            const yrSel = document.querySelector('.react-datepicker__year-select');
+            if (yrSel) { yrSel.value = year; yrSel.dispatchEvent(new Event('change', { bubbles: true })); }
+            await sleep(150);
+            const moSel = document.querySelector('.react-datepicker__month-select');
+            if (moSel) { moSel.value = String(month); moSel.dispatchEvent(new Event('change', { bubbles: true })); }
+            await sleep(150);
+            const dayEl = Array.from(document.querySelectorAll('.react-datepicker__day:not(.react-datepicker__day--outside-month)')).find(d => d.innerText.trim() === String(day));
+            if (dayEl) dayEl.click();
+            await sleep(250);
         }
+
+        // Grade
+        if (grInp) {
+            grInp.click();
+            await sleep(300);
+            const target = String(s.grade || 'Grade 1').toLowerCase();
+            const item = Array.from(document.querySelectorAll('.custom-dropdown-item, [role="option"], li, div[class*="option"]')).find(it => it.innerText.toLowerCase().includes(target) || target.includes(it.innerText.toLowerCase()));
+            if (item) item.click();
+            await sleep(200);
+        }
+
+        // Section
+        if (secInp) {
+            secInp.click();
+            await sleep(300);
+            const targetSec = String(s.section || 'A').toUpperCase().trim();
+            const item = Array.from(document.querySelectorAll('.custom-dropdown-item, [role="option"], li, div[class*="option"]')).find(it => it.innerText.toUpperCase().trim() === targetSec || it.innerText.toUpperCase().includes('SECTION ' + targetSec));
+            if (item) item.click();
+            await sleep(200);
+        }
+
+        // APAAR
+        const apaar = String(s.apaar_id || '').replace(/\\D/g, '');
+        if (apaar.length === 12) {
+            const boxes = Array.from(document.querySelectorAll('input[maxlength="1"]')).slice(0, 12);
+            for (let b = 0; b < 12 && b < boxes.length; b++) setVal(boxes[b], apaar[b]);
+        }
+
+        // Save (prefer "Save & Add Another" so page does not reload)
+        await sleep(500);
+        const buttons = Array.from(document.querySelectorAll('button, input[type=submit], [role=button], a[class*=btn], div[class*=btn]'));
+        const isLast = (i === students.length - 1);
+        let saveBtn = null;
+        if (!isLast) {
+            saveBtn = buttons.find(b => {
+                const txt = (b.innerText || b.value || '').toLowerCase().trim();
+                return txt.includes('save & add another') || txt.includes('save and add another');
+            });
+        }
+        if (!saveBtn) {
+            saveBtn = buttons.find(b => {
+                const txt = (b.innerText || b.value || '').toLowerCase().trim();
+                return (txt === 'save' || txt.includes('save')) && !txt.includes('cancel');
+            });
+        }
+
+        if (saveBtn) {
+            console.log('✓ Submitting ' + stName);
+            saveBtn.click();
+        }
+
+        try {
+            await fetch('${serverUrl}/hpc/run/progress', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ school_id: ${schoolId}, current: i+1, total: students.length, name: stName, status: 'success' })
+            });
+        } catch(e) {}
+
         await sleep(2500);
-        if (i < students.length - 1) {
-            window.location.href = 'https://hpc.parakh.ncert.gov.in/en/students/add';
-            return;
-        }
     }
     alert('🎉 All ' + students.length + ' students submitted!');
 })();`;

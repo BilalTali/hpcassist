@@ -18,8 +18,10 @@
 
         // Prevent repeated sync in the same browser session unless forced
         const syncKey = 'hpc_synced_' + schoolId;
-        if (!force && sessionStorage.getItem(syncKey)) {
-            renderWidget('synced', `School ${schoolId} already synced!`);
+        if (force) {
+            sessionStorage.removeItem(syncKey);
+        } else if (sessionStorage.getItem(syncKey)) {
+            renderWidget('synced', `School ${schoolId} already synced in this tab. Click below to fetch again if needed.`);
             return;
         }
 
@@ -30,17 +32,22 @@
         try {
             // 1. Fetch from UDISE session
             let res = await fetch('/p0/api/cy/snapshot/students/all/' + schoolId, { credentials: 'include' });
-            let json = await res.json();
-            let students = json.data || json.students || json.result || json;
+            let json = null;
+            if (res.ok) {
+                try { json = await res.json(); } catch(e) {}
+            }
+            let students = json?.data || json?.students || json?.result || (Array.isArray(json) ? json : null);
 
             if (!Array.isArray(students) || !students.length) {
                 res = await fetch('/p0/api/cy/students/all/' + schoolId, { credentials: 'include' });
-                json = await res.json();
-                students = json.data || json.students || json.result || json;
+                if (res.ok) {
+                    try { json = await res.json(); } catch(e) {}
+                    students = json?.data || json?.students || json?.result || (Array.isArray(json) ? json : null);
+                }
             }
 
             if (!Array.isArray(students) || !students.length) {
-                renderWidget('idle', 'No students found on this page yet. Go to Student → All Students.');
+                renderWidget('idle', 'No students found on this page. Navigate to Student → All Students in UDISE+ and click Re-Sync.');
                 isSyncing = false;
                 return;
             }
@@ -48,7 +55,7 @@
             const udiseCode = students[0]?.schUdiseCode || '';
 
             // 2. Automatically POST to HPC Assist server
-            renderWidget('syncing', `Uploading ${students.length} students to HPC Assist...`);
+            renderWidget('syncing', `Uploading ${students.length} students to HPC Assist (UDISE: ${udiseCode || schoolId})...`);
 
             const ingestUrl = window.location.hostname.includes('ctetmonktest.fun') 
                 ? '/udise/ingest' 
@@ -68,7 +75,7 @@
 
             if (postData.ok) {
                 sessionStorage.setItem(syncKey, 'true');
-                renderWidget('success', `🎉 Synced ${postData.total} students (${postData.apaar_count} APAAR IDs) to HPC Assist!`, postData.redirect);
+                renderWidget('success', `🎉 Synced ${postData.total} students (${postData.apaar_count} APAAR IDs) to ${postData.school_name || 'HPC Assist'}!`, postData.redirect);
             } else {
                 renderWidget('error', `Sync failed: ${postData.error || 'Unknown error'}`);
             }
@@ -120,18 +127,29 @@
             title = 'UDISE Synced!';
             const dashUrl = redirectUrl || 'https://ctetmonktest.fun/dashboard?step=2';
             actionBtn = `
-                <a href="${dashUrl}" target="_blank" style="
-                    display: block;
-                    text-align: center;
-                    background: #10b981;
-                    color: white;
-                    text-decoration: none;
-                    padding: 8px 14px;
-                    border-radius: 10px;
-                    font-size: 12px;
-                    font-weight: 700;
-                    margin-top: 4px;
-                ">🚀 Open HPC Assist Dashboard →</a>
+                <div style="display:flex; flex-direction:column; gap:6px;">
+                    <a href="${dashUrl}" target="_blank" style="
+                        display: block;
+                        text-align: center;
+                        background: #10b981;
+                        color: white;
+                        text-decoration: none;
+                        padding: 8px 14px;
+                        border-radius: 10px;
+                        font-size: 12px;
+                        font-weight: 700;
+                    ">🚀 Open HPC Assist Dashboard →</a>
+                    <button id="hpc-resync-btn" style="
+                        background: #f1f5f9;
+                        color: #334155;
+                        border: 1px solid #cbd5e1;
+                        padding: 6px 10px;
+                        border-radius: 8px;
+                        font-size: 11px;
+                        font-weight: 700;
+                        cursor: pointer;
+                    ">🔄 Re-Sync / Fetch Students Again</button>
+                </div>
             `;
         } else if (status === 'error') {
             bgBadge = '#ef4444';
@@ -181,6 +199,7 @@
 
         document.getElementById('hpc-retry-btn')?.addEventListener('click', () => performAutoSync(true));
         document.getElementById('hpc-manual-sync-btn')?.addEventListener('click', () => performAutoSync(true));
+        document.getElementById('hpc-resync-btn')?.addEventListener('click', () => performAutoSync(true));
     }
 
     // Check periodically for school login and auto-trigger

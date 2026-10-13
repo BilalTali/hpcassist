@@ -1,0 +1,93 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class Student extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'school_id',
+        'first_name',
+        'last_name',
+        'name',
+        'dob',
+        'email',
+        'grade',
+        'section',
+        'apaar_id',
+        'pen_code',
+        'udise_student_id',
+        'gender',
+        'source',
+        'status',
+        'remark',
+        'failure_reason',
+        'hpc_submitted_at',
+    ];
+
+    protected $casts = [
+        'hpc_submitted_at' => 'datetime',
+    ];
+
+    public function school(): BelongsTo
+    {
+        return $this->belongsTo(School::class);
+    }
+
+    /**
+     * Scope for querying students of a particular school.
+     */
+    public function scopeForSchool($query, int $schoolId)
+    {
+        return $query->where('school_id', $schoolId);
+    }
+
+    /**
+     * Scope for successfully synced or submitted students.
+     */
+    public function scopeSuccess($query)
+    {
+        return $query->where('status', 'success');
+    }
+
+    /**
+     * Scope for failed or invalid students.
+     */
+    public function scopeFailed($query)
+    {
+        return $query->where('status', 'failed');
+    }
+
+    /**
+     * Format student model into preview array structure expected by dashboard and automation scripts.
+     */
+    public function toPreviewArray(int $rowNum = 1): array
+    {
+        $errors = [];
+        if (! empty($this->failure_reason)) {
+            $errors = array_filter(array_map('trim', explode(',', $this->failure_reason)));
+        }
+
+        return [
+            'id'         => $this->id,
+            'row'        => $rowNum,
+            'first_name' => $this->first_name,
+            'last_name'  => $this->last_name ?? '',
+            'name'       => $this->name,
+            'dob'        => $this->dob ?? '',
+            'email'      => $this->email ?? '',
+            'grade'      => $this->grade,
+            'section'    => $this->section ?? 'A',
+            'apaar_id'   => $this->apaar_id ?? '',
+            'pen_code'   => $this->pen_code ?? '',
+            'status'     => $this->status ?? 'pending',
+            'remark'     => $this->remark ?? '',
+            'errors'     => array_values($errors),
+        ];
+    }
+}

@@ -138,12 +138,15 @@ class UdiseController extends Controller
             }
         }
 
-        if (! $school) {
+        if (! $school && \App\Models\School::count() === 1) {
             $school = \App\Models\School::first();
         }
 
         if (! $school) {
-            return response()->json(['ok' => false, 'error' => 'Cannot identify school for sync.'], 403, $headers);
+            return response()->json([
+                'ok'    => false,
+                'error' => "Cannot identify school for UDISE code '{$udiseCode}'. Please ensure a school is registered with this UDISE code in HPC Assist.",
+            ], 404, $headers);
         }
 
         // Persist raw students

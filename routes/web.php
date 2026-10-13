@@ -33,6 +33,19 @@ Route::middleware('auth')->group(function () {
         $previewFile = $school ? $hpcController->getPreviewFile($school) : storage_path('app/hpc/preview.json');
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
 
+        // Check MySQL persistence for students
+        if ($school) {
+            $dbStudents = $school->students()->orderBy('id')->get();
+            if ($dbStudents->isNotEmpty()) {
+                $preview = $dbStudents->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
+            } elseif (count($preview) > 0) {
+                // Auto-migrate legacy preview.json records into MySQL
+                foreach ($preview as $pRow) {
+                    $hpcController->upsertStudentToDatabase($school, $pRow, 'legacy_import');
+                }
+            }
+        }
+
         $udiseStudents = $school ? $hpcController->getUdiseStudents($school) : [];
         $udiseCount = count($udiseStudents);
         if ($udiseCount === 0 && count($preview) > 0) {

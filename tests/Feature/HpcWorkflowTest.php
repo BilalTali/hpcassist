@@ -177,7 +177,13 @@ class HpcWorkflowTest extends TestCase
 
     public function test_student_records_save_and_delete(): void
     {
-        [$user] = $this->createSchoolUser();
+        [$user, $school] = $this->createSchoolUser();
+
+        // Ensure clean preview storage for isolated test
+        $previewFile = app(\App\Http\Controllers\HpcController::class)->getPreviewFile($school);
+        if (file_exists($previewFile)) {
+            @unlink($previewFile);
+        }
 
         // Save a new student record
         $saveResponse = $this->actingAs($user)->postJson('/hpc/students/save', [
@@ -194,6 +200,12 @@ class HpcWorkflowTest extends TestCase
         $saveResponse->assertStatus(200);
         $saveResponse->assertJson(['ok' => true]);
         $this->assertGreaterThanOrEqual(1, $saveResponse->json('total'));
+        $this->assertDatabaseHas('students', [
+            'school_id'  => $school->id,
+            'first_name' => 'AARAV',
+            'apaar_id'   => '123456789012',
+            'status'     => 'success',
+        ]);
 
         // Delete the student record
         $deleteResponse = $this->actingAs($user)->postJson('/hpc/students/delete', [
@@ -201,6 +213,45 @@ class HpcWorkflowTest extends TestCase
         ]);
         $deleteResponse->assertStatus(200);
         $deleteResponse->assertJson(['ok' => true]);
+        $this->assertDatabaseMissing('students', [
+            'school_id'  => $school->id,
+            'apaar_id'   => '123456789012',
+        ]);
+    }
+
+    public function test_student_records_deduplication_on_udise_sync(): void
+    {
+        [$user, $school] = $this->createSchoolUser();
+
+        $hpcController = app(\App\Http\Controllers\HpcController::class);
+
+        // Preload students
+        $students = [
+            [
+                'studentName' => 'RAHUL SHARMA',
+                'dob' => '2012-05-10',
+                'classDesc' => 'VI',
+                'sectionDesc' => 'A',
+                'apaarId' => '987654321012',
+                'studentCodeNat' => 'PEN123456',
+                'schUdiseCode' => $school->udise_code,
+            ],
+        ];
+
+        // First sync
+        $hpcController->preloadUdise(null, $school, $students);
+        $this->assertDatabaseHas('students', [
+            'school_id' => $school->id,
+            'first_name' => 'RAHUL',
+            'apaar_id' => '987654321012',
+            'source' => 'udise_sync',
+            'status' => 'success',
+        ]);
+        $this->assertEquals(1, \App\Models\Student::where('school_id', $school->id)->count());
+
+        // Second sync with same student — should update, not create duplicate
+        $hpcController->preloadUdise(null, $school, $students);
+        $this->assertEquals(1, \App\Models\Student::where('school_id', $school->id)->count());
     }
 
     public function test_udise_bridge_and_poll(): void

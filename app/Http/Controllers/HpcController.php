@@ -13,6 +13,8 @@ use PhpOffice\PhpSpreadsheet\Style\Font;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use App\Models\School;
+use App\Models\Student;
 
 /**
  * Class HpcController
@@ -364,6 +366,12 @@ class HpcController extends Controller
 
         file_put_contents($this->getPreviewFile($school), json_encode($preview, JSON_PRETTY_PRINT));
 
+        if ($school) {
+            foreach ($preview as $pRow) {
+                $this->upsertStudentToDatabase($school, $pRow, 'udise_sync');
+            }
+        }
+
         return response()->json([
             'ok'      => true,
             'message' => 'Successfully loaded ' . count($preview) . ' students from UDISE with unmasked APAAR IDs into Step 2!',
@@ -629,6 +637,9 @@ class HpcController extends Controller
         if (\Illuminate\Support\Facades\Auth::check()) {
             $userSchool = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
             if ($userSchool) {
+                foreach ($preview as $pRow) {
+                    $this->upsertStudentToDatabase($userSchool, $pRow, 'excel_upload');
+                }
                 $apaarCount = count(array_filter($preview, fn($s) => !empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12));
                 $userSchool->update([
                     'udise_status'         => 'synced',
@@ -725,6 +736,14 @@ class HpcController extends Controller
 
         $validated = $this->validateStudentRow($request->all(), $targetRow);
 
+        if (\Illuminate\Support\Facades\Auth::check()) {
+            $userSchool = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
+            if ($userSchool) {
+                $dbStudent = $this->upsertStudentToDatabase($userSchool, $validated, 'manual');
+                $validated['id'] = $dbStudent->id;
+            }
+        }
+
         if ($isEdit) {
             $preview[(int)$index] = $validated;
         } else {
@@ -755,21 +774,46 @@ class HpcController extends Controller
 
     public function deleteStudent(Request $request)
     {
-        $previewFile = $this->getPreviewFile();
+        $userSchool = \Illuminate\Support\Facades\Auth::check()
+            ? \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool()
+            : null;
+
+        $previewFile = $this->getPreviewFile($userSchool);
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
 
-        $index = (int) $request->input('index');
-        if (isset($preview[$index])) {
+        $index = $request->has('index') ? (int) $request->input('index') : null;
+        $studentId = $request->input('id');
+
+        $deletedStudent = null;
+
+        if ($studentId && $userSchool) {
+            $dbStudent = Student::where('school_id', $userSchool->id)->find($studentId);
+            if ($dbStudent) {
+                $deletedStudent = $dbStudent->toArray();
+                $dbStudent->delete();
+            }
+            $preview = array_values(array_filter($preview, fn($s) => ($s['id'] ?? null) != $studentId));
+        } elseif ($index !== null && isset($preview[$index])) {
+            $deletedStudent = $preview[$index];
             array_splice($preview, $index, 1);
 
-            foreach ($preview as $i => &$st) {
-                $st['row'] = $i + 1;
+            if ($userSchool && $deletedStudent) {
+                $this->deleteStudentFromDatabase($userSchool, $deletedStudent);
             }
-            unset($st);
-
-            file_put_contents($previewFile, json_encode($preview, JSON_PRETTY_PRINT));
-            $this->syncSpreadsheetFromPreview($preview);
+        } elseif ($userSchool && $index !== null) {
+            $dbStudent = Student::where('school_id', $userSchool->id)->orderBy('id')->skip($index)->first();
+            if ($dbStudent) {
+                $dbStudent->delete();
+            }
         }
+
+        foreach ($preview as $i => &$st) {
+            $st['row'] = $i + 1;
+        }
+        unset($st);
+
+        file_put_contents($previewFile, json_encode($preview, JSON_PRETTY_PRINT));
+        $this->syncSpreadsheetFromPreview($preview);
 
         $valid = count(array_filter($preview, fn($r) => empty($r['errors'])));
         $invalid = count($preview) - $valid;
@@ -796,6 +840,15 @@ class HpcController extends Controller
         file_put_contents($previewFile, json_encode($preview, JSON_PRETTY_PRINT));
         $this->syncSpreadsheetFromPreview($preview);
 
+        if (\Illuminate\Support\Facades\Auth::check()) {
+            $userSchool = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
+            if ($userSchool) {
+                foreach ($preview as $pRow) {
+                    $this->upsertStudentToDatabase($userSchool, $pRow, 'bulk_update');
+                }
+            }
+        }
+
         $valid = count(array_filter($preview, fn($r) => empty($r['errors'])));
         $invalid = count($preview) - $valid;
 
@@ -808,6 +861,105 @@ class HpcController extends Controller
             'preview' => $preview,
         ]);
     }
+
+    /**
+     * Upsert a student record into the MySQL database with deduplication.
+     * Matches by 12-digit unmasked APAAR ID, PEN code, or Name + DOB + Grade.
+     */
+    public function upsertStudentToDatabase(School $school, array $data, string $source = 'udise_sync'): Student
+    {
+        $apaar = ! empty($data['apaar_id']) ? preg_replace('/[^0-9]/', '', (string) $data['apaar_id']) : null;
+        $pen   = ! empty($data['pen_code']) ? trim((string) $data['pen_code']) : (! empty($data['studentCodeNat']) ? trim((string) $data['studentCodeNat']) : null);
+        $firstName = trim($data['first_name'] ?? '');
+        $lastName  = trim($data['last_name'] ?? '');
+        $name      = trim($data['name'] ?? trim("{$firstName} {$lastName}"));
+        $dob       = trim($data['dob'] ?? '');
+        $grade     = trim($data['grade'] ?? 'Grade 6');
+        $section   = trim($data['section'] ?? 'A');
+        $email     = trim($data['email'] ?? '');
+
+        $student = null;
+
+        // 1. Match by 12-digit APAAR ID if present
+        if ($apaar && strlen($apaar) === 12) {
+            $student = Student::where('school_id', $school->id)->where('apaar_id', $apaar)->first();
+        }
+
+        // 2. Match by PEN code if APAAR did not match
+        if (! $student && ! empty($pen)) {
+            $student = Student::where('school_id', $school->id)->where('pen_code', $pen)->first();
+        }
+
+        // 3. Match by Name + DOB + Grade
+        if (! $student && ! empty($name) && ! empty($dob)) {
+            $student = Student::where('school_id', $school->id)
+                ->where('name', $name)
+                ->where('dob', $dob)
+                ->where('grade', $grade)
+                ->first();
+        }
+
+        $errors = $data['errors'] ?? [];
+        $status = ! empty($errors) ? 'failed' : 'success';
+        $defaultRemark = $source === 'udise_sync' ? 'Synced from UDISE+ SDMS' : ($source === 'excel_upload' ? 'Imported from Excel spreadsheet' : 'Saved via School Portal');
+        $remark = ! empty($errors) ? null : ($data['remark'] ?? $defaultRemark);
+        $failureReason = ! empty($errors) ? implode(', ', (array) $errors) : null;
+
+        $payload = [
+            'school_id'        => $school->id,
+            'first_name'       => $firstName ?: 'Student',
+            'last_name'        => $lastName,
+            'name'             => $name ?: 'Student',
+            'dob'              => $dob,
+            'email'            => $email,
+            'grade'            => $grade,
+            'section'          => $section ?: 'A',
+            'apaar_id'         => $apaar,
+            'pen_code'         => $pen,
+            'udise_student_id' => $data['udise_student_id'] ?? ($data['studentId'] ?? null),
+            'gender'           => $data['gender'] ?? ($data['genderDesc'] ?? null),
+            'source'           => $source,
+            'status'           => $status,
+            'remark'           => $remark,
+            'failure_reason'   => $failureReason,
+        ];
+
+        if ($student) {
+            $student->update($payload);
+            return $student;
+        }
+
+        return Student::create($payload);
+    }
+
+    /**
+     * Remove student record from MySQL database.
+     */
+    public function deleteStudentFromDatabase(School $school, array $studentData): void
+    {
+        $query = Student::where('school_id', $school->id);
+
+        if (! empty($studentData['id'])) {
+            $query->where('id', $studentData['id'])->delete();
+            return;
+        }
+
+        $apaar = ! empty($studentData['apaar_id']) ? preg_replace('/[^0-9]/', '', (string) $studentData['apaar_id']) : null;
+        $pen   = ! empty($studentData['pen_code']) ? trim((string) $studentData['pen_code']) : null;
+
+        if ($apaar && strlen($apaar) === 12) {
+            $query->where('apaar_id', $apaar)->delete();
+        } elseif ($pen) {
+            $query->where('pen_code', $pen)->delete();
+        } else {
+            $name = trim($studentData['name'] ?? trim(($studentData['first_name'] ?? '') . ' ' . ($studentData['last_name'] ?? '')));
+            $dob  = trim($studentData['dob'] ?? '');
+            if (! empty($name) && ! empty($dob)) {
+                $query->where('name', $name)->where('dob', $dob)->delete();
+            }
+        }
+    }
+
 
     // ─── Step 3: Start Automation ────────────────────────────────────────────
 

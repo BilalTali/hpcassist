@@ -55,6 +55,11 @@ class School extends Model
         return $this->hasMany(Teacher::class);
     }
 
+    public function students(): HasMany
+    {
+        return $this->hasMany(Student::class);
+    }
+
     public function activeTeachers(): HasMany
     {
         return $this->hasMany(Teacher::class)->where('is_active', true);

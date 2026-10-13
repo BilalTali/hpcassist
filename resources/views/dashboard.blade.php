@@ -382,13 +382,13 @@
             <!-- ========================================================================= -->
             <div x-show="currentStep === 2" x-transition class="space-y-6">
 
-                <!-- 2A. Template Download & Upload Hub -->
+                <!-- 2A. Template Generation Suite -->
                 <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-6 space-y-4">
                     <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                         <div>
                             <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-600">Template Generation Suite</div>
                             <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
-                                <span>Excel Spreadsheets for PARAKH HPC</span>
+                                <span>Official HPC &amp; PARAKH Spreadsheets</span>
                                 @if(isset($udiseCount) && $udiseCount > 0)
                                     <span class="text-xs font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full">
                                         ✨ {{ $udiseCount }} Students Ready
@@ -396,7 +396,7 @@
                                 @endif
                             </h3>
                             <p class="text-xs text-slate-500 mt-0.5">
-                                Download the verified template format, complete or modify records, and upload for automated portal ingestion.
+                                Download verified templates with official HPC schema, stage-specific grading columns, and pre-populated student IDs.
                             </p>
                         </div>
 
@@ -417,28 +417,116 @@
                             </a>
                         </div>
                     </div>
-
-                    <!-- Upload Excel Form -->
-                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <form action="{{ route('hpc.upload') }}" method="POST" enctype="multipart/form-data" 
-                              @submit.prevent="submitExcelUpload($event)"
-                              class="flex items-center gap-3 flex-wrap">
-                            @csrf
-                            <input type="file" name="file" accept=".xlsx, .csv" required
-                                   class="text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100 cursor-pointer">
-                            <button type="submit" :disabled="isUploadingExcel"
-                                    class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
-                                <span x-show="!isUploadingExcel">📤 Upload Completed Spreadsheet</span>
-                                <span x-show="isUploadingExcel" class="inline-flex items-center gap-1.5" style="display:none;">
-                                    <svg class="animate-spin -ml-1 mr-1 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
-                                    Uploading &amp; Processing...
-                                </span>
-                            </button>
-                        </form>
-                    </div>
                 </div>
 
-                <!-- 2B. Paginated Student Records Review Table -->
+                <!-- 2B. Dedicated Student Spreadsheet Upload Hub (Fresh & Update) -->
+                <div class="bg-white rounded-2xl shadow-sm border-2 border-indigo-500/40 p-6 space-y-5"
+                     x-data="{
+                        isUploading: false,
+                        fileName: '',
+                        fileSize: '',
+                        replaceAll: false,
+                        handleFileChange(e) {
+                            const f = e.target.files[0];
+                            if (f) {
+                                this.fileName = f.name;
+                                this.fileSize = (f.size / 1024).toFixed(1) + ' KB';
+                            } else {
+                                this.fileName = '';
+                                this.fileSize = '';
+                            }
+                        }
+                     }">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-800">
+                                📤 Student Roster Ingestion
+                            </span>
+                            <h3 class="text-lg font-black text-slate-900 mt-2 flex items-center gap-2">
+                                <span>Upload Student Spreadsheet (.xlsx, .xls, .csv)</span>
+                            </h3>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                Upload your completed HPC student spreadsheet or raw UDISE+ export. All names, grades, sections, dates of birth, and unmasked APAAR IDs will be automatically validated and saved.
+                            </p>
+                        </div>
+                        @if(isset($udiseCount) && $udiseCount > 0)
+                            <div class="shrink-0 flex items-center gap-2">
+                                <span class="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                                    Current Roster: <strong class="text-indigo-600">{{ $udiseCount }}</strong> Students
+                                </span>
+                            </div>
+                        @endif
+                    </div>
+
+                    <form action="{{ route('hpc.upload') }}" method="POST" enctype="multipart/form-data"
+                          @submit="isUploading = true"
+                          class="space-y-4">
+                        @csrf
+
+                        <!-- Drag/Drop or Select Zone -->
+                        <div class="relative border-2 border-dashed border-indigo-200 hover:border-indigo-500 bg-indigo-50/30 hover:bg-indigo-50/60 rounded-2xl p-6 transition flex flex-col items-center justify-center text-center cursor-pointer">
+                            <input type="file" name="file" accept=".xlsx, .xls, .csv" required
+                                   @change="handleFileChange($event)"
+                                   id="excel-file-input"
+                                   class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                            <div class="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-2xl mb-2">
+                                📊
+                            </div>
+                            <template x-if="!fileName">
+                                <div class="space-y-1">
+                                    <div class="text-sm font-black text-slate-800">
+                                        Click to choose Excel file or drag &amp; drop here
+                                    </div>
+                                    <div class="text-xs text-slate-500 font-medium">
+                                        Supports .xlsx, .xls, and .csv files up to 10 MB
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="fileName">
+                                <div class="space-y-1">
+                                    <div class="text-sm font-black text-indigo-700 flex items-center justify-center gap-2 flex-wrap">
+                                        <span>✓ Ready to upload:</span>
+                                        <span class="font-mono bg-white px-2.5 py-1 rounded-lg border border-indigo-200 shadow-2xs" x-text="fileName"></span>
+                                        <span class="text-xs font-normal text-slate-500" x-text="'(' + fileSize + ')'"></span>
+                                    </div>
+                                    <div class="text-xs text-slate-500">
+                                        Click again to choose a different file
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Fresh Upload Toggle & Submit Controls -->
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <label class="flex items-start gap-3 cursor-pointer select-none">
+                                <input type="checkbox" name="replace_all" value="1" x-model="replaceAll"
+                                       class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4">
+                                <div class="text-xs">
+                                    <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                                        <span>🔄 Fresh Roster Upload</span>
+                                        <span class="text-[10px] uppercase font-black bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">Replaces existing list</span>
+                                    </div>
+                                    <div class="text-slate-500 text-[11px] mt-0.5">
+                                        Check this to completely wipe existing records and load this spreadsheet freshly. Leave unchecked to merge/update.
+                                    </div>
+                                </div>
+                            </label>
+
+                            <button type="submit" :disabled="isUploading"
+                                    class="shrink-0 inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-black text-xs sm:text-sm shadow-md hover:shadow-indigo-500/25 transition active:scale-95 cursor-pointer">
+                                <span x-show="!isUploading" class="inline-flex items-center gap-1.5">
+                                    <span>📤</span> Upload &amp; Ingest Spreadsheet
+                                </span>
+                                <span x-show="isUploading" class="inline-flex items-center gap-2" style="display:none;">
+                                    <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                                    Uploading &amp; Parsing Students...
+                                </span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 2C. Paginated Student Records Review Table -->
                 <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-6 space-y-4">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
@@ -453,15 +541,23 @@
                             </p>
                         </div>
 
-                        <!-- Search Box & Filter -->
-                        <div class="flex items-center gap-2.5">
+                        <!-- Search Box & Actions -->
+                        <div class="flex items-center gap-2 flex-wrap">
                             <input type="text" id="student-search-input" onkeyup="filterStudentTable()"
                                    placeholder="🔍 Search by Name or APAAR..."
-                                   class="px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-500 w-56">
+                                   class="px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-500 w-52">
                             <button onclick="openAddStudentModal()"
                                     class="px-3.5 py-1.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold transition">
                                 ➕ Add Student
                             </button>
+                            @if(count($preview) > 0)
+                                <button onclick="clearAllStudentsConfirm()"
+                                        type="button"
+                                        class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition"
+                                        title="Clear all student records to upload fresh file">
+                                    🗑️ Clear All
+                                </button>
+                            @endif
                         </div>
                     </div>
 
@@ -1422,6 +1518,28 @@
             const data = await res.json();
             if (data.ok) window.location.reload();
             else alert('Failed to delete student.');
+        }
+
+        async function clearAllStudentsConfirm() {
+            if (!confirm('⚠️ Are you sure you want to completely clear all student records from your school roster? This will allow you to upload a fresh Excel spreadsheet from scratch.')) return;
+            try {
+                const res = await fetch("{{ route('hpc.students.clear_all') }}", {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': CSRF
+                    }
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    window.location.href = "{{ route('dashboard') }}?step=2";
+                } else {
+                    alert(data.message || 'Could not clear students.');
+                }
+            } catch (err) {
+                alert('Clear failed: ' + err.message);
+            }
         }
 
         // Automation Runner

@@ -643,6 +643,10 @@ class HpcController extends Controller
         if (\Illuminate\Support\Facades\Auth::check()) {
             $userSchool = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
             if ($userSchool) {
+                if ($request->boolean('replace_all')) {
+                    Student::where('school_id', $userSchool->id)->delete();
+                }
+
                 foreach ($preview as $pRow) {
                     $this->upsertStudentToDatabase($userSchool, $pRow, 'excel_upload');
                 }
@@ -837,6 +841,38 @@ class HpcController extends Controller
             'invalid' => $invalid,
             'preview' => $preview,
         ]);
+    }
+
+    public function clearAllStudents(Request $request)
+    {
+        $userSchool = \Illuminate\Support\Facades\Auth::check()
+            ? \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool()
+            : null;
+
+        if ($userSchool) {
+            Student::where('school_id', $userSchool->id)->delete();
+            $userSchool->update([
+                'udise_students_count' => 0,
+                'udise_apaar_count'    => 0,
+            ]);
+            $previewFile = $this->getPreviewFile($userSchool);
+            if (file_exists($previewFile)) {
+                @unlink($previewFile);
+            }
+            $this->syncSpreadsheetFromPreview([]);
+        }
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'ok'      => true,
+                'message' => 'All students cleared from roster.',
+                'total'   => 0,
+                'preview' => [],
+            ]);
+        }
+
+        return redirect()->to(route('dashboard') . '?step=2')
+            ->with('success', 'Student roster cleared. You can now upload a fresh Excel file.');
     }
 
     public function updateAllStudents(Request $request)

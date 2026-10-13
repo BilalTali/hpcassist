@@ -122,6 +122,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/hpc/students/preload-udise', [HpcController::class, 'preloadUdise'])->name('hpc.students.preload_udise');
     Route::post('/hpc/students/save',          [HpcController::class, 'saveStudent'])->name('hpc.students.save');
     Route::post('/hpc/students/delete',        [HpcController::class, 'deleteStudent'])->name('hpc.students.delete');
+    Route::post('/hpc/students/clear-all',     [HpcController::class, 'clearAllStudents'])->name('hpc.students.clear_all');
     Route::post('/hpc/students/update-all',    [HpcController::class, 'updateAllStudents'])->name('hpc.students.update_all');
 
     // ── Teacher Assessment Portal Routes ──────────────────────────────────────

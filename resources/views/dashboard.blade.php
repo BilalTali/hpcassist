@@ -53,6 +53,25 @@
     <div class="py-6 bg-slate-50 min-h-screen" x-data="workflowApp({{ (int) request('step', ($school?->udise_status === 'synced' || $school?->udise_status === 'skipped') ? 2 : 1) }})">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
+            @if(session('success'))
+                <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between shadow-2xs">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">🎉</span>
+                        <span>{{ session('success') }}</span>
+                    </div>
+                    <button type="button" onclick="this.parentElement.remove()" class="text-emerald-500 hover:text-emerald-800 text-base font-bold leading-none">&times;</button>
+                </div>
+            @endif
+            @if(session('error'))
+                <div class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center justify-between shadow-2xs">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">⚠️</span>
+                        <span>{{ session('error') }}</span>
+                    </div>
+                    <button type="button" onclick="this.parentElement.remove()" class="text-rose-500 hover:text-rose-800 text-base font-bold leading-none">&times;</button>
+                </div>
+            @endif
+
             <!-- ── STEPPER PROGRESS BAR (MATCHING USER WORKFLOW PATTERN) ── -->
             <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-3 sm:p-4">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -386,13 +405,19 @@
 
                     <!-- Upload Excel Form -->
                     <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <form action="{{ route('hpc.upload') }}" method="POST" enctype="multipart/form-data" class="flex items-center gap-3 flex-wrap">
+                        <form action="{{ route('hpc.upload') }}" method="POST" enctype="multipart/form-data" 
+                              @submit.prevent="submitExcelUpload($event)"
+                              class="flex items-center gap-3 flex-wrap">
                             @csrf
                             <input type="file" name="file" accept=".xlsx, .csv" required
                                    class="text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100 cursor-pointer">
-                            <button type="submit"
-                                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
-                                📤 Upload Completed Spreadsheet
+                            <button type="submit" :disabled="isUploadingExcel"
+                                    class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
+                                <span x-show="!isUploadingExcel">📤 Upload Completed Spreadsheet</span>
+                                <span x-show="isUploadingExcel" class="inline-flex items-center gap-1.5" style="display:none;">
+                                    <svg class="animate-spin -ml-1 mr-1 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                                    Uploading &amp; Processing...
+                                </span>
                             </button>
                         </form>
                     </div>
@@ -736,13 +761,19 @@
                             <p class="text-xs text-slate-600 leading-relaxed">
                                 Upload your completed spreadsheet to validate marks, verify calculation rules, and prepare batch submission into the portal.
                             </p>
-                            <form action="{{ route('hpc.teacher.upload') }}" method="POST" enctype="multipart/form-data" class="flex items-center gap-2 flex-wrap pt-1">
+                            <form action="{{ route('hpc.teacher.upload') }}" method="POST" enctype="multipart/form-data" 
+                                  @submit.prevent="submitTeacherAssessmentUpload($event)"
+                                  class="flex items-center gap-2 flex-wrap pt-1">
                                 @csrf
                                 <input type="file" name="file" accept=".xlsx, .csv" required
                                        class="text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-100 cursor-pointer">
-                                <button type="submit"
-                                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
-                                    Upload Assessment
+                                <button type="submit" :disabled="isUploadingAssessment"
+                                        class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
+                                    <span x-show="!isUploadingAssessment">Upload Assessment</span>
+                                    <span x-show="isUploadingAssessment" class="inline-flex items-center gap-1.5" style="display:none;">
+                                        <svg class="animate-spin -ml-1 mr-1 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                                        Uploading...
+                                    </span>
                                 </button>
                             </form>
                         </div>
@@ -953,6 +984,72 @@
                     } catch(e) {
                         alert('Upload failed: ' + e.message);
                         this.statusType = 'idle';
+                    }
+                },
+
+                isUploadingExcel: false,
+                async submitExcelUpload(event) {
+                    const form = event.target;
+                    const fileInput = form.querySelector('input[type="file"]');
+                    if (!fileInput || !fileInput.files.length) {
+                        alert('Please choose an Excel (.xlsx, .xls) file first.');
+                        return;
+                    }
+                    this.isUploadingExcel = true;
+                    const fd = new FormData(form);
+                    try {
+                        const res = await fetch("{{ route('hpc.upload') }}", {
+                            method: 'POST',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': CSRF
+                            },
+                            body: fd
+                        });
+                        const data = await res.json();
+                        if (data.ok) {
+                            window.location.href = "{{ route('dashboard') }}?step=2";
+                        } else {
+                            alert(data.error || 'Failed to upload spreadsheet.');
+                            this.isUploadingExcel = false;
+                        }
+                    } catch(err) {
+                        alert('Upload failed: ' + err.message);
+                        this.isUploadingExcel = false;
+                    }
+                },
+
+                isUploadingAssessment: false,
+                async submitTeacherAssessmentUpload(event) {
+                    const form = event.target;
+                    const fileInput = form.querySelector('input[type="file"]');
+                    if (!fileInput || !fileInput.files.length) {
+                        alert('Please choose an assessment spreadsheet first.');
+                        return;
+                    }
+                    this.isUploadingAssessment = true;
+                    const fd = new FormData(form);
+                    try {
+                        const res = await fetch("{{ route('hpc.teacher.upload') }}", {
+                            method: 'POST',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': CSRF
+                            },
+                            body: fd
+                        });
+                        const data = await res.json();
+                        if (data.ok) {
+                            window.location.href = "{{ route('dashboard') }}?step=4";
+                        } else {
+                            alert(data.error || 'Failed to upload assessment.');
+                            this.isUploadingAssessment = false;
+                        }
+                    } catch(err) {
+                        alert('Upload failed: ' + err.message);
+                        this.isUploadingAssessment = false;
                     }
                 },
 

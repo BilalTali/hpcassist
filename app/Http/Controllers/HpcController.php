@@ -488,7 +488,10 @@ class HpcController extends Controller
         $uploadedFile = $request->file('file');
         $ext = strtolower($uploadedFile->getClientOriginalExtension());
         if (! in_array($ext, ['xlsx', 'xls', 'csv'])) {
-            return response()->json(['ok' => false, 'error' => 'Please upload a valid Excel (.xlsx, .xls) file.']);
+            $msg = 'Please upload a valid Excel (.xlsx, .xls) file.';
+            return ($request->expectsJson() || $request->ajax())
+                ? response()->json(['ok' => false, 'error' => $msg])
+                : redirect()->to(route('dashboard') . '?step=2')->with('error', $msg);
         }
 
         $dir = $this->getSchoolStorageDir();
@@ -651,6 +654,11 @@ class HpcController extends Controller
                     'udise_apaar_count'    => $apaarCount,
                 ]);
             }
+        }
+
+        if (! $request->expectsJson() && ! $request->ajax()) {
+            return redirect()->to(route('dashboard') . '?step=2')
+                ->with('success', 'Successfully uploaded ' . count($preview) . ' students to your school roster!');
         }
 
         return response()->json([

@@ -79,14 +79,46 @@ class HpcTeacherController extends Controller
         ));
     }
 
-    // ─── Step 1: Download Filled Roster Template ──────────────────────────────
-
-    public function downloadTemplate(?Request $request = null)
+    /**
+     * Download Filled Roster Template.
+     *
+     * @param Request|null $request
+     * @return \Symfony\Component\HttpFoundation\StreamedResponse
+     */
+    public function downloadTemplate(?Request $request = null): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
-        $schoolDir = $this->getSchoolStorageDir($school);
+        $students = $this->getTeacherTemplateStudents();
+
+        return $this->generateSpreadsheetResponse($students);
+    }
+
+    private function generateSpreadsheetResponse(array $students): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        /** @var Spreadsheet $spreadsheet */
+        $spreadsheet = new Spreadsheet();
+
+        $this->buildInstructionsSheet($spreadsheet);
+        $this->buildEvaluationsSheet($spreadsheet, $students);
+
+        $filename = 'hpc_teacher_assessment_template.xlsx';
+        /** @var Xlsx $writer */
+        $writer   = new Xlsx($spreadsheet);
+
+        return response()->stream(function () use ($writer): void {
+            $writer->save('php://output');
+        }, 200, [
+            'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Cache-Control'       => 'no-cache, no-store, must-revalidate',
+        ]);
+    }
+
+    private function getTeacherTemplateStudents(): array
+    {
+        $school       = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $schoolDir    = $this->getSchoolStorageDir($school);
         $studentsFile = $schoolDir . '/teacher_students.json';
-        $students = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
+        $students     = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
 
         if (empty($students) && $school && $school->students()->exists()) {
             $students = $school->students()->orderBy('id')->get()->map(function($st) {
@@ -109,9 +141,11 @@ class HpcTeacherController extends Controller
             ];
         }
 
-        $spreadsheet = new Spreadsheet();
+        return $students;
+    }
 
-        // ─── Sheet 1: Instructions & Rules ────────────────────────────────────
+    private function buildInstructionsSheet(Spreadsheet $spreadsheet): void
+    {
         $instructionSheet = $spreadsheet->getActiveSheet();
         $instructionSheet->setTitle('Instructions & Rules');
 
@@ -166,15 +200,17 @@ class HpcTeacherController extends Controller
         $instructionSheet->getColumnDimension('C')->setWidth(22);
         $instructionSheet->getColumnDimension('D')->setWidth(55);
         $instructionSheet->getColumnDimension('E')->setWidth(45);
+    }
 
-        // ─── Sheet 2: Student Evaluations ─────────────────────────────────────
+    private function buildEvaluationsSheet(Spreadsheet $spreadsheet, array $students): void
+    {
         $evalSheet = $spreadsheet->createSheet();
         $evalSheet->setTitle('Student Evaluations');
 
         $columns  = $this->getEvaluationColumns();
         $sections = $this->getEvaluationSections();
 
-        // ─── Row 1: Category Super-Headers (Color Banners) ─────────────────────
+        // Row 1: Category Super-Headers (Color Banners)
         foreach ($sections as $sec) {
             $startCol = $this->indexToColumnLetter($sec['start']);
             $endCol   = $this->indexToColumnLetter($sec['end']);
@@ -190,35 +226,18 @@ class HpcTeacherController extends Controller
             ]);
         }
 
-        // ─── Part-by-Part Independent Collapsible Column Outlines ───────────────
-        // Each major Part in Row 1 has its own isolated outline bracket so teachers can:
-        // 1. Expand [+] any part to fill student records
-        // 2. Collapse [-] that part when completed and proceed to the next part
-        // 3. Keep Student Name (Col C) locked & visible at all times
-        // 4. Expand [+] any part at any time to inspect or edit!
         $collapsibleRanges = [
-            // Part 1: Student Identity (cols 0..3) -> APAAR & Login ID (A-B) & Status (D) collapsed; Name (Col C) locked & visible
             [0, 1],
             [3, 3],
-            // Part 2: Part-A1 Basic Profile (cols 4..11) -> Secondary fields (Cols F-K) collapsible; Admission No (Col E) & Parent Name (Col L) anchor
             [5, 10],
-            // Part 3: Monthly Attendance (cols 12..35) -> All 24 monthly attendance cols (Cols M-AJ) collapsible into Attendance Summary (Cols AK-AM)
             [12, 35],
-            // Part 5: Absence & Hobby (cols 39..41) -> Absent count & reason (Cols AN-AO) collapsible; Hobby (Col AP) anchor
             [39, 40],
-            // Part 6: Part-A2 Goals & Reflections (cols 42..67) -> 25 goals/strengths cols (Cols AQ-BO) collapsible; Teacher note (Col BP) anchor
             [42, 66],
-            // Part 7: Part-A3 Ambition Card (cols 68..77) -> 8 ambition cols (Cols BR-BY) collapsible; Ambition (Col BQ) & Parent feeling (Col BZ) anchor
             [69, 76],
-            // Part 8: Part-A4 Home Resources (cols 78..87) -> 9 resources checklist cols (Cols CA-CI) collapsible; Other specify (Col CJ) anchor
             [78, 86],
-            // Part 9: Part-A4 Motivation & Progress (cols 88..91) -> 3 motivation cols (Cols CK-CM) collapsible; Progress (Col CN) anchor
             [88, 90],
-            // Part 10: Part-A4 School Support Needed (cols 92..102) -> 10 support cols (Cols CO-CX) collapsible; Other specify (Col CY) anchor
             [92, 101],
-            // Part 12: Part-B Activity Profile (cols 104..126) -> 22 activity & review cols (Cols DA-DV) collapsible; Support plan (Col DW) anchor
             [104, 125],
-            // Part 14: HPC Credit Curricular Marks (cols 129..144) -> All 16 marks cols (Cols DZ-EO) collapsible; Declaration (Col EP) anchor
             [129, 144],
         ];
 
@@ -233,13 +252,12 @@ class HpcTeacherController extends Controller
         $evalSheet->setShowSummaryRight(true);
         $evalSheet->getRowDimension(1)->setRowHeight(30);
 
-        // ─── Row 2: Field Names & Row 3: Guidance Notes ────────────────────────
+        // Row 2: Field Names & Row 3: Guidance Notes
         foreach ($columns as $idx => $col) {
             $colLetter = $this->indexToColumnLetter($idx);
             $isObt    = str_ends_with($col['key'], '_obt');
             $isLocked = in_array($col['type'], ['locked', 'calc']);
 
-            // Highlight Obtained Marks headers in Soft Yellow with icon
             $label = $isObt ? '✏️ ' . $col['label'] : $col['label'];
             $evalSheet->setCellValue("{$colLetter}2", $label);
             $evalSheet->setCellValue("{$colLetter}3", $col['note']);
@@ -265,9 +283,8 @@ class HpcTeacherController extends Controller
         $evalSheet->getRowDimension(2)->setRowHeight(26);
         $evalSheet->getRowDimension(3)->setRowHeight(20);
 
-        // ─── Row 4: COMPLETE DEMO / DUMMY STUDENT (GUIDE ONLY) ────────────────
+        // Row 4: Complete Demo Student
         $demoRow = $this->getDemoStudentRow();
-
         foreach ($columns as $cIdx => $col) {
             $colLetter = $this->indexToColumnLetter($cIdx);
             $val = $demoRow[$cIdx] ?? '';
@@ -291,13 +308,13 @@ class HpcTeacherController extends Controller
         }
         $evalSheet->getRowDimension(4)->setRowHeight(24);
 
-        // ─── Rows 5 onwards: REAL ENROLLED STUDENTS (SMART PRE-FILLED) ────────
+        // Rows 5 onwards: Enrolled Students
         $defaultWd = SchoolWorkingDay::getDefault();
         $defaultWorkMap = $defaultWd->toMonthMap();
         $defaultMax = SchoolMaxMark::getDefault()->toSubjectMap();
 
         foreach ($students as $sIdx => $st) {
-            $rowNum = $sIdx + 5; // Starts at Row 5 below Category Header, Names, Notes, and Demo Student
+            $rowNum = $sIdx + 5;
             $starterRow = $this->getStudentStarterProfile($sIdx, $st, $defaultWorkMap, $defaultMax, $rowNum);
 
             foreach ($columns as $cIdx => $col) {
@@ -321,7 +338,6 @@ class HpcTeacherController extends Controller
                 $isObt    = str_ends_with($col['key'], '_obt');
                 $isLocked = in_array($col['type'], ['locked', 'calc']);
 
-                // Highlight editable Obtained Marks in soft warm yellow for quick focus
                 $cellBg    = $isObt ? 'FFFEFCE8' : ($isLocked ? 'FFF1F5F9' : 'FFFFFFFF');
                 $cellColor = $isObt ? 'FF0F172A' : ($isLocked ? 'FF475569' : 'FF1E293B');
 
@@ -336,9 +352,6 @@ class HpcTeacherController extends Controller
             $evalSheet->getRowDimension($rowNum)->setRowHeight(22);
         }
 
-        // ─── Conditional Formatting: Highlight Empty Cells in Light Red ───────
-        // All empty cells light up in soft alert red (#FEE2E2 with border #FCA5A5).
-        // Once filled by teacher, conditional rule evaluates to false and cell converts to its respective color.
         $lastColLetter = $this->indexToColumnLetter(count($columns) - 1);
         $maxRow = max(5, count($students) + 4);
         $evalDataRange = "A5:{$lastColLetter}{$maxRow}";
@@ -354,19 +367,7 @@ class HpcTeacherController extends Controller
         $blankRule->getStyle()->getBorders()->getRight()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFFCA5A5');
 
         $evalSheet->getStyle($evalDataRange)->setConditionalStyles([$blankRule]);
-
         $evalSheet->freezePane('D5');
-
-        $filename = 'hpc_teacher_assessment_template.xlsx';
-        $writer   = new Xlsx($spreadsheet);
-
-        return response()->stream(function () use ($writer) {
-            $writer->save('php://output');
-        }, 200, [
-            'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
-            'Cache-Control'       => 'no-cache, no-store, must-revalidate',
-        ]);
     }
 
     public function indexToColumnLetter(int $index): string
@@ -482,11 +483,19 @@ class HpcTeacherController extends Controller
                 }
             }
         } catch (\Throwable $e) {
-            return response()->json(['ok' => false, 'error' => 'Could not read Excel file: ' . $e->getMessage()]);
+            $msg = 'Could not read Excel file: ' . $e->getMessage();
+            return ($request->expectsJson() || $request->ajax())
+                ? response()->json(['ok' => false, 'error' => $msg])
+                : redirect()->to(route('dashboard') . '?step=4')->with('error', $msg);
         }
 
         $schoolDir = $this->getSchoolStorageDir();
         file_put_contents($schoolDir . '/teacher_preview.json', json_encode($preview, JSON_PRETTY_PRINT));
+
+        if (! $request->expectsJson() && ! $request->ajax()) {
+            return redirect()->to(route('dashboard') . '?step=4')
+                ->with('success', 'Successfully uploaded ' . count($preview) . ' assessment records!');
+        }
 
         return response()->json([
             'ok'      => true,

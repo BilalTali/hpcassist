@@ -561,10 +561,27 @@
 
         logStatus(`Setting APAAR ID: ${cleanApaar}...`);
 
-        // 1. Try dispatching synthetic paste event on the first box
+        // 1. Direct React Hook Form onPaste handler invocation on the first box (PARAKH module 5522)
+        const box0 = boxes[0];
+        const box0PropsKey = Object.keys(box0).find(k => k.startsWith('__reactProps'));
+        if (box0PropsKey && typeof box0[box0PropsKey]?.onPaste === 'function') {
+            try {
+                box0[box0PropsKey].onPaste({
+                    clipboardData: {
+                        getData: () => cleanApaar
+                    },
+                    preventDefault: () => {},
+                    stopPropagation: () => {}
+                });
+                await sleep(150);
+            } catch(e) {}
+        }
+
+        // 2. Dispatch synthetic DOM ClipboardEvent paste
         try {
             const pasteDt = new DataTransfer();
             pasteDt.setData('text/plain', cleanApaar);
+            pasteDt.setData('text', cleanApaar);
             const pasteEv = new ClipboardEvent('paste', {
                 clipboardData: pasteDt,
                 bubbles: true,
@@ -574,7 +591,7 @@
             await sleep(150);
         } catch(e) {}
 
-        // 2. Set each box individually to ensure React Hook Form state is updated
+        // 3. Set each box individually to ensure React Hook Form state and DOM are synchronized
         for (let b = 0; b < 12; b++) {
             const box = boxes[b];
             const digit = cleanApaar[b];
@@ -582,7 +599,14 @@
             
             const propsKey = Object.keys(box).find(k => k.startsWith('__reactProps'));
             if (propsKey && typeof box[propsKey]?.onChange === 'function') {
-                try { box[propsKey].onChange({ target: box, currentTarget: box }); } catch(e) {}
+                try {
+                    box[propsKey].onChange({
+                        target: box,
+                        currentTarget: box,
+                        preventDefault: () => {},
+                        stopPropagation: () => {}
+                    });
+                } catch(e) {}
             }
             await sleep(30);
         }
@@ -651,9 +675,28 @@
             }
 
             // 5. School Admission Number (if available)
-            if (fields.admissionNo && student.admission_no) {
-                setNativeValue(fields.admissionNo, student.admission_no);
-                await sleep(100);
+            const admInput = getFieldByLabel('admission') ||
+                             Array.from(document.querySelectorAll('.custom-input-label')).find(w => w.textContent.toLowerCase().includes('admission'))?.querySelector('input') ||
+                             Array.from(document.querySelectorAll('input[placeholder*="write" i]'))[3];
+            const admVal = String(student.admission_no || student.pen_code || student.admissionNo || '').trim();
+            if (admInput && admVal) {
+                logStatus(`Setting Admission No: ${admVal}...`);
+                admInput.focus();
+                setNativeValue(admInput, admVal);
+                const propsKey = Object.keys(admInput).find(k => k.startsWith('__reactProps'));
+                if (propsKey && typeof admInput[propsKey]?.onChange === 'function') {
+                    try {
+                        admInput[propsKey].onChange({
+                            target: admInput,
+                            currentTarget: admInput,
+                            preventDefault: () => {},
+                            stopPropagation: () => {}
+                        });
+                    } catch(e) {
+                        try { admInput[propsKey].onChange({ target: { value: admVal }, currentTarget: { value: admVal } }); } catch(e2) {}
+                    }
+                }
+                await sleep(150);
             }
 
             // 6. Grade Dropdown
@@ -714,25 +757,31 @@
             targetBtn.click();
 
             // 11. WAIT AND STRICTLY VERIFY: Did PARAKH accept the submission?
-            // PARAKH opens #custom_modal with "Student has been added successfully" on success,
-            // or displays a toast/alert on validation failure.
+            // PARAKH opens #custom_modal with "Student has been added successfully" on success
             let confirmedSuccess = false;
             let portalError = null;
 
             for (let poll = 0; poll < 15; poll++) {
                 await sleep(400);
 
-                // Check for custom success modal (#custom_modal or .modal.show)
-                const successModal = document.querySelector('#custom_modal, .modal.show');
-                if (successModal && successModal.offsetParent !== null) {
+                // Check for custom success modal (#custom_modal or .modal.show or style*="block")
+                const successModal = document.querySelector('#custom_modal, .modal.show, div.modal[style*="block"]');
+                if (successModal) {
                     const mTxt = (successModal.innerText || successModal.textContent || '').toLowerCase();
                     if (mTxt.includes('successfully') || mTxt.includes('success') || mTxt.includes('added') || mTxt.includes('updated')) {
                         console.log('[HPC Assist] Success modal appeared for', stName);
                         // Click confirmation button in modal-footer to dismiss modal and reset form
-                        const okBtn = successModal.querySelector('.modal-footer button.custom-btn:not(.custom-btn-secondary), .modal-footer button:last-child, button.close-modal');
+                        const okBtn = successModal.querySelector('.modal-footer button.custom-btn:not(.custom-btn-secondary), .modal-footer button, button.close-modal') ||
+                                      Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim().toLowerCase() === 'ok');
                         if (okBtn) {
+                            const btnPropsKey = Object.keys(okBtn).find(k => k.startsWith('__reactProps'));
+                            if (btnPropsKey && typeof okBtn[btnPropsKey]?.onClick === 'function') {
+                                try { okBtn[btnPropsKey].onClick({ stopPropagation: () => {}, preventDefault: () => {} }); } catch(e) {}
+                            }
+                            okBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                            okBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
                             okBtn.click();
-                            await sleep(600);
+                            await sleep(800);
                         }
                         confirmedSuccess = true;
                         break;

@@ -1844,9 +1844,27 @@
         }
 
         // 5. Admission Number
-        if (admission && s.admission_no) {
-            setVal(admission, s.admission_no);
-            await sleep(100);
+        const admInput = getFieldByLabel('admission') ||
+                         Array.from(document.querySelectorAll('.custom-input-label')).find(w => w.textContent.toLowerCase().includes('admission'))?.querySelector('input') ||
+                         Array.from(document.querySelectorAll('input[placeholder*="write" i]'))[3];
+        const admVal = String(s.admission_no || s.pen_code || s.admissionNo || '').trim();
+        if (admInput && admVal) {
+            admInput.focus();
+            setVal(admInput, admVal);
+            const propsKey = Object.keys(admInput).find(k => k.startsWith('__reactProps'));
+            if (propsKey && typeof admInput[propsKey]?.onChange === 'function') {
+                try {
+                    admInput[propsKey].onChange({
+                        target: admInput,
+                        currentTarget: admInput,
+                        preventDefault: () => {},
+                        stopPropagation: () => {}
+                    });
+                } catch(e) {
+                    try { admInput[propsKey].onChange({ target: { value: admVal }, currentTarget: { value: admVal } }); } catch(e2) {}
+                }
+            }
+            await sleep(150);
         }
 
         // 6. Grade
@@ -1861,24 +1879,47 @@
         await selectDd('section', 2, s.section || 'A', secCandidates);
         await sleep(250);
 
-        // 8. APAAR ID
+        // 8. APAAR ID (12 boxes)
         const apaar = String(s.apaar_id || '').replace(/\\D/g, '');
         if (apaar.length === 12) {
             const boxes = Array.from(document.querySelectorAll('.udise-codes input, input[name^="std_apaar_id"], input[maxlength="1"]')).slice(0, 12);
             if (boxes.length >= 12) {
+                // 1. Direct React Hook Form onPaste handler invocation
+                const box0PropsKey = Object.keys(boxes[0]).find(k => k.startsWith('__reactProps'));
+                if (box0PropsKey && typeof boxes[0][box0PropsKey]?.onPaste === 'function') {
+                    try {
+                        boxes[0][box0PropsKey].onPaste({
+                            clipboardData: { getData: () => apaar },
+                            preventDefault: () => {},
+                            stopPropagation: () => {}
+                        });
+                        await sleep(150);
+                    } catch(e) {}
+                }
+
+                // 2. Synthetic paste event
                 try {
                     const pasteDt = new DataTransfer();
                     pasteDt.setData('text/plain', apaar);
+                    pasteDt.setData('text', apaar);
                     const pasteEv = new ClipboardEvent('paste', { clipboardData: pasteDt, bubbles: true, cancelable: true });
                     boxes[0].dispatchEvent(pasteEv);
                     await sleep(150);
                 } catch(e) {}
 
+                // 3. Set each box individually
                 for (let b = 0; b < 12; b++) {
                     setVal(boxes[b], apaar[b]);
                     const propsKey = Object.keys(boxes[b]).find(k => k.startsWith('__reactProps'));
                     if (propsKey && typeof boxes[b][propsKey]?.onChange === 'function') {
-                        try { boxes[b][propsKey].onChange({ target: boxes[b], currentTarget: boxes[b] }); } catch(e) {}
+                        try {
+                            boxes[b][propsKey].onChange({
+                                target: boxes[b],
+                                currentTarget: boxes[b],
+                                preventDefault: () => {},
+                                stopPropagation: () => {}
+                            });
+                        } catch(e) {}
                     }
                     await sleep(30);
                 }
@@ -1921,15 +1962,22 @@
 
         for (let poll = 0; poll < 15; poll++) {
             await sleep(400);
-            const successModal = document.querySelector('#custom_modal, .modal.show');
-            if (successModal && successModal.offsetParent !== null) {
+            const successModal = document.querySelector('#custom_modal, .modal.show, div.modal[style*="block"]');
+            if (successModal) {
                 const mTxt = (successModal.innerText || successModal.textContent || '').toLowerCase();
                 if (mTxt.includes('successfully') || mTxt.includes('success') || mTxt.includes('added') || mTxt.includes('updated')) {
                     console.log('Success modal appeared for ' + stName);
-                    const okBtn = successModal.querySelector('.modal-footer button.custom-btn:not(.custom-btn-secondary), .modal-footer button:last-child, button.close-modal');
+                    const okBtn = successModal.querySelector('.modal-footer button.custom-btn:not(.custom-btn-secondary), .modal-footer button, button.close-modal') ||
+                                  Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim().toLowerCase() === 'ok');
                     if (okBtn) {
+                        const btnPropsKey = Object.keys(okBtn).find(k => k.startsWith('__reactProps'));
+                        if (btnPropsKey && typeof okBtn[btnPropsKey]?.onClick === 'function') {
+                            try { okBtn[btnPropsKey].onClick({ stopPropagation: () => {}, preventDefault: () => {} }); } catch(e) {}
+                        }
+                        okBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                        okBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
                         okBtn.click();
-                        await sleep(600);
+                        await sleep(800);
                     }
                     confirmedSuccess = true;
                     break;

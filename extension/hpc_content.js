@@ -19,6 +19,7 @@
 
     function setNativeValue(element, value) {
         if (!element) return;
+        element.focus();
         const proto = Object.getPrototypeOf(element);
         const set = Object.getOwnPropertyDescriptor(proto, 'value')?.set ||
                     Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
@@ -112,75 +113,221 @@
         } catch(e) {}
     }
 
-    // Comprehensive form field detector
+    // Precision scoped field finder by label text
+    function findFieldByLabel(labelMatch) {
+        const norm = labelMatch.toLowerCase().trim();
+
+        // 1. Direct name/id attribute matching
+        const cleanKey = norm.replace(/[^a-z0-9]/g, '');
+        let el = document.querySelector(`[name*="${cleanKey}" i], [id*="${cleanKey}" i]`);
+        if (el && !el.disabled && el.type !== 'hidden') return el;
+
+        // 2. Find label elements whose text closely matches
+        const candidateLabels = Array.from(document.querySelectorAll('label, div, span, p, h6, h5')).filter(l => {
+            if (l.children.length > 2) return false;
+            const txt = l.textContent.trim().toLowerCase();
+            return (txt.startsWith(norm) || (txt.includes(norm) && txt.length <= norm.length + 15));
+        });
+
+        for (const lbl of candidateLabels) {
+            // Check 'for' attribute
+            const forId = lbl.getAttribute('for') || lbl.getAttribute('htmlFor');
+            if (forId) {
+                const target = document.getElementById(forId);
+                if (target) return target;
+            }
+
+            // Check siblings
+            let sib = lbl.nextElementSibling;
+            while (sib) {
+                if (sib.matches('input:not([type="hidden"]), select, [role="combobox"], button')) {
+                    return sib;
+                }
+                const inner = sib.querySelector('input:not([type="hidden"]), select, [role="combobox"], .custom-dropdown-header, button');
+                if (inner) return inner;
+                sib = sib.nextElementSibling;
+            }
+
+            // Check immediate parent column wrapper (<div class="col...">)
+            let parent = lbl.parentElement;
+            for (let d = 0; d < 3 && parent; d++) {
+                if (parent.tagName === 'FORM' || parent.id === 'root') break;
+                const controls = Array.from(parent.querySelectorAll('input:not([type="hidden"]), select, [role="combobox"], .custom-dropdown-header'));
+                if (controls.length === 1) {
+                    return controls[0];
+                }
+                if (controls.length > 1 && controls.length <= 3) {
+                    const found = controls.find(c => c !== lbl && !lbl.contains(c));
+                    if (found) return found;
+                }
+                parent = parent.parentElement;
+            }
+        }
+        return null;
+    }
+
+    // Precision form field detector
     function findFormFields() {
         const fields = {
             firstName: null,
             lastName: null,
             dob: null,
+            genderTrigger: null,
             email: null,
+            admissionNo: null,
             gradeTrigger: null,
             sectionTrigger: null,
             apaarBoxes: []
         };
 
-        const allLabels = Array.from(document.querySelectorAll('label, div, span, p'));
-        function getControlForLabel(matchText) {
-            const l = allLabels.find(el => {
-                const txt = (el.innerText || '').toLowerCase().trim();
-                return txt.startsWith(matchText.toLowerCase()) && el.children.length === 0;
-            }) || allLabels.find(el => {
-                const txt = (el.innerText || '').toLowerCase().trim();
-                return txt.includes(matchText.toLowerCase()) && el.children.length <= 1;
-            });
-            if (!l) return null;
+        fields.firstName     = findFieldByLabel('First Name');
+        fields.lastName      = findFieldByLabel('Last Name');
+        fields.dob           = findFieldByLabel('Date of Birth') || findFieldByLabel('DOB');
+        fields.genderTrigger = findFieldByLabel('Gender');
+        fields.email         = findFieldByLabel('Email');
+        fields.admissionNo   = findFieldByLabel('School Admission Number') || findFieldByLabel('Admission');
+        fields.gradeTrigger  = findFieldByLabel('Grade');
+        fields.sectionTrigger= findFieldByLabel('Section');
 
-            const forId = l.getAttribute('for');
-            if (forId) {
-                const el = document.getElementById(forId);
-                if (el) return el;
-            }
-
-            let parent = l.parentElement;
-            for (let i = 0; i < 4 && parent; i++) {
-                const control = parent.querySelector('input, select, .custom-dropdown-header, [role="combobox"]');
-                if (control && control !== l) return control;
-                parent = parent.parentElement;
-            }
-            return null;
-        }
-
-        fields.firstName = getControlForLabel('First Name');
-        fields.lastName  = getControlForLabel('Last Name');
-        fields.dob       = getControlForLabel('Date of Birth');
-        fields.email     = getControlForLabel('Email');
-        fields.gradeTrigger   = getControlForLabel('Grade');
-        fields.sectionTrigger = getControlForLabel('Section');
-
-        // Fallbacks
+        // Positional fallbacks based on exact PARAKH layout
         const allInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"])'));
-        const textInputs = allInputs.filter(inp => {
-            const t = (inp.getAttribute('type') || 'text').toLowerCase();
-            return t === 'text' || t === 'email';
-        });
+        const textInputs = allInputs.filter(inp => inp.getAttribute('maxlength') !== '1' && !inp.disabled);
 
         if (!fields.firstName && textInputs.length >= 1) fields.firstName = textInputs[0];
         if (!fields.lastName && textInputs.length >= 2) fields.lastName = textInputs[1];
-        if (!fields.email) {
-            fields.email = document.querySelector('input[type="email"]') || (textInputs.length >= 4 ? textInputs[3] : textInputs[2]);
+
+        // Ensure Email is NEVER the same element as First Name or Last Name
+        if (!fields.email || fields.email === fields.firstName || fields.email === fields.lastName) {
+            fields.email = document.querySelector('input[type="email"]') ||
+                           textInputs.find(inp => inp !== fields.firstName && inp !== fields.lastName);
         }
 
+        // DOB fallback
         if (!fields.dob) {
-            fields.dob = allInputs.find(inp => (inp.getAttribute('placeholder') || '').toLowerCase().includes('select'));
+            fields.dob = allInputs.find(inp => {
+                const ph = (inp.getAttribute('placeholder') || '').toLowerCase();
+                return ph.includes('select') || ph.includes('dd/mm') || ph.includes('date');
+            });
         }
 
-        const dds = Array.from(document.querySelectorAll('.custom-dropdown-header, [role="combobox"]'));
-        if (!fields.gradeTrigger && dds.length > 0) fields.gradeTrigger = dds[0];
-        if (!fields.sectionTrigger && dds.length > 1) fields.sectionTrigger = dds[1];
+        // Dropdowns fallback (Gender, Grade, Section)
+        const dropdowns = Array.from(document.querySelectorAll('.custom-dropdown-header, [role="combobox"], select, div[class*="dropdown-toggle"], button[class*="dropdown"]'))
+            .filter(dd => dd.offsetParent !== null);
 
+        if (!fields.genderTrigger && dropdowns.length >= 1) fields.genderTrigger = dropdowns[0];
+        if (!fields.gradeTrigger && dropdowns.length >= 2) fields.gradeTrigger = dropdowns[1];
+        if (!fields.sectionTrigger && dropdowns.length >= 3) fields.sectionTrigger = dropdowns[2];
+
+        // APAAR ID (12 single-character input boxes)
         fields.apaarBoxes = allInputs.filter(inp => inp.getAttribute('maxlength') === '1');
 
         return fields;
+    }
+
+    async function selectDropdownOption(trigger, targetValue, fallbacks = []) {
+        if (!trigger) return false;
+
+        // Native select
+        if (trigger.tagName === 'SELECT') {
+            const opt = Array.from(trigger.options).find(o => {
+                const txt = o.text.toLowerCase().trim();
+                const val = o.value.toLowerCase().trim();
+                const tgt = targetValue.toLowerCase().trim();
+                return txt === tgt || txt.includes(tgt) || val === tgt;
+            });
+            if (opt) {
+                trigger.value = opt.value;
+                trigger.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            }
+        }
+
+        // Custom Dropdown: Click trigger
+        trigger.click();
+        await sleep(350);
+
+        const candidates = [targetValue, ...fallbacks].map(s => String(s).toLowerCase().trim());
+        const options = Array.from(document.querySelectorAll(
+            '.custom-dropdown-item, [role="option"], li, div[class*="option" i], div[class*="item" i], span[class*="option" i], p[class*="option" i], button[class*="option" i]'
+        )).filter(el => el.offsetParent !== null);
+
+        for (const tgt of candidates) {
+            const found = options.find(el => {
+                const txt = el.textContent.toLowerCase().trim();
+                return txt === tgt || txt.startsWith(tgt) || txt.includes(tgt);
+            });
+            if (found) {
+                found.click();
+                await sleep(250);
+                return true;
+            }
+        }
+
+        // Click outside if not matched to close
+        document.body.click();
+        await sleep(150);
+        return false;
+    }
+
+    async function fillGender(trigger, student) {
+        if (!trigger) {
+            console.warn('[HPC Assist] Gender trigger not found');
+            return;
+        }
+
+        let target = 'Female';
+        if (student.gender) {
+            const g = String(student.gender).toLowerCase().trim();
+            if (g.startsWith('m') || g.includes('boy')) target = 'Male';
+            else if (g.startsWith('f') || g.includes('girl')) target = 'Female';
+        } else {
+            const name = (student.name || `${student.first_name || ''} ${student.last_name || ''}`).toLowerCase();
+            const femaleNames = ['jan', 'akhter', 'begum', 'bano', 'fatima', 'zehra', 'kousar', 'maryam', 'aabroo', 'aaliya', 'adeeba', 'hafsa', 'insha', 'rabia', 'toiba', 'zaira', 'afreen', 'asma', 'nimrah', 'jannat', 'misbah', 'safoora', 'tahira', 'zenab', 'shazia', 'ayaz', 'ayat', 'muntaha', 'abreena', 'bilkeesa', 'bisma', 'farhat', 'mehnaz', 'ronak', 'rubeena', 'rukhsana', 'saimah', 'simran', 'tasleema', 'towseer', 'uzma'];
+            target = femaleNames.some(fn => name.includes(fn)) ? 'Female' : 'Male';
+        }
+
+        logStatus(`Setting Gender: ${target}...`);
+        await selectDropdownOption(trigger, target, [target.toLowerCase(), target === 'Female' ? 'Girl' : 'Boy']);
+    }
+
+    async function fillDob(dobField, dobStr) {
+        if (!dobField || !dobStr) return;
+        const dobObj = parseDate(dobStr);
+        if (!dobObj) return;
+
+        logStatus(`Setting DOB: ${dobObj.formatted}...`);
+        
+        dobField.removeAttribute('readonly');
+        setNativeValue(dobField, dobObj.formatted);
+        await sleep(150);
+
+        // Open calendar
+        dobField.click();
+        await sleep(350);
+
+        const yr = document.querySelector('.react-datepicker__year-select, select[class*="year" i]');
+        if (yr) {
+            yr.value = dobObj.year;
+            yr.dispatchEvent(new Event('change', { bubbles: true }));
+            await sleep(150);
+        }
+
+        const mo = document.querySelector('.react-datepicker__month-select, select[class*="month" i]');
+        if (mo) {
+            mo.value = String(dobObj.month);
+            mo.dispatchEvent(new Event('change', { bubbles: true }));
+            await sleep(150);
+        }
+
+        const days = Array.from(document.querySelectorAll('.react-datepicker__day:not(.react-datepicker__day--outside-month), [class*="day"]:not([class*="outside"])'));
+        const dayEl = days.find(d => d.textContent.trim() === String(dobObj.day));
+        if (dayEl) {
+            dayEl.click();
+            await sleep(250);
+        }
+
+        document.body.click();
+        await sleep(150);
     }
 
     // Inject Floating Automation Widget with Persistent Event Delegation
@@ -208,7 +355,7 @@
 
         document.body.appendChild(widget);
 
-        // Event delegation on widget: guaranteed to catch all clicks!
+        // Event delegation on widget
         widget.addEventListener('click', async (e) => {
             const startBtn = e.target.closest('#hpc-start-btn');
             if (startBtn) {
@@ -382,99 +529,52 @@
             }
 
             // 2. Date of Birth
-            if (student.dob) {
-                const dobObj = parseDate(student.dob);
-                if (fields.dob) {
-                    // Try direct native fill
-                    if (dobObj) {
-                        setNativeValue(fields.dob, dobObj.formatted);
-                    } else {
-                        setNativeValue(fields.dob, student.dob);
-                    }
-                    await sleep(100);
-
-                    // Click to trigger datepicker calendar
-                    fields.dob.click();
-                    await sleep(350);
-
-                    if (dobObj) {
-                        const yearSelect = document.querySelector('.react-datepicker__year-select');
-                        if (yearSelect) {
-                            yearSelect.value = dobObj.year;
-                            yearSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                            await sleep(150);
-                        }
-
-                        const monthSelect = document.querySelector('.react-datepicker__month-select');
-                        if (monthSelect) {
-                            monthSelect.value = String(dobObj.month);
-                            monthSelect.dispatchEvent(new Event('change', { bubbles: true }));
-                            await sleep(150);
-                        }
-
-                        const days = Array.from(document.querySelectorAll('.react-datepicker__day:not(.react-datepicker__day--outside-month)'));
-                        const dayEl = days.find(d => d.innerText.trim() === String(dobObj.day));
-                        if (dayEl) {
-                            dayEl.click();
-                            await sleep(250);
-                        }
-                    }
-                }
+            if (fields.dob && student.dob) {
+                await fillDob(fields.dob, student.dob);
+                await sleep(150);
             }
 
-            // 3. Email
-            if (fields.email && student.email) {
+            // 3. Gender (MANDATORY FIELD)
+            if (fields.genderTrigger) {
+                await fillGender(fields.genderTrigger, student);
+                await sleep(150);
+            }
+
+            // 4. Email
+            if (fields.email && student.email && fields.email !== fields.firstName) {
                 setNativeValue(fields.email, student.email);
                 await sleep(150);
             }
 
-            // 4. Grade Dropdown
+            // 5. Grade Dropdown
             const rawGrade = String(student.grade || 'Grade 1').toLowerCase().trim();
             if (fields.gradeTrigger) {
-                fields.gradeTrigger.click();
-                await sleep(350);
-
-                const gradeOptions = Array.from(document.querySelectorAll('.custom-dropdown-item, [role="option"], li, div[class*="option"], div[class*="item"]'));
-                const matchedGrade = gradeOptions.find(it => {
-                    const txt = (it.innerText || '').toLowerCase().trim();
-                    return txt === rawGrade || txt.includes(rawGrade) || rawGrade.includes(txt);
-                });
-                if (matchedGrade) {
-                    matchedGrade.click();
-                    await sleep(250);
-                }
+                logStatus(`Setting Grade: ${student.grade || 'Grade 1'}...`);
+                await selectDropdownOption(fields.gradeTrigger, rawGrade, [rawGrade, 'Grade 1', 'Balvatika 1']);
+                await sleep(150);
             }
 
-            // 5. Section Dropdown
+            // 6. Section Dropdown
             const rawSection = String(student.section || 'A').toUpperCase().trim();
             if (fields.sectionTrigger) {
-                fields.sectionTrigger.click();
-                await sleep(350);
-
-                const sectionOptions = Array.from(document.querySelectorAll('.custom-dropdown-item, [role="option"], li, div[class*="option"], div[class*="item"]'));
-                const matchedSection = sectionOptions.find(it => {
-                    const txt = (it.innerText || '').toUpperCase().trim();
-                    return txt === rawSection || txt === `SECTION ${rawSection}` || txt.includes(`SECTION ${rawSection}`);
-                });
-                if (matchedSection) {
-                    matchedSection.click();
-                    await sleep(250);
-                }
+                logStatus(`Setting Section: ${rawSection}...`);
+                await selectDropdownOption(fields.sectionTrigger, rawSection, [`SECTION ${rawSection}`, rawSection, 'A']);
+                await sleep(150);
             }
 
-            // 6. APAAR ID (12 character boxes)
+            // 7. APAAR ID (12 character boxes)
             const apaarId = String(student.apaar_id || '').replace(/\D/g, '');
             if (apaarId.length === 12) {
                 const boxes = fields.apaarBoxes.length >= 12 ? fields.apaarBoxes : Array.from(document.querySelectorAll('input[maxlength="1"]')).slice(0, 12);
                 if (boxes.length === 12) {
                     for (let b = 0; b < 12; b++) {
                         setNativeValue(boxes[b], apaarId[b]);
-                        await sleep(50);
+                        await sleep(40);
                     }
                 }
             }
 
-            // 7. Click Save Button (prefer "Save & Add Another" for intermediate students)
+            // 8. Submit via Save / Save & Add Another
             await sleep(500);
             const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], [role="button"], a[class*="btn"], div[class*="btn"]'));
             const isLast = (currentIndex >= studentsQueue.length - 1);
@@ -494,23 +594,48 @@
                 });
             }
 
-            if (targetBtn) {
-                logStatus(`Submitting ${stName}...`);
-                targetBtn.click();
-            } else {
-                logStatus(`Form filled for ${stName}. Click Save manually.`);
+            if (!targetBtn) {
+                logStatus(`⚠️ Could not find Save button. Please click Save manually.`);
+                pauseAutomation();
+                return;
             }
 
-            // Report progress back to server
+            logStatus(`Submitting ${stName}...`);
+            targetBtn.click();
+
+            // WAIT AND STRICTLY VERIFY: Did PARAKH accept the submission?
+            await sleep(2200);
+
+            // Check for validation errors on page
+            const errorElements = Array.from(document.querySelectorAll(
+                '[role="alert"], .error, [class*="error" i], [class*="invalid" i], .text-danger, .invalid-feedback, div[class*="tooltip" i]'
+            )).filter(el => {
+                if (el.offsetParent === null) return false;
+                const txt = el.textContent.toLowerCase().trim();
+                return txt.includes('required') || txt.includes('mandatory') || txt.includes('invalid') || txt.includes('failed');
+            });
+
+            if (errorElements.length > 0) {
+                const errText = errorElements.map(e => e.innerText.trim()).filter(Boolean).join('; ') || 'Form validation failed';
+                console.error('[HPC Assist] Submission rejected by portal:', errText);
+                logStatus(`❌ ${stName} failed: ${errText}`);
+                
+                // STOP IMMEDIATELY! Do NOT mark as saved! Do NOT increment count!
+                pauseAutomation();
+                alert(`⚠️ PARAKH Portal rejected submission for ${stName}:\n\n"${errText}"\n\nPlease fix the highlighted field on the page.`);
+                return;
+            }
+
+            // Submission SUCCESS!
+            logStatus(`✅ Saved [${currentIndex + 1}/${studentsQueue.length}] ${stName}!`);
             await reportProgress(currentIndex + 1, studentsQueue.length, stName, 'success', `Saved ${stName}`);
 
             currentIndex++;
             localStorage.setItem('hpc_student_index', String(currentIndex));
             updateWidgetContent();
 
-            await sleep(2500);
+            await sleep(1500);
 
-            // Re-navigate or proceed
             if (isRunning) {
                 if (currentIndex >= studentsQueue.length) {
                     isRunning = false;
@@ -521,37 +646,19 @@
                     return;
                 }
 
-                // If page navigated away, re-navigate to add student form
                 if (!location.pathname.includes('/students/add')) {
                     window.location.href = 'https://hpc.parakh.ncert.gov.in/en/students/add';
                     return;
                 }
 
-                // If still on /students/add (Save & Add Another), proceed directly to next student
                 await processCurrentStudent();
             }
 
         } catch(err) {
             console.error('[HPC Assist] Error submitting student:', err);
             logStatus(`⚠️ Error on ${stName}: ${err.message}`);
-            await reportProgress(currentIndex + 1, studentsQueue.length, stName, 'error', err.message);
-            currentIndex++;
-            localStorage.setItem('hpc_student_index', String(currentIndex));
-            updateWidgetContent();
-            await sleep(2500);
-            if (isRunning) {
-                if (currentIndex >= studentsQueue.length) {
-                    isRunning = false;
-                    localStorage.setItem('hpc_submission_running', 'false');
-                    updateWidgetContent();
-                    return;
-                }
-                if (!location.pathname.includes('/students/add')) {
-                    window.location.href = 'https://hpc.parakh.ncert.gov.in/en/students/add';
-                    return;
-                }
-                await processCurrentStudent();
-            }
+            pauseAutomation();
+            alert(`⚠️ Error submitting ${stName}: ${err.message}`);
         }
     }
 

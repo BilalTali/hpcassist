@@ -64,6 +64,31 @@ class Student extends Model
     }
 
     /**
+     * Get effective gender (infer from name if not stored).
+     */
+    public function getEffectiveGender(): string
+    {
+        if (! empty($this->gender)) {
+            $g = strtolower(trim($this->gender));
+            if (str_starts_with($g, 'f') || str_contains($g, 'girl')) return 'Female';
+            if (str_starts_with($g, 'm') || str_contains($g, 'boy')) return 'Male';
+        }
+
+        $name = strtolower(trim($this->name ?: "{$this->first_name} {$this->last_name}"));
+        $femaleIndicators = [
+            'jan', 'akhter', 'begum', 'bano', 'fatima', 'zehra', 'kousar', 'maryam',
+            'aabroo', 'aaliya', 'adeeba', 'hafsa', 'insha', 'rabia', 'toiba', 'zaira',
+            'afreen', 'asma', 'nimrah', 'jannat', 'misbah', 'safoora', 'tahira', 'zenab',
+            'shazia', 'ayaz', 'ayat', 'muntaha', 'abreena', 'bilkeesa', 'bisma', 'farhat',
+            'mehnaz', 'ronak', 'rubeena', 'rukhsana', 'saimah', 'simran', 'tasleema', 'towseer', 'uzma'
+        ];
+        foreach (preg_split('/\s+/', $name) as $w) {
+            if (in_array($w, $femaleIndicators)) return 'Female';
+        }
+        return 'Male';
+    }
+
+    /**
      * Format student model into preview array structure expected by dashboard and automation scripts.
      */
     public function toPreviewArray(int $rowNum = 1): array
@@ -79,6 +104,7 @@ class Student extends Model
             'first_name' => $this->first_name,
             'last_name'  => $this->last_name ?? '',
             'name'       => $this->name,
+            'gender'     => $this->getEffectiveGender(),
             'dob'        => $this->dob ?? '',
             'email'      => $this->email ?? '',
             'grade'      => $this->grade,

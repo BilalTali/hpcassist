@@ -1042,6 +1042,13 @@ class HpcController extends Controller
     {
         $schoolId = $request->input('school_id');
         $school   = $schoolId ? School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        if (! $school && $request->filled('udise_code')) {
+            $school = School::where('udise_code', $request->input('udise_code'))->first();
+        }
+        if (! $school) {
+            $school = School::whereHas('students')->latest()->first() ?? School::first();
+        }
+
         $resultsFile = $this->getSchoolStorageDir($school) . '/run_results.json';
 
         $current = (int) $request->input('current', 0);
@@ -1074,13 +1081,23 @@ class HpcController extends Controller
 
         file_put_contents($resultsFile, json_encode($data, JSON_PRETTY_PRINT));
 
-        return response()->json(['ok' => true]);
+        return response()->json(['ok' => true], 200, [
+            'Access-Control-Allow-Origin'  => '*',
+            'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers' => '*',
+        ]);
     }
 
     public function getStudentQueue(Request $request)
     {
         $schoolId = $request->input('school_id');
         $school   = $schoolId ? School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        if (! $school && $request->filled('udise_code')) {
+            $school = School::where('udise_code', $request->input('udise_code'))->first();
+        }
+        if (! $school) {
+            $school = School::whereHas('students')->latest()->first() ?? School::first();
+        }
 
         if (! $school) {
             return response()->json(['ok' => false, 'error' => 'School not found.'], 404);
@@ -1103,6 +1120,10 @@ class HpcController extends Controller
             'total'       => count($valid),
             'students'    => $valid,
             'add_url'     => config('hpc.add_student_url', 'https://hpc.parakh.ncert.gov.in/en/students/add'),
+        ], 200, [
+            'Access-Control-Allow-Origin'  => '*',
+            'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers' => '*',
         ]);
     }
 

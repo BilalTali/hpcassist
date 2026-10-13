@@ -110,8 +110,9 @@ class Student extends Model
             'grade'      => $this->grade,
             'section'    => $this->section ?? 'A',
             'apaar_id'   => $this->apaar_id ?? '',
-            'pen_code'   => $this->pen_code ?? '',
-            'status'     => $this->status ?? 'pending',
+            'pen_code'     => $this->pen_code ?? '',
+            'admission_no' => $this->pen_code ?? '',
+            'status'       => $this->status ?? 'pending',
             'remark'     => $this->remark ?? '',
             'errors'     => array_values($errors),
         ];

@@ -1642,46 +1642,20 @@
         el.dispatchEvent(new Event('blur', { bubbles: true }));
     };
 
-    function findField(labelText) {
-        const norm = labelText.toLowerCase().trim();
-        const cleanKey = norm.replace(/[^a-z0-9]/g, '');
-        let direct = document.querySelector(\`[name*="\${cleanKey}" i], [id*="\${cleanKey}" i]\`);
-        if (direct && !direct.disabled && direct.type !== 'hidden') return direct;
+    function getFieldByLabel(kw) {
+        const labels = Array.from(document.querySelectorAll('.custom-input-label label, label'));
+        const l = labels.find(el => el.textContent.toLowerCase().includes(kw.toLowerCase()));
+        if (!l) return null;
+        const w = l.closest('.custom-input-label') || l.parentElement;
+        return w ? w.querySelector('input:not([type="hidden"]):not([maxlength="1"])') : null;
+    }
 
-        const candidateLabels = Array.from(document.querySelectorAll('label, div, span, p, h6, h5')).filter(l => {
-            if (l.children.length > 2) return false;
-            const txt = l.textContent.trim().toLowerCase();
-            return (txt.startsWith(norm) || (txt.includes(norm) && txt.length <= norm.length + 15));
-        });
-
-        for (const lbl of candidateLabels) {
-            const forId = lbl.getAttribute('for') || lbl.getAttribute('htmlFor');
-            if (forId) {
-                const target = document.getElementById(forId);
-                if (target) return target;
-            }
-
-            let sib = lbl.nextElementSibling;
-            while (sib) {
-                if (sib.matches('input:not([type="hidden"]), select, [role="combobox"], button')) return sib;
-                const inner = sib.querySelector('input:not([type="hidden"]), select, [role="combobox"], .custom-dropdown-header, button');
-                if (inner) return inner;
-                sib = sib.nextElementSibling;
-            }
-
-            let parent = lbl.parentElement;
-            for (let d = 0; d < 3 && parent; d++) {
-                if (parent.tagName === 'FORM' || parent.id === 'root') break;
-                const controls = Array.from(parent.querySelectorAll('input:not([type="hidden"]), select, [role="combobox"], .custom-dropdown-header'));
-                if (controls.length === 1) return controls[0];
-                if (controls.length > 1 && controls.length <= 3) {
-                    const found = controls.find(c => c !== lbl && !lbl.contains(c));
-                    if (found) return found;
-                }
-                parent = parent.parentElement;
-            }
-        }
-        return null;
+    function getDdByLabel(kw) {
+        const labels = Array.from(document.querySelectorAll('.custom-input-label label, label'));
+        const l = labels.find(el => el.textContent.toLowerCase().includes(kw.toLowerCase()));
+        if (!l) return null;
+        const w = l.closest('.custom-input-label') || l.parentElement;
+        return w ? (w.querySelector('.custom-dropdown-wrapper') || w.querySelector('.custom-dropdown-header') || w.querySelector('[role="combobox"], select')) : null;
     }
 
     async function selectDd(trigger, targetValue, fallbacks = []) {
@@ -1698,10 +1672,12 @@
                 return true;
             }
         }
-        trigger.click();
+        const header = trigger.querySelector('.custom-dropdown-header') || trigger;
+        header.click();
         await sleep(350);
+
         const candidates = [targetValue, ...fallbacks].map(s => String(s).toLowerCase().trim());
-        const options = Array.from(document.querySelectorAll('.custom-dropdown-item, [role="option"], li, div[class*="option" i], div[class*="item" i], span[class*="option" i], button[class*="option" i]')).filter(el => el.offsetParent !== null);
+        const options = Array.from(document.querySelectorAll('.custom-dropdown-item, [role="option"], li, div[class*="option" i], button[class*="option" i]')).filter(el => el.offsetParent !== null);
         for (const tgt of candidates) {
             const found = options.find(el => {
                 const txt = el.textContent.toLowerCase().trim();
@@ -1709,7 +1685,18 @@
             });
             if (found) {
                 found.click();
-                await sleep(250);
+                await sleep(300);
+                return true;
+            }
+        }
+        const searchInp = document.querySelector('.dropdown-search-box input');
+        if (searchInp) {
+            setVal(searchInp, targetValue);
+            await sleep(300);
+            const filtered = Array.from(document.querySelectorAll('.custom-dropdown-item')).filter(el => el.offsetParent !== null);
+            if (filtered.length > 0) {
+                filtered[0].click();
+                await sleep(300);
                 return true;
             }
         }
@@ -1730,14 +1717,26 @@
         const lName = findField('Last Name') || (textInputs.length >= 2 ? textInputs[1] : null);
         let email = findField('Email') || document.querySelector('input[type="email"]');
         if (!email || email === fName || email === lName) {
-            email = textInputs.find(inp => inp !== fName && inp !== lName);
-        }
+        const writeInputs = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i]'));
+        const allTextInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([maxlength="1"])')).filter(inp => !inp.disabled);
 
-        const dobInp = findField('Date of Birth') || findField('DOB') || allInputs.find(inp => (inp.getAttribute('placeholder')||'').toLowerCase().includes('select'));
-        const dds = Array.from(document.querySelectorAll('.custom-dropdown-header, [role="combobox"], select, div[class*="dropdown-toggle"], button[class*="dropdown"]')).filter(d => d.offsetParent !== null);
-        const genderInp = findField('Gender') || (dds.length >= 1 ? dds[0] : null);
-        const grInp = findField('Grade') || (dds.length >= 2 ? dds[1] : null);
-        const secInp = findField('Section') || (dds.length >= 3 ? dds[2] : null);
+        const fName = getFieldByLabel('first') || writeInputs[0] || allTextInputs[0];
+        const lName = getFieldByLabel('last') || writeInputs[1] || allTextInputs[1];
+        const email = getFieldByLabel('email') || writeInputs[2] || (document.querySelector('input[type="email"]') || allTextInputs[2]);
+        const admission = getFieldByLabel('admission') || writeInputs[3] || allTextInputs[3];
+
+        const dobLabel = Array.from(document.querySelectorAll('.custom-input-label label, label')).find(l => {
+            const t = l.textContent.toLowerCase();
+            return t.includes('birth') || t.includes('d-o-b') || t.includes('dob') || t.includes('जन्म');
+        });
+        const dobInp = dobLabel?.closest('.custom-input-label')?.querySelector('input') || document.querySelector('.react-datepicker__input-container input') || document.querySelector('input[placeholder*="Select" i]');
+
+        const allWrappers = Array.from(document.querySelectorAll('.custom-dropdown-wrapper'));
+        const allHeaders  = Array.from(document.querySelectorAll('.custom-dropdown-header, [role="combobox"], select')).filter(d => d.offsetParent !== null);
+
+        const genderInp = getDdByLabel('gender') || allWrappers[0] || allHeaders[0];
+        const grInp     = getDdByLabel('grade') || allWrappers[1] || allHeaders[1];
+        const secInp    = getDdByLabel('section') || allWrappers[2] || allHeaders[2];
 
         // 1. Names
         if (fName) setVal(fName, s.first_name || s.name?.split(' ')[0] || 'Student');
@@ -1749,20 +1748,26 @@
             const year = dobParts[0].length === 4 ? dobParts[0] : dobParts[2];
             const month = (parseInt(dobParts[0].length === 4 ? dobParts[1] : dobParts[1], 10) - 1);
             const day = parseInt(dobParts[0].length === 4 ? dobParts[2] : dobParts[0], 10);
+            const ymd = \`\${year}-\${String(month+1).padStart(2,'0')}-\${String(day).padStart(2,'0')}\`;
+            const dmy = \`\${String(day).padStart(2,'0')}/\${String(month+1).padStart(2,'0')}/\${year}\`;
             dobInp.removeAttribute('readonly');
-            setVal(dobInp, \`\${String(day).padStart(2,'0')}/\${String(month+1).padStart(2,'0')}/\${year}\`);
+            setVal(dobInp, ymd);
+            await sleep(150);
+            if (!dobInp.value || dobInp.value !== ymd) setVal(dobInp, dmy);
+
             dobInp.click();
-            await sleep(350);
+            await sleep(300);
             const yrSel = document.querySelector('.react-datepicker__year-select, select[class*="year" i]');
             if (yrSel) { yrSel.value = year; yrSel.dispatchEvent(new Event('change', { bubbles: true })); }
-            await sleep(150);
+            await sleep(100);
             const moSel = document.querySelector('.react-datepicker__month-select, select[class*="month" i]');
             if (moSel) { moSel.value = String(month); moSel.dispatchEvent(new Event('change', { bubbles: true })); }
-            await sleep(150);
+            await sleep(100);
             const dayEl = Array.from(document.querySelectorAll('.react-datepicker__day:not(.react-datepicker__day--outside-month), [class*="day"]:not([class*="outside"])')).find(d => d.textContent.trim() === String(day));
             if (dayEl) dayEl.click();
             await sleep(200);
             document.body.click();
+            await sleep(150);
         }
 
         // 3. Gender (MANDATORY)
@@ -1778,68 +1783,122 @@
             }
             console.log('Setting Gender: ' + targetG);
             await selectDd(genderInp, targetG, [targetG.toLowerCase(), targetG === 'Female' ? 'Girl' : 'Boy']);
+            await sleep(150);
         }
 
         // 4. Email
         if (email && s.email && email !== fName) {
             setVal(email, s.email);
+            await sleep(150);
         }
 
-        // 5. Grade
+        // 5. Admission Number
+        if (admission && s.admission_no) {
+            setVal(admission, s.admission_no);
+            await sleep(100);
+        }
+
+        // 6. Grade
         if (grInp) {
             const rawGr = String(s.grade || 'Grade 1').toLowerCase();
+            console.log('Setting Grade: ' + (s.grade || 'Grade 1'));
             await selectDd(grInp, rawGr, [rawGr, 'Grade 1', 'Balvatika 1']);
+            await sleep(400); // allow section options to update
         }
 
-        // 6. Section
+        // 7. Section
         if (secInp) {
             const rawSec = String(s.section || 'A').toUpperCase().trim();
+            console.log('Setting Section: ' + rawSec);
             await selectDd(secInp, rawSec, [\`SECTION \${rawSec}\`, rawSec, 'A']);
+            await sleep(150);
         }
 
-        // 7. APAAR ID
+        // 8. APAAR ID
         const apaar = String(s.apaar_id || '').replace(/\\D/g, '');
         if (apaar.length === 12) {
-            const boxes = Array.from(document.querySelectorAll('input[maxlength="1"]')).slice(0, 12);
-            for (let b = 0; b < 12 && b < boxes.length; b++) setVal(boxes[b], apaar[b]);
+            const boxes = Array.from(document.querySelectorAll('.udise-codes input, input[name^="std_apaar_id"], input[maxlength="1"]')).slice(0, 12);
+            for (let b = 0; b < 12 && b < boxes.length; b++) {
+                setVal(boxes[b], apaar[b]);
+                await sleep(30);
+            }
         }
 
-        // 8. Submit (prefer "Save & Add Another" for intermediate rows)
-        await sleep(500);
-        const buttons = Array.from(document.querySelectorAll('button, input[type=submit], [role=button], a[class*=btn], div[class*=btn]'));
+        // 9. Pre-Submission HTML5 Validation Check
+        const form = document.querySelector('form');
+        if (form && typeof form.checkValidity === 'function' && !form.checkValidity()) {
+            console.error('❌ Form checkValidity() failed for ' + stName);
+            if (typeof form.reportValidity === 'function') form.reportValidity();
+            alert('⚠️ Some required fields for ' + stName + ' are missing or invalid.\\n\\nPlease check the highlighted fields on the screen.');
+            return;
+        }
+
+        // 10. Submit (Save & Add Another vs Save)
+        await sleep(400);
         const isLast = (i === students.length - 1);
         let saveBtn = null;
         if (!isLast) {
-            saveBtn = buttons.find(b => {
-                const txt = (b.innerText || b.value || '').toLowerCase().trim();
-                return txt.includes('save & add another') || txt.includes('save and add another');
-            });
+            saveBtn = document.querySelector('button[name="action"][value="reset"]') ||
+                      Array.from(document.querySelectorAll('button')).find(b => (b.innerText || b.value || '').toLowerCase().includes('save & add another'));
         }
         if (!saveBtn) {
-            saveBtn = buttons.find(b => {
-                const txt = (b.innerText || b.value || '').toLowerCase().trim();
-                return (txt === 'save' || txt.includes('save')) && !txt.includes('cancel');
-            });
+            saveBtn = document.querySelector('button[name="action"][value="back"]') ||
+                      Array.from(document.querySelectorAll('button')).find(b => {
+                          const t = (b.innerText || b.value || '').toLowerCase().trim();
+                          return (t === 'save' || t.includes('save')) && !t.includes('cancel');
+                      });
         }
 
         if (saveBtn) {
-            console.log('✓ Submitting ' + stName);
+            console.log('Submitting ' + stName + '...');
             saveBtn.click();
         }
 
-        // VERIFY: Wait and check for portal error
-        await sleep(2200);
-        const errors = Array.from(document.querySelectorAll('[role="alert"], .error, [class*="error" i], [class*="invalid" i], .text-danger, .invalid-feedback, div[class*="tooltip" i]')).filter(el => {
-            if (el.offsetParent === null) return false;
-            const t = el.textContent.toLowerCase().trim();
-            return t.includes('required') || t.includes('mandatory') || t.includes('invalid') || t.includes('failed');
-        });
+        // 11. WAIT AND VERIFY MODAL / TOAST
+        let confirmedSuccess = false;
+        let portalError = null;
 
-        if (errors.length > 0) {
-            const errStr = errors.map(e => e.innerText.trim()).filter(Boolean).join('; ') || 'Form validation error';
-            console.error('❌ Submission rejected for ' + stName + ': ' + errStr);
-            alert('⚠️ PARAKH Portal rejected submission for ' + stName + ':\\n\\n"' + errStr + '"\\n\\nPlease fix the highlighted field.');
+        for (let poll = 0; poll < 15; poll++) {
+            await sleep(400);
+            const successModal = document.querySelector('#custom_modal, .modal.show');
+            if (successModal && successModal.offsetParent !== null) {
+                const mTxt = (successModal.innerText || successModal.textContent || '').toLowerCase();
+                if (mTxt.includes('successfully') || mTxt.includes('success') || mTxt.includes('added') || mTxt.includes('updated')) {
+                    console.log('Success modal appeared for ' + stName);
+                    const okBtn = successModal.querySelector('.modal-footer button.custom-btn:not(.custom-btn-secondary), .modal-footer button:last-child, button.close-modal');
+                    if (okBtn) {
+                        okBtn.click();
+                        await sleep(600);
+                    }
+                    confirmedSuccess = true;
+                    break;
+                }
+            }
+
+            const errorElements = Array.from(document.querySelectorAll('.Toastify__toast--error, [role="alert"], .error, [class*="error" i], [class*="invalid" i], .text-danger, .invalid-feedback')).filter(el => {
+                if (el.offsetParent === null) return false;
+                const txt = el.textContent.toLowerCase().trim();
+                return txt.includes('required') || txt.includes('mandatory') || txt.includes('invalid') || txt.includes('failed') || txt.includes('error');
+            });
+            if (errorElements.length > 0) {
+                portalError = errorElements.map(e => e.innerText.trim()).filter(Boolean).join('; ') || 'Form validation failed';
+                break;
+            }
+        }
+
+        if (portalError) {
+            console.error('❌ Portal rejected submission for ' + stName + ': ' + portalError);
+            alert('⚠️ PARAKH Portal rejected submission for ' + stName + ':\\n\\n"' + portalError + '"\\n\\nPlease fix the highlighted field.');
             return;
+        }
+
+        if (!confirmedSuccess && !isLast) {
+            const currentFirstVal = (fName?.value || '').trim();
+            if (currentFirstVal === (s.first_name || '')) {
+                console.warn('⚠️ Submission unconfirmed for ' + stName);
+                alert('⚠️ The portal did not confirm saving ' + stName + '.\\n\\nPlease check the form and click Save manually.');
+                return;
+            }
         }
 
         console.log('✅ Successfully saved ' + stName);
@@ -1851,7 +1910,7 @@
             });
         } catch(e) {}
 
-        await sleep(1500);
+        await sleep(1200);
     }
     alert('🎉 All ' + students.length + ' students have been successfully submitted to PARAKH HPC portal!');
 })();`;

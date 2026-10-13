@@ -85,6 +85,7 @@ class HpcController extends Controller
                     'first_name' => $st->first_name,
                     'last_name'  => $st->last_name,
                     'dob'        => $st->dob,
+                    'gender'     => $st->getEffectiveGender(),
                     'email'      => $st->email,
                     'grade'      => $st->grade,
                     'section'    => $st->section,
@@ -119,15 +120,17 @@ class HpcController extends Controller
         $ws    = $sheet->getActiveSheet();
         $ws->setTitle('Students');
 
-        // Columns exposed in the template
+        // Columns exposed in the template (matching PARAKH portal order 1-to-1)
         $columns = [
-            ['key' => 'first_name', 'label' => 'First Name *',   'width' => 22, 'note' => 'First name from UDISE / records'],
-            ['key' => 'last_name',  'label' => 'Last Name',       'width' => 22, 'note' => 'Last name / surname (optional)'],
-            ['key' => 'dob',        'label' => 'Date of Birth *', 'width' => 18, 'note' => 'DD/MM/YYYY e.g. 15/08/2012'],
-            ['key' => 'email',      'label' => 'Email *',         'width' => 34, 'note' => 'Valid email address'],
-            ['key' => 'grade',      'label' => 'Grade *',         'width' => 18, 'note' => 'Balvatika 1-3, Grade 1-8'],
-            ['key' => 'section',    'label' => 'Section *',       'width' => 14, 'note' => 'Default: A'],
-            ['key' => 'apaar_id',   'label' => 'APAAR ID',        'width' => 22, 'note' => '12-digit unmasked APAAR ID'],
+            ['key' => 'first_name',   'label' => 'First Name *',             'width' => 20, 'note' => 'First name from UDISE / records'],
+            ['key' => 'last_name',    'label' => 'Last Name',                 'width' => 20, 'note' => 'Last name / surname (optional)'],
+            ['key' => 'dob',          'label' => 'Date of Birth *',           'width' => 18, 'note' => 'DD/MM/YYYY e.g. 15/08/2012'],
+            ['key' => 'gender',       'label' => 'Gender *',                  'width' => 14, 'note' => 'Male / Female / Other'],
+            ['key' => 'email',        'label' => 'Email *',                   'width' => 32, 'note' => 'Valid email address'],
+            ['key' => 'admission_no', 'label' => 'School Admission Number',  'width' => 24, 'note' => 'School admission / roll number (optional)'],
+            ['key' => 'grade',        'label' => 'Grade *',                   'width' => 18, 'note' => 'Balvatika 1-3, Grade 1-8'],
+            ['key' => 'section',      'label' => 'Section *',                 'width' => 14, 'note' => 'Default: A'],
+            ['key' => 'apaar_id',     'label' => 'APAAR ID',                  'width' => 20, 'note' => '12-digit unmasked APAAR ID'],
         ];
 
         // ── Header row (Row 1) ────────────────────────────────────────────────
@@ -170,46 +173,49 @@ class HpcController extends Controller
                 $r = $idx + 3;
 
                 if (isset($st['first_name'])) {
-                    $firstName = trim($st['first_name']);
-                    $lastName  = trim($st['last_name'] ?? '');
-                    $dob       = trim($st['dob'] ?? '');
-                    $email     = trim($st['email'] ?? '');
-                    $grade     = trim($st['grade'] ?? 'Grade 6');
-                    $section   = trim($st['section'] ?? 'A');
-                    $apaarId   = trim((string)($st['apaar_id'] ?? ''));
+                    $firstName   = trim($st['first_name']);
+                    $lastName    = trim($st['last_name'] ?? '');
+                    $dob         = trim($st['dob'] ?? '');
+                    $gender      = trim($st['gender'] ?? '');
+                    $email       = trim($st['email'] ?? '');
+                    $admissionNo = trim($st['admission_no'] ?? ($st['pen_code'] ?? ''));
+                    $grade       = trim($st['grade'] ?? 'Grade 6');
+                    $section     = trim($st['section'] ?? 'A');
+                    $apaarId     = trim((string)($st['apaar_id'] ?? ''));
                 } else {
-                    // 1. First Name + Last Name from studentName
                     $rawName   = trim($st['studentName'] ?? '');
                     $parts     = preg_split('/\s+/', $rawName);
                     $firstName = $parts[0] ?? 'Student';
                     $lastName  = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
 
-                    // 2. Date of Birth (ensure DD/MM/YYYY)
                     $dob = trim($st['dob'] ?? '');
                     if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dob, $m)) {
                         $dob = "{$m[3]}/{$m[2]}/{$m[1]}";
                     }
 
-                    // 3. Email (use valid student email with @gmail.com, not gov.in)
+                    $gender = trim($st['genderDesc'] ?? ($st['gender'] ?? ''));
+
+                    $cleanPen   = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
+                    $admissionNo = $cleanPen;
+
                     $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL) ? trim($st['email']) : '';
                     if (empty($email) || str_contains(strtolower($email), 'gov.in')) {
                         $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
-                        $cleanPen   = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
                         $email      = "{$cleanFirst}.{$cleanPen}@gmail.com";
                     }
 
-                    // 4. Grade mapped from classDesc
                     $rawClass = trim($st['classDesc'] ?? '');
                     $grade    = $gradeMap[$rawClass] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawClass)] ?? 'Grade 6');
-
-                    // 5. Section (default A)
                     $section  = ! empty($st['sectionDesc']) ? trim($st['sectionDesc']) : 'A';
-
-                    // 6. APAAR ID (unmasked 12-digit)
                     $apaarId  = ! empty($st['apaarId']) ? (string) $st['apaarId'] : '';
                 }
 
-                $rowVals  = [$firstName, $lastName, $dob, $email, $grade, $section, $apaarId];
+                if (empty($gender)) {
+                    $dummy = new Student(['first_name' => $firstName, 'last_name' => $lastName]);
+                    $gender = $dummy->getEffectiveGender();
+                }
+
+                $rowVals  = [$firstName, $lastName, $dob, $gender, $email, $admissionNo, $grade, $section, $apaarId];
                 $isApaar  = ! empty($apaarId);
                 $rowBg    = ($idx % 2 === 0) ? 'FFFFFFFF' : 'FFF8FAFC';
 
@@ -217,12 +223,12 @@ class HpcController extends Controller
                     $colLetter = chr(65 + $cIdx);
                     $ws->setCellValueExplicit("{$colLetter}{$r}", (string) $val, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
-                    $cellBg = ($cIdx === 6 && $isApaar) ? 'FFCCFBF1' : $rowBg; // Soft teal highlight for APAAR ID
+                    $cellBg = ($cIdx === 8 && $isApaar) ? 'FFCCFBF1' : $rowBg;
                     $ws->getStyle("{$colLetter}{$r}")->applyFromArray([
                         'font'      => [
                             'size'  => 9.5,
-                            'bold'  => ($cIdx === 6 && $isApaar),
-                            'color' => ['argb' => ($cIdx === 6 && $isApaar) ? 'FF0F766E' : 'FF0F172A'],
+                            'bold'  => ($cIdx === 8 && $isApaar),
+                            'color' => ['argb' => ($cIdx === 8 && $isApaar) ? 'FF0F766E' : 'FF0F172A'],
                         ],
                         'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $cellBg]],
                         'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
@@ -233,7 +239,7 @@ class HpcController extends Controller
             }
         } else {
             // Sample row (Row 3)
-            $sample = ['Aarav', 'Sharma', '15/08/2012', 'aarav.sharma@gmail.com', 'Grade 6', 'A', '123456789012'];
+            $sample = ['Aarav', 'Sharma', '15/08/2012', 'Male', 'aarav.sharma@gmail.com', '', 'Grade 6', 'A', '123456789012'];
             $sampleStyle = [
                 'font'      => ['color' => ['argb' => 'FF334155'], 'size' => 10],
                 'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFF8FAFC']],
@@ -252,29 +258,40 @@ class HpcController extends Controller
                 'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFFFFF']],
                 'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
             ];
-            $ws->getStyle("A4:G200")->applyFromArray($dataStyle);
+            $ws->getStyle("A4:I200")->applyFromArray($dataStyle);
         }
 
-        // In-cell Dropdown Data Validation for Grade and Section
+        // In-cell Dropdown Data Validation for Gender, Grade and Section
+        $genderFormula  = '"Male,Female,Other"';
         $gradeFormula   = '"Balvatika 1,Balvatika 2,Balvatika 3,Grade 1,Grade 2,Grade 3,Grade 4,Grade 5,Grade 6,Grade 7,Grade 8"';
         $sectionFormula = '"A,B,C,D,E,F,G,H"';
 
         for ($r = 3; $r <= $totalRows; $r++) {
-            $gv = $ws->getCell("E{$r}")->getDataValidation();
+            $genV = $ws->getCell("D{$r}")->getDataValidation();
+            $genV->setType(DataValidation::TYPE_LIST);
+            $genV->setErrorStyle(DataValidation::STYLE_INFORMATION);
+            $genV->setAllowBlank(false);
+            $genV->setShowDropDown(true);
+            $genV->setPromptTitle('Gender Selection');
+            $genV->setPrompt('Select Male, Female or Other');
+            $genV->setFormula1($genderFormula);
+
+            $gv = $ws->getCell("G{$r}")->getDataValidation();
             $gv->setType(DataValidation::TYPE_LIST);
             $gv->setErrorStyle(DataValidation::STYLE_INFORMATION);
             $gv->setAllowBlank(false);
             $gv->setShowDropDown(true);
-            $gv->setShowInputMessage(true);
             $gv->setPromptTitle('Grade Selection');
             $gv->setPrompt('Select Grade 1-8 or Balvatika 1-3');
             $gv->setFormula1($gradeFormula);
 
-            $sv = $ws->getCell("F{$r}")->getDataValidation();
+            $sv = $ws->getCell("H{$r}")->getDataValidation();
             $sv->setType(DataValidation::TYPE_LIST);
             $sv->setErrorStyle(DataValidation::STYLE_INFORMATION);
             $sv->setAllowBlank(false);
             $sv->setShowDropDown(true);
+            $sv->setPromptTitle('Section Selection');
+            $sv->setPrompt('Select Section');
             $sv->setFormula1($sectionFormula);
         }
 
@@ -293,13 +310,15 @@ class HpcController extends Controller
         $info->getStyle('A3:C3')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFEDE9FE');
 
         $rows = [
-            ['First Name *',   'studentName (Word 1)', 'Student first name as per official UDISE / school records.'],
-            ['Last Name',      'studentName (Rest)',   'Student last name (optional or remaining parts of full name).'],
-            ['Date of Birth *','dob',                  'Format: DD/MM/YYYY (e.g. 15/08/2012).'],
-            ['Email *',        'email / auto-gen',     'Official student email (auto-generated using PEN if blank).'],
-            ['Grade *',        'classDesc',            'Mapped from UDISE class (PP-1 -> Balvatika 1, I-VIII -> Grade 1-8).'],
-            ['Section *',      'sectionDesc',          'Defaulted to Section A.'],
-            ['APAAR ID',       'apaarId',              'Unmasked 12-digit APAAR ID from UDISE SDMS.'],
+            ['First Name *',             'studentName (Word 1)', 'Student first name as per official UDISE / school records.'],
+            ['Last Name',                'studentName (Rest)',   'Student last name (optional or remaining parts of full name).'],
+            ['Date of Birth *',          'dob',                  'Format: DD/MM/YYYY (e.g. 15/08/2012).'],
+            ['Gender *',                 'genderDesc / gender',  'Student gender: Male, Female, or Other. Mandatory on PARAKH portal.'],
+            ['Email *',                  'email / auto-gen',     'Official student email (auto-generated using PEN if blank).'],
+            ['School Admission Number',  'studentCodeNat / roll','School admission number or student roll number (optional).'],
+            ['Grade *',                  'classDesc',            'Mapped from UDISE class (PP-1 -> Balvatika 1, I-VIII -> Grade 1-8).'],
+            ['Section *',                'sectionDesc',          'Defaulted to Section A.'],
+            ['APAAR ID',                 'apaarId',              'Unmasked 12-digit APAAR ID from UDISE SDMS.'],
         ];
 
         foreach ($rows as $ri => $row) {
@@ -309,7 +328,7 @@ class HpcController extends Controller
             $info->setCellValue("C{$line}", $row[2]);
         }
 
-        $info->getColumnDimension('A')->setWidth(20);
+        $info->getColumnDimension('A')->setWidth(26);
         $info->getColumnDimension('B')->setWidth(24);
         $info->getColumnDimension('C')->setWidth(60);
 
@@ -506,8 +525,8 @@ class HpcController extends Controller
             $ws  = $ss->getActiveSheet();
             $max = $ws->getHighestDataRow();
 
-            // Detect if uploaded file is a UDISE+ export spreadsheet
-            $udiseCols = [];
+            // Universal header detection for UDISE+, new 9-col template, and legacy templates
+            $headerMap = [];
             $headerRow = 0;
             for ($testRow = 1; $testRow <= min(6, $max); $testRow++) {
                 $cells = [];
@@ -516,81 +535,121 @@ class HpcController extends Controller
                     $val = strtolower(trim((string) $ws->getCell("{$ltr}{$testRow}")->getValue()));
                     if ($val !== '') $cells[$val] = $ltr;
                 }
-                $hasStudentName = false;
-                $hasPenOrApaar = false;
                 foreach ($cells as $k => $ltr) {
-                    if (str_contains($k, 'student') && str_contains($k, 'name')) $hasStudentName = true;
-                    if (str_contains($k, 'pen') || str_contains($k, 'apaar') || str_contains($k, 'permanent education')) $hasPenOrApaar = true;
+                    if (str_contains($k, 'first') && str_contains($k, 'name')) $headerMap['first_name'] = $ltr;
+                    elseif (str_contains($k, 'last') && str_contains($k, 'name')) $headerMap['last_name'] = $ltr;
+                    elseif (str_contains($k, 'student') && str_contains($k, 'name')) $headerMap['name'] = $ltr;
+                    elseif (str_contains($k, 'birth') || $k === 'dob') $headerMap['dob'] = $ltr;
+                    elseif (str_contains($k, 'gender') || str_contains($k, 'sex')) $headerMap['gender'] = $ltr;
+                    elseif (str_contains($k, 'email')) $headerMap['email'] = $ltr;
+                    elseif (str_contains($k, 'admission') || str_contains($k, 'roll')) $headerMap['admission'] = $ltr;
+                    elseif (str_contains($k, 'grade') || str_contains($k, 'class')) $headerMap['grade'] = $ltr;
+                    elseif (str_contains($k, 'section')) $headerMap['section'] = $ltr;
+                    elseif (str_contains($k, 'apaar')) $headerMap['apaar'] = $ltr;
+                    elseif (str_contains($k, 'pen') || str_contains($k, 'permanent education')) $headerMap['pen'] = $ltr;
                 }
-                if ($hasStudentName && $hasPenOrApaar) {
+                if (! empty($headerMap['name']) || ! empty($headerMap['first_name'])) {
                     $headerRow = $testRow;
-                    foreach ($cells as $k => $ltr) {
-                        if (str_contains($k, 'student') && str_contains($k, 'name')) $udiseCols['name'] = $ltr;
-                        elseif (str_contains($k, 'apaar')) $udiseCols['apaar'] = $ltr;
-                        elseif (str_contains($k, 'pen') || str_contains($k, 'permanent education')) $udiseCols['pen'] = $ltr;
-                        elseif (str_contains($k, 'class') || str_contains($k, 'grade')) $udiseCols['grade'] = $ltr;
-                        elseif (str_contains($k, 'section')) $udiseCols['section'] = $ltr;
-                        elseif (str_contains($k, 'birth') || $k === 'dob') $udiseCols['dob'] = $ltr;
-                        elseif (str_contains($k, 'email')) $udiseCols['email'] = $ltr;
-                    }
                     break;
                 }
             }
 
-            $isUdise = ($headerRow > 0 && isset($udiseCols['name']));
-            $startRow = $isUdise ? ($headerRow + 1) : 3;
+            $startRow = $headerRow > 0 ? ($headerRow + 1) : 3;
+            // If row after header is a note row (e.g. Row 2 with italic instructions), skip it
+            $sampleTest = strtolower(trim((string)$ws->getCell("A{$startRow}")->getValue()));
+            if (str_contains($sampleTest, 'first name from') || str_contains($sampleTest, 'dd/mm/yyyy')) {
+                $startRow++;
+            }
+
             $gradeMap = $this->getGradeMap();
 
             for ($r = $startRow; $r <= $max; $r++) {
-                if ($isUdise) {
-                    $fullName = trim((string) $ws->getCell(($udiseCols['name'] ?? 'A') . $r)->getValue());
-                    if ($fullName === '') continue;
-                    $parts = preg_split('/\s+/', $fullName);
-                    $firstName = $parts[0] ?? 'Student';
-                    $lastName = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
+                if ($headerRow > 0) {
+                    // Extract via identified headers
+                    if (! empty($headerMap['first_name'])) {
+                        $firstName = trim((string) $ws->getCell($headerMap['first_name'] . $r)->getValue());
+                        $lastName  = ! empty($headerMap['last_name']) ? trim((string) $ws->getCell($headerMap['last_name'] . $r)->getValue()) : '';
+                    } else {
+                        $fullName  = trim((string) $ws->getCell(($headerMap['name'] ?? 'A') . $r)->getValue());
+                        if ($fullName === '') continue;
+                        $parts     = preg_split('/\s+/', $fullName);
+                        $firstName = $parts[0] ?? 'Student';
+                        $lastName  = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
+                    }
 
-                    $dobCell = isset($udiseCols['dob']) ? $ws->getCell($udiseCols['dob'] . $r) : null;
+                    if ($firstName === '' && empty($lastName)) continue;
+
+                    // DOB
+                    $dobCell = ! empty($headerMap['dob']) ? $ws->getCell($headerMap['dob'] . $r) : null;
                     if ($dobCell && ExcelDate::isDateTime($dobCell)) {
                         $dob = ExcelDate::excelToDateTimeObject($dobCell->getValue())->format('d/m/Y');
                     } else {
                         $dob = $dobCell ? trim((string) $dobCell->getFormattedValue()) : '';
                     }
 
-                    $pen = isset($udiseCols['pen']) ? preg_replace('/[^0-9]/', '', (string)$ws->getCell($udiseCols['pen'] . $r)->getValue()) : (string)$r;
-                    $rawEmail = isset($udiseCols['email']) ? trim((string)$ws->getCell($udiseCols['email'] . $r)->getValue()) : '';
-                    if (empty($rawEmail) || str_contains(strtolower($rawEmail), 'gov.in') || !filter_var($rawEmail, FILTER_VALIDATE_EMAIL)) {
+                    // Gender
+                    $gender = ! empty($headerMap['gender']) ? trim((string) $ws->getCell($headerMap['gender'] . $r)->getValue()) : '';
+
+                    // Admission No / PEN
+                    $pen = ! empty($headerMap['pen']) ? preg_replace('/[^0-9]/', '', (string)$ws->getCell($headerMap['pen'] . $r)->getValue()) : '';
+                    $admissionNo = ! empty($headerMap['admission']) ? trim((string)$ws->getCell($headerMap['admission'] . $r)->getValue()) : $pen;
+
+                    // Email
+                    $rawEmail = ! empty($headerMap['email']) ? trim((string)$ws->getCell($headerMap['email'] . $r)->getValue()) : '';
+                    if (empty($rawEmail) || str_contains(strtolower($rawEmail), 'gov.in') || ! filter_var($rawEmail, FILTER_VALIDATE_EMAIL)) {
                         $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
-                        $email = "{$cleanFirst}.{$pen}@gmail.com";
+                        $cleanId    = $admissionNo ?: ($pen ?: (string)$r);
+                        $email      = "{$cleanFirst}.{$cleanId}@gmail.com";
                     } else {
                         $email = $rawEmail;
                     }
 
-                    $rawGrade = isset($udiseCols['grade']) ? trim((string)$ws->getCell($udiseCols['grade'] . $r)->getValue()) : 'Grade 6';
-                    $grade = $gradeMap[$rawGrade] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawGrade)] ?? 'Grade 6');
-                    $section = isset($udiseCols['section']) ? (trim((string)$ws->getCell($udiseCols['section'] . $r)->getValue()) ?: 'A') : 'A';
-                    $apaarId = isset($udiseCols['apaar']) ? preg_replace('/[^0-9]/', '', (string)$ws->getCell($udiseCols['apaar'] . $r)->getValue()) : '';
+                    // Grade & Section
+                    $rawGrade = ! empty($headerMap['grade']) ? trim((string)$ws->getCell($headerMap['grade'] . $r)->getValue()) : 'Grade 6';
+                    $grade    = $gradeMap[$rawGrade] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawGrade)] ?? 'Grade 6');
+                    $section  = ! empty($headerMap['section']) ? (trim((string)$ws->getCell($headerMap['section'] . $r)->getValue()) ?: 'A') : 'A';
+                    $apaarId  = ! empty($headerMap['apaar']) ? preg_replace('/[^0-9]/', '', (string)$ws->getCell($headerMap['apaar'] . $r)->getValue()) : '';
+
                 } else {
+                    // Positional fallback (default 9-col or 7-col layout)
                     $firstName = trim((string) $ws->getCell("A{$r}")->getValue());
                     $lastName  = trim((string) $ws->getCell("B{$r}")->getValue());
 
-                    // Read DOB
                     $dobCell  = $ws->getCell("C{$r}");
-                    $dobValue = $dobCell->getValue();
                     if (ExcelDate::isDateTime($dobCell)) {
-                        $dob = ExcelDate::excelToDateTimeObject($dobValue)->format('d/m/Y');
+                        $dob = ExcelDate::excelToDateTimeObject($dobCell->getValue())->format('d/m/Y');
                     } else {
                         $dob = trim((string) $dobCell->getFormattedValue());
                     }
 
-                    $email   = trim((string) $ws->getCell("D{$r}")->getValue());
-                    $grade   = trim((string) $ws->getCell("E{$r}")->getValue());
-                    $section = trim((string) $ws->getCell("F{$r}")->getValue());
-                    $apaarId = trim((string) $ws->getCell("G{$r}")->getValue());
+                    // Check if Col D is Gender or Email
+                    $valD = trim((string) $ws->getCell("D{$r}")->getValue());
+                    if (in_array(strtolower($valD), ['male', 'female', 'other', 'm', 'f', 'boy', 'girl'])) {
+                        // 9-col layout: A=First, B=Last, C=DOB, D=Gender, E=Email, F=Admission, G=Grade, H=Section, I=APAAR
+                        $gender      = $valD;
+                        $email       = trim((string) $ws->getCell("E{$r}")->getValue());
+                        $admissionNo = trim((string) $ws->getCell("F{$r}")->getValue());
+                        $grade       = trim((string) $ws->getCell("G{$r}")->getValue());
+                        $section     = trim((string) $ws->getCell("H{$r}")->getValue());
+                        $apaarId     = trim((string) $ws->getCell("I{$r}")->getValue());
+                    } else {
+                        // Legacy 7-col layout: A=First, B=Last, C=DOB, D=Email, E=Grade, F=Section, G=APAAR
+                        $gender      = '';
+                        $email       = $valD;
+                        $admissionNo = '';
+                        $grade       = trim((string) $ws->getCell("E{$r}")->getValue());
+                        $section     = trim((string) $ws->getCell("F{$r}")->getValue());
+                        $apaarId     = trim((string) $ws->getCell("G{$r}")->getValue());
+                    }
 
-                    // Skip sample row if untouched, or skip completely empty row
                     if ($firstName === '' && $email === '' && $grade === '') {
                         continue;
                     }
+                }
+
+                if (empty($gender)) {
+                    $dummySt = new Student(['first_name' => $firstName, 'last_name' => $lastName]);
+                    $gender  = $dummySt->getEffectiveGender();
                 }
 
                 $rowErrors = [];
@@ -616,16 +675,19 @@ class HpcController extends Controller
                 }
 
                 $preview[] = [
-                    'row'        => count($preview) + 1,
-                    'first_name' => $firstName,
-                    'last_name'  => $lastName,
-                    'name'       => trim("{$firstName} {$lastName}"),
-                    'dob'        => $dob,
-                    'email'      => $email,
-                    'grade'      => $grade,
-                    'section'    => $section,
-                    'apaar_id'   => $apaarId,
-                    'errors'     => $rowErrors,
+                    'row'          => count($preview) + 1,
+                    'first_name'   => $firstName,
+                    'last_name'    => $lastName,
+                    'name'         => trim("{$firstName} {$lastName}"),
+                    'gender'       => $gender,
+                    'dob'          => $dob,
+                    'email'        => $email,
+                    'admission_no' => $admissionNo,
+                    'grade'        => $grade,
+                    'section'      => $section,
+                    'apaar_id'     => $apaarId,
+                    'pen_code'     => $admissionNo,
+                    'errors'       => $rowErrors,
                 ];
 
                 if (! empty($rowErrors)) {
@@ -918,7 +980,7 @@ class HpcController extends Controller
     public function upsertStudentToDatabase(School $school, array $data, string $source = 'udise_sync'): Student
     {
         $apaar = ! empty($data['apaar_id']) ? preg_replace('/[^0-9]/', '', (string) $data['apaar_id']) : null;
-        $pen   = ! empty($data['pen_code']) ? trim((string) $data['pen_code']) : (! empty($data['studentCodeNat']) ? trim((string) $data['studentCodeNat']) : null);
+        $pen   = ! empty($data['pen_code']) ? trim((string) $data['pen_code']) : (! empty($data['admission_no']) ? trim((string) $data['admission_no']) : (! empty($data['studentCodeNat']) ? trim((string) $data['studentCodeNat']) : null));
         $firstName = trim($data['first_name'] ?? '');
         $lastName  = trim($data['last_name'] ?? '');
         $name      = trim($data['name'] ?? trim("{$firstName} {$lastName}"));

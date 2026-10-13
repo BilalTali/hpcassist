@@ -396,8 +396,20 @@
                                 @endif
                             </h3>
                             <p class="text-xs text-slate-500 mt-0.5">
-                                Download verified templates with official HPC schema, stage-specific grading columns, and pre-populated student IDs.
+                                Download verified templates with official HPC schema matching PARAKH portal fields 1-to-1.
                             </p>
+                            <div class="mt-2 flex items-center gap-1.5 flex-wrap text-[11px] text-slate-600 font-mono bg-slate-100/90 px-2.5 py-1.5 rounded-lg border border-slate-200">
+                                <span class="font-sans font-black text-indigo-700">📋 Columns A to I:</span>
+                                <span><b>A:</b> First Name*</span> ·
+                                <span><b>B:</b> Last Name</span> ·
+                                <span><b>C:</b> DOB*</span> ·
+                                <span><b>D:</b> Gender*</span> ·
+                                <span><b>E:</b> Email*</span> ·
+                                <span><b>F:</b> Admission No</span> ·
+                                <span><b>G:</b> Grade*</span> ·
+                                <span><b>H:</b> Section*</span> ·
+                                <span><b>I:</b> APAAR ID</span>
+                            </div>
                         </div>
 
                         <!-- Template Buttons & Config Links -->

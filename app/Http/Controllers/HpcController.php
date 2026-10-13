@@ -84,12 +84,13 @@ class HpcController extends Controller
                 $udiseStudents = $school->students()->orderBy('id')->get()->map(fn($st) => [
                     'first_name' => $st->first_name,
                     'last_name'  => $st->last_name,
-                    'dob'        => $st->dob,
-                    'gender'     => $st->getEffectiveGender(),
-                    'email'      => $st->email,
-                    'grade'      => $st->grade,
-                    'section'    => $st->section,
-                    'apaar_id'   => $st->apaar_id,
+                    'dob'          => $st->dob,
+                    'gender'       => $st->getEffectiveGender(),
+                    'email'        => $st->email,
+                    'admission_no' => $st->pen_code,
+                    'grade'        => $st->grade,
+                    'section'      => $st->section,
+                    'apaar_id'     => $st->apaar_id,
                 ])->all();
             } else {
                 $udiseStudents = $this->getUdiseStudents($school);

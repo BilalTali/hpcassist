@@ -33,15 +33,25 @@ Route::middleware('auth')->group(function () {
         $previewFile = $school ? $hpcController->getPreviewFile($school) : storage_path('app/hpc/preview.json');
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
 
-        // Check MySQL persistence for students
+        // Check MySQL persistence for students (auto-run migration on server if not yet created)
         if ($school) {
-            $dbStudents = $school->students()->orderBy('id')->get();
-            if ($dbStudents->isNotEmpty()) {
-                $preview = $dbStudents->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
-            } elseif (count($preview) > 0) {
-                // Auto-migrate legacy preview.json records into MySQL
-                foreach ($preview as $pRow) {
-                    $hpcController->upsertStudentToDatabase($school, $pRow, 'legacy_import');
+            if (! \Illuminate\Support\Facades\Schema::hasTable('students')) {
+                try {
+                    \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('Auto-migration failed: ' . $e->getMessage());
+                }
+            }
+
+            if (\Illuminate\Support\Facades\Schema::hasTable('students')) {
+                $dbStudents = $school->students()->orderBy('id')->get();
+                if ($dbStudents->isNotEmpty()) {
+                    $preview = $dbStudents->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
+                } elseif (count($preview) > 0) {
+                    // Auto-migrate legacy preview.json records into MySQL
+                    foreach ($preview as $pRow) {
+                        $hpcController->upsertStudentToDatabase($school, $pRow, 'legacy_import');
+                    }
                 }
             }
         }
@@ -105,6 +115,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/school/udise/reset',           [SchoolManageController::class, 'resetUdise'])->name('school.udise.reset');
     Route::post('/school/udise/sync-existing',   [SchoolManageController::class, 'syncExistingUdise'])->name('school.udise.sync_existing');
     Route::post('/school/sessions/kill-all',     [SchoolManageController::class, 'killAllSessions'])->name('school.sessions.kill_all');
+    Route::match(['get', 'post'], '/school/system/migrate', function () {
+        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        $output = \Illuminate\Support\Facades\Artisan::output();
+        return response()->json([
+            'ok'     => true,
+            'output' => $output,
+        ]);
+    })->name('school.system.migrate');
 
 
     // ── HPC Universal Student & Excel Routes ──────────────────────────────────

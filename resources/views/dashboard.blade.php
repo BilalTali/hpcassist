@@ -34,6 +34,11 @@
                         Setup In Progress
                     </span>
                 @endif
+                <a href="{{ route('extension.download') }}"
+                   class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 shadow-2xs transition active:scale-95"
+                   title="Download HPC Assist Chrome Extension for UDISE+ and PARAKH HPC">
+                    🧩 Download Extension (.zip)
+                </a>
                 <a href="{{ route('school.academic_settings') }}"
                    class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 shadow-2xs transition active:scale-95">
                     ⚙️ Working Days &amp; Marks Settings
@@ -201,6 +206,11 @@
                                         class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition active:scale-95">
                                     Proceed to Step 2: HPC School Connect ➔
                                 </button>
+                                <a href="{{ route('extension.download') }}"
+                                   class="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs transition active:scale-95"
+                                   title="Download or update the HPC Assist Chrome Extension (.zip)">
+                                    📦 Download Extension (.zip)
+                                </a>
                                 <button onclick="resetUdiseSync()"
                                         class="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs transition active:scale-95">
                                     🔄 Re-sync UDISE Data
@@ -227,6 +237,11 @@
                                         class="inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition active:scale-95">
                                     Proceed to Step 2 ➔
                                 </button>
+                                <a href="{{ route('extension.download') }}"
+                                   class="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs transition active:scale-95"
+                                   title="Download the HPC Assist Chrome Extension (.zip)">
+                                    📦 Download Extension (.zip)
+                                </a>
                                 <button onclick="resetUdiseSync()"
                                         class="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl font-semibold text-xs transition active:scale-95">
                                     🌐 Connect UDISE+ Instead
@@ -612,6 +627,11 @@
                                     class="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs shadow-sm transition active:scale-95">
                                 🚀 Run Automation &amp; Submit to HPC Portal
                             </button>
+                            <a href="{{ route('extension.download') }}"
+                               class="inline-flex items-center gap-1.5 px-3.5 py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs transition active:scale-95"
+                               title="Download or update the HPC Assist Chrome Extension (.zip) required for automated submission">
+                                🧩 Download Extension (.zip)
+                            </a>
                             <button onclick="copyConsoleScript()" type="button"
                                     class="inline-flex items-center gap-1.5 px-3.5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl font-bold text-xs transition active:scale-95"
                                     title="Copy a 1-click self-contained script to paste directly into the browser DevTools Console on the PARAKH portal">

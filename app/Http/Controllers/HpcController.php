@@ -193,10 +193,19 @@ class HpcController extends Controller
                         $dob = "{$m[3]}/{$m[2]}/{$m[1]}";
                     }
 
-                    $gender = trim($st['genderDesc'] ?? ($st['gender'] ?? ''));
+                    $rawGen = trim((string)($st['genderDesc'] ?? ($st['gender'] ?? '')));
+                    if ($rawGen === '1' || $rawGen === 1 || strtolower($rawGen) === 'male' || str_starts_with(strtolower($rawGen), 'm')) {
+                        $gender = 'Male';
+                    } elseif ($rawGen === '2' || $rawGen === 2 || strtolower($rawGen) === 'female' || str_starts_with(strtolower($rawGen), 'f')) {
+                        $gender = 'Female';
+                    } elseif ($rawGen === '3' || $rawGen === 3) {
+                        $gender = 'Other';
+                    } else {
+                        $gender = $rawGen;
+                    }
 
-                    $cleanPen   = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
-                    $admissionNo = $cleanPen;
+                    $cleanPen    = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
+                    $admissionNo = ! empty($st['admnNumber']) ? trim((string)$st['admnNumber']) : (! empty($st['admission_no']) ? trim((string)$st['admission_no']) : $cleanPen);
 
                     $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL) ? trim($st['email']) : '';
                     if (empty($email) || str_contains(strtolower($email), 'gov.in')) {
@@ -530,7 +539,7 @@ class HpcController extends Controller
             $headerRow = 0;
             for ($testRow = 1; $testRow <= min(6, $max); $testRow++) {
                 $cells = [];
-                for ($col = 1; $col <= 26; $col++) {
+                for ($col = 1; $col <= 40; $col++) {
                     $ltr = Coordinate::stringFromColumnIndex($col);
                     $val = strtolower(trim((string) $ws->getCell("{$ltr}{$testRow}")->getValue()));
                     if ($val !== '') $cells[$val] = $ltr;
@@ -539,10 +548,11 @@ class HpcController extends Controller
                     if (str_contains($k, 'first') && str_contains($k, 'name')) $headerMap['first_name'] = $ltr;
                     elseif (str_contains($k, 'last') && str_contains($k, 'name')) $headerMap['last_name'] = $ltr;
                     elseif (str_contains($k, 'student') && str_contains($k, 'name')) $headerMap['name'] = $ltr;
+                    elseif (str_contains($k, 'name') && empty($headerMap['name']) && empty($headerMap['first_name'])) $headerMap['name'] = $ltr;
                     elseif (str_contains($k, 'birth') || $k === 'dob') $headerMap['dob'] = $ltr;
                     elseif (str_contains($k, 'gender') || str_contains($k, 'sex')) $headerMap['gender'] = $ltr;
                     elseif (str_contains($k, 'email')) $headerMap['email'] = $ltr;
-                    elseif (str_contains($k, 'admission') || str_contains($k, 'roll')) $headerMap['admission'] = $ltr;
+                    elseif (str_contains($k, 'admission') || str_contains($k, 'admn') || str_contains($k, 'adm no') || str_contains($k, 'adm.') || str_contains($k, 'roll')) $headerMap['admission'] = $ltr;
                     elseif (str_contains($k, 'grade') || str_contains($k, 'class')) $headerMap['grade'] = $ltr;
                     elseif (str_contains($k, 'section')) $headerMap['section'] = $ltr;
                     elseif (str_contains($k, 'apaar')) $headerMap['apaar'] = $ltr;

@@ -10,23 +10,44 @@ use Facebook\WebDriver\WebDriverExpectedCondition;
 
 class HpcRun extends Command
 {
-    protected $signature   = 'hpc:run';
+    protected $signature   = 'hpc:run {--school= : Optional school ID for multi-tenant isolation}';
     protected $description = 'Read students from preview.json and submit each to the HPC portal';
 
     public function handle(): int
     {
         $storagePath   = config('hpc.storage_path');
         $profileDir    = base_path(config('hpc.profile_dir'));
+        $schoolId      = $this->option('school');
 
-        // Check if a specific school profile is active
-        $schoolsFile = $storagePath . '/schools.json';
-        if (file_exists($schoolsFile)) {
-            $schoolsData = json_decode(file_get_contents($schoolsFile), true) ?? [];
-            $activeId    = $schoolsData['active'] ?? 'default';
-            foreach ($schoolsData['schools'] ?? [] as $sch) {
-                if (($sch['id'] ?? '') === $activeId) {
-                    $profileDir = $storagePath . '/' . ($sch['dir'] ?? 'chrome-profile');
-                    break;
+        $previewFile   = $storagePath . '/preview.json';
+        $resultsFile   = $storagePath . '/run_results.json';
+
+        if ($schoolId) {
+            $schoolDir = $storagePath . '/schools/' . $schoolId;
+            @mkdir($schoolDir, 0755, true);
+            $profileDir  = $schoolDir . '/chrome-profile';
+            $previewFile = $schoolDir . '/preview.json';
+            $resultsFile = $schoolDir . '/run_results.json';
+
+            // If preview.json does not exist yet on disk, load directly from MySQL students table
+            if (! file_exists($previewFile) && class_exists(\App\Models\School::class)) {
+                $dbSchool = \App\Models\School::find((int) $schoolId);
+                if ($dbSchool && $dbSchool->students()->exists()) {
+                    $dbStudents = $dbSchool->students()->orderBy('id')->get()->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
+                    file_put_contents($previewFile, json_encode($dbStudents, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                }
+            }
+        } else {
+            // Check if a specific school profile is active in schools.json fallback
+            $schoolsFile = $storagePath . '/schools.json';
+            if (file_exists($schoolsFile)) {
+                $schoolsData = json_decode(file_get_contents($schoolsFile), true) ?? [];
+                $activeId    = $schoolsData['active'] ?? 'default';
+                foreach ($schoolsData['schools'] ?? [] as $sch) {
+                    if (($sch['id'] ?? '') === $activeId) {
+                        $profileDir = $storagePath . '/' . ($sch['dir'] ?? 'chrome-profile');
+                        break;
+                    }
                 }
             }
         }
@@ -34,8 +55,6 @@ class HpcRun extends Command
         $driverBin     = config('hpc.chromedriver_path');
         $loginUrl      = config('hpc.login_url');
         $addStudentUrl = config('hpc.add_student_url');
-        $previewFile   = $storagePath . '/preview.json';
-        $resultsFile   = $storagePath . '/run_results.json';
 
         // ── Load students ─────────────────────────────────────────────────────
         if (! file_exists($previewFile)) {

@@ -27,19 +27,22 @@ class HpcController extends Controller
 
     public function dashboard()
     {
-        $fieldsFile  = storage_path('app/hpc/fields.json');
-        $previewFile = storage_path('app/hpc/preview.json');
-        $resultsFile = storage_path('app/hpc/run_results.json');
+        $school       = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $fieldsFile   = storage_path('app/hpc/fields.json');
+        $previewFile  = $this->getPreviewFile($school);
+        $resultsFile  = $this->getSchoolStorageDir($school) . '/run_results.json';
 
         $schoolsData  = $this->getSchoolsData();
         $activeSchool = $this->getActiveSchool();
-        $profileDir   = $this->getActiveProfileDir();
+        $profileDir   = $this->getActiveProfileDir($school);
 
         $hasFields  = file_exists($fieldsFile);
         $hasProfile = is_dir($profileDir) && count(scandir($profileDir)) > 2;
 
         $preview = [];
-        if (file_exists($previewFile)) {
+        if ($school && $school->students()->exists()) {
+            $preview = $school->students()->orderBy('id')->get()->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
+        } elseif (file_exists($previewFile)) {
             $preview = json_decode(file_get_contents($previewFile), true) ?? [];
         }
 
@@ -52,9 +55,9 @@ class HpcController extends Controller
             ? trim(file_get_contents(storage_path('app/hpc/current_form.txt')))
             : config('hpc.add_student_url');
 
-        $udiseStudents   = $this->getUdiseStudents();
-        $udiseCount       = count($udiseStudents);
-        $udiseApaarCount  = count(array_filter($udiseStudents, fn($s) => !empty($s['apaarId']) && ctype_digit((string)$s['apaarId']) && strlen((string)$s['apaarId']) === 12));
+        $udiseStudents   = $this->getUdiseStudents($school);
+        $udiseCount      = count($preview);
+        $udiseApaarCount = count(array_filter($preview, fn($s) => !empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12));
 
         return view('hpc.dashboard', compact(
             'hasFields', 'hasProfile', 'preview', 'lastRun', 'currentFormUrl',
@@ -992,12 +995,14 @@ class HpcController extends Controller
         ];
         file_put_contents($resultsFile, json_encode($init, JSON_PRETTY_PRINT));
 
-        // Launch hpc:run command in the background
-        $artisan = base_path('artisan');
-        $logFile = storage_path('logs/hpc_run.log');
-        $php = PHP_BINARY;
+        // Launch hpc:run command in the background scoped to current school
+        $artisan     = base_path('artisan');
+        $school      = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $schoolArg   = $school ? "--school={$school->id}" : "";
+        $logFile     = storage_path('logs/hpc_run.log');
+        $php         = PHP_BINARY;
 
-        exec("nohup {$php} {$artisan} hpc:run > {$logFile} 2>&1 &");
+        exec("nohup {$php} {$artisan} hpc:run {$schoolArg} > {$logFile} 2>&1 &");
 
         return response()->json([
             'ok'    => true,

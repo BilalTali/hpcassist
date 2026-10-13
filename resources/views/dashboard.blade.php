@@ -23,7 +23,7 @@
                 @if($uStat === 'synced')
                     <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        UDISE Synced ({{ $udiseCount ?? 129 }} Students)
+                        UDISE Synced ({{ $udiseCount ?? 0 }} Students)
                     </span>
                 @elseif($uStat === 'skipped')
                     <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">

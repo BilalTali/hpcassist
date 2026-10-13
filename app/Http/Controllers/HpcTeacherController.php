@@ -17,6 +17,23 @@ class HpcTeacherController extends Controller
 {
     // ─── Dashboard View ───────────────────────────────────────────────────────
 
+    public function getSchoolStorageDir($school = null): string
+    {
+        if (! $school && \Illuminate\Support\Facades\Auth::check()) {
+            $school = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
+        }
+
+        if ($school) {
+            $dir = storage_path('app/hpc/schools/' . $school->id);
+            if (! is_dir($dir)) {
+                @mkdir($dir, 0755, true);
+            }
+            return $dir;
+        }
+
+        return storage_path('app/hpc');
+    }
+
     public function dashboard()
     {
         $storagePath = config('hpc.storage_path');
@@ -33,13 +50,16 @@ class HpcTeacherController extends Controller
             ['title' => 'Preparatory Stage', 'slug' => 'preparatory-stage', 'url' => 'https://hpc.parakh.ncert.gov.in/en/hpc/preparatory-stage']
         ];
 
-        $studentsFile = $storagePath . '/teacher_students.json';
+        $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $schoolDir = $this->getSchoolStorageDir($school);
+
+        $studentsFile = $schoolDir . '/teacher_students.json';
         $students = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
 
-        $previewFile = $storagePath . '/teacher_preview.json';
+        $previewFile = $schoolDir . '/teacher_preview.json';
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
 
-        $resultsFile = $storagePath . '/teacher_run_results.json';
+        $resultsFile = $schoolDir . '/teacher_run_results.json';
         $lastRun = file_exists($resultsFile) ? json_decode(file_get_contents($resultsFile), true) : null;
 
         $workingDays = SchoolWorkingDay::getDefault();
@@ -63,9 +83,21 @@ class HpcTeacherController extends Controller
 
     public function downloadTemplate(?Request $request = null)
     {
-        $storagePath = config('hpc.storage_path');
-        $studentsFile = $storagePath . '/teacher_students.json';
+        $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $schoolDir = $this->getSchoolStorageDir($school);
+        $studentsFile = $schoolDir . '/teacher_students.json';
         $students = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
+
+        if (empty($students) && $school && $school->students()->exists()) {
+            $students = $school->students()->orderBy('id')->get()->map(function($st) {
+                return [
+                    'name'     => $st->name,
+                    'apaar_id' => $st->apaar_id ?: '',
+                    'login_id' => $st->pen_code ?: ($st->apaar_id ?: 'S' . strtoupper(substr(md5($st->id . $st->name), 0, 9))),
+                    'status'   => 'HPC Pending',
+                ];
+            })->all();
+        }
 
         if (empty($students)) {
             $students = [
@@ -453,7 +485,8 @@ class HpcTeacherController extends Controller
             return response()->json(['ok' => false, 'error' => 'Could not read Excel file: ' . $e->getMessage()]);
         }
 
-        file_put_contents(storage_path('app/hpc/teacher_preview.json'), json_encode($preview, JSON_PRETTY_PRINT));
+        $schoolDir = $this->getSchoolStorageDir();
+        file_put_contents($schoolDir . '/teacher_preview.json', json_encode($preview, JSON_PRETTY_PRINT));
 
         return response()->json([
             'ok'      => true,
@@ -469,7 +502,8 @@ class HpcTeacherController extends Controller
 
     public function runStart(Request $request)
     {
-        $previewFile = storage_path('app/hpc/teacher_preview.json');
+        $schoolDir   = $this->getSchoolStorageDir();
+        $previewFile = $schoolDir . '/teacher_preview.json';
         if (! file_exists($previewFile)) {
             return response()->json(['ok' => false, 'error' => 'No student evaluation data found. Please upload the filled Excel file first.']);
         }
@@ -482,7 +516,7 @@ class HpcTeacherController extends Controller
         }
 
         $total = count($validStudents);
-        $resultsFile = storage_path('app/hpc/teacher_run_results.json');
+        $resultsFile = $schoolDir . '/teacher_run_results.json';
         $init = [
             'started'    => true,
             'done'       => false,
@@ -494,18 +528,23 @@ class HpcTeacherController extends Controller
         ];
         file_put_contents($resultsFile, json_encode($init, JSON_PRETTY_PRINT));
 
+        $school    = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $schoolArg = $school ? "--school={$school->id}" : "";
+        $teacher   = $this->getActiveTeacher();
+        $tArg      = !empty($teacher['id']) ? "--teacher={$teacher['id']}" : "";
+
         $artisan = base_path('artisan');
         $logFile = storage_path('logs/hpc_teacher_run.log');
         $php     = PHP_BINARY;
 
-        exec("nohup {$php} {$artisan} hpc:teacher-run > {$logFile} 2>&1 &");
+        exec("nohup {$php} {$artisan} hpc:teacher-run {$schoolArg} {$tArg} > {$logFile} 2>&1 &");
 
         return response()->json(['ok' => true, 'total' => $total]);
     }
 
     public function runStatus()
     {
-        $file = storage_path('app/hpc/teacher_run_results.json');
+        $file = $this->getSchoolStorageDir() . '/teacher_run_results.json';
         if (! file_exists($file)) {
             return response()->json(['started' => false, 'results' => []]);
         }
@@ -515,7 +554,7 @@ class HpcTeacherController extends Controller
 
     public function runReset()
     {
-        $file = storage_path('app/hpc/teacher_run_results.json');
+        $file = $this->getSchoolStorageDir() . '/teacher_run_results.json';
         if (file_exists($file)) @unlink($file);
         return response()->json(['ok' => true]);
     }

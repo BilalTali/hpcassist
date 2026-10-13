@@ -100,7 +100,7 @@
                         <!-- Button 2: Template Pre-filled with UDISE Data -->
                         <a href="{{ route('hpc.template.download_udise') }}"
                            class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow active:scale-95"
-                           title="Download Excel pre-populated with 129 UDISE students and unmasked APAAR IDs">
+                           title="Download Excel pre-populated with verified UDISE students and unmasked APAAR IDs">
                             📊 Template with UDISE Data (.xlsx)
                             @if(isset($udiseCount) && $udiseCount > 0)
                                 <span class="bg-white/20 text-white text-[10px] px-1.5 py-0.5 rounded-md font-mono">{{ $udiseCount }} Students</span>

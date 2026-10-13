@@ -8,7 +8,7 @@ use App\Models\SchoolWorkingDay;
 
 class HpcTeacherRun extends Command
 {
-    protected $signature   = 'hpc:teacher-run';
+    protected $signature   = 'hpc:teacher-run {--school= : Optional school ID for multi-tenant isolation} {--teacher= : Optional teacher ID}';
     protected $description = 'Read students from teacher_preview.json and update each student across HPC evaluation parts';
 
     public function handle(): int
@@ -17,10 +17,23 @@ class HpcTeacherRun extends Command
         $driverBin   = config('hpc.chromedriver_path');
         $loginUrl    = config('hpc.login_url');
         $hpcHomeUrl  = config('hpc.hpc_home_url') ?: 'https://hpc.parakh.ncert.gov.in/en/hpc';
+        $schoolId    = $this->option('school');
+        $teacherId   = $this->option('teacher');
+
         $previewFile = $storagePath . '/teacher_preview.json';
         $resultsFile = $storagePath . '/teacher_run_results.json';
 
-        $profileDir = $this->resolveActiveTeacherProfile();
+        if ($schoolId) {
+            $schoolDir = $storagePath . '/schools/' . $schoolId;
+            @mkdir($schoolDir, 0755, true);
+            $previewFile = $schoolDir . '/teacher_preview.json';
+            $resultsFile = $schoolDir . '/teacher_run_results.json';
+            $tSlug       = $teacherId ?: 'teacher_default';
+            $profileDir  = $schoolDir . '/teacher-profiles/' . $tSlug;
+            @mkdir($profileDir, 0755, true);
+        } else {
+            $profileDir = $this->resolveActiveTeacherProfile();
+        }
 
         if (! file_exists($previewFile)) {
             $this->writeStatus(['started' => true, 'done' => true, 'fatal' => 'No evaluation data found.', 'results' => []], $resultsFile);

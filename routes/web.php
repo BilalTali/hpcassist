@@ -21,6 +21,9 @@ Route::get('/udise/bridge', [UdiseController::class, 'bridge'])->name('udise.bri
 Route::get('/extension/download', [UdiseController::class, 'downloadExtension'])->name('extension.download');
 // Ingest: called by bridge page JS or extension after fetching students (CSRF-exempt via bootstrap/app.php)
 Route::match(['post','options'], '/udise/ingest', [UdiseController::class, 'ingest'])->name('udise.ingest');
+// HPC Portal Queue & Progress: called by extension or browser automation on PARAKH portal
+Route::match(['get', 'options'], '/hpc/students/queue', [HpcController::class, 'getStudentQueue'])->name('hpc.students.queue');
+Route::match(['post', 'options'], '/hpc/run/progress',   [HpcController::class, 'runProgress'])->name('hpc.run.progress');
 
 Route::middleware('auth')->group(function () {
     // ── School Central Dashboard ──────────────────────────────────────────────
@@ -108,10 +111,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/hpc/template/download/udise', [HpcController::class, 'downloadTemplate'])->name('hpc.template.download_udise');
     Route::post('/hpc/upload',             [HpcController::class, 'upload'])->name('hpc.upload');
     Route::post('/hpc/run/start',          [HpcController::class, 'runStart'])->name('hpc.run.start');
-    Route::post('/hpc/run/progress',       [HpcController::class, 'runProgress'])->name('hpc.run.progress');
     Route::get('/hpc/run/status',          [HpcController::class, 'runStatus'])->name('hpc.run.status');
     Route::post('/hpc/run/reset',          [HpcController::class, 'runReset'])->name('hpc.run.reset');
-    Route::get('/hpc/students/queue',      [HpcController::class, 'getStudentQueue'])->name('hpc.students.queue');
     Route::post('/hpc/session/end',        [HpcController::class, 'endSession'])->name('hpc.session.end');
     Route::post('/hpc/session/start',      [HpcController::class, 'startSession'])->name('hpc.session.start');
     Route::post('/hpc/form/discover',      [HpcController::class, 'discoverForm'])->name('hpc.form.discover');

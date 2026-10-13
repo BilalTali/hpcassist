@@ -425,7 +425,7 @@
                         isUploading: false,
                         fileName: '',
                         fileSize: '',
-                        replaceAll: false,
+                        replaceAll: true,
                         handleFileChange(e) {
                             const f = e.target.files[0];
                             if (f) {
@@ -497,17 +497,17 @@
                         </div>
 
                         <!-- Fresh Upload Toggle & Submit Controls -->
-                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-200/70 flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <label class="flex items-start gap-3 cursor-pointer select-none">
-                                <input type="checkbox" name="replace_all" value="1" x-model="replaceAll"
-                                       class="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4">
+                                <input type="checkbox" name="replace_all" value="1" checked x-model="replaceAll"
+                                       class="mt-0.5 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4">
                                 <div class="text-xs">
                                     <div class="font-bold text-slate-800 flex items-center gap-1.5">
-                                        <span>🔄 Fresh Roster Upload</span>
-                                        <span class="text-[10px] uppercase font-black bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">Replaces existing list</span>
+                                        <span>🔄 Replace entire roster with this spreadsheet</span>
+                                        <span class="text-[10px] uppercase font-black bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">Exact Match</span>
                                     </div>
                                     <div class="text-slate-500 text-[11px] mt-0.5">
-                                        Check this to completely wipe existing records and load this spreadsheet freshly. Leave unchecked to merge/update.
+                                        When checked, past records are cleared so your roster only contains the students in this file. Uncheck to merge.
                                     </div>
                                 </div>
                             </label>
@@ -515,11 +515,11 @@
                             <button type="submit" :disabled="isUploading"
                                     class="shrink-0 inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-black text-xs sm:text-sm shadow-md hover:shadow-indigo-500/25 transition active:scale-95 cursor-pointer">
                                 <span x-show="!isUploading" class="inline-flex items-center gap-1.5">
-                                    <span>📤</span> Upload &amp; Ingest Spreadsheet
+                                    <span>📤</span> <span x-text="replaceAll ? 'Upload & Replace Roster' : 'Upload & Merge Spreadsheet'">Upload &amp; Replace Roster</span>
                                 </span>
                                 <span x-show="isUploading" class="inline-flex items-center gap-2" style="display:none;">
                                     <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
-                                    Uploading &amp; Parsing Students...
+                                    Uploading &amp; Ingesting Students...
                                 </span>
                             </button>
                         </div>

@@ -643,7 +643,9 @@ class HpcController extends Controller
         if (\Illuminate\Support\Facades\Auth::check()) {
             $userSchool = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
             if ($userSchool) {
-                if ($request->boolean('replace_all')) {
+                // By default, fresh spreadsheet upload replaces the roster so the dashboard exactly matches the file
+                $shouldReplace = ! $request->boolean('append') && ($request->boolean('replace_all', true) || $request->input('mode') !== 'append');
+                if ($shouldReplace) {
                     Student::where('school_id', $userSchool->id)->delete();
                 }
 

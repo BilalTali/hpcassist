@@ -222,6 +222,32 @@ class UdiseController extends Controller
             ], 404, $headers);
         }
 
+        // Cross-school mismatch verification: verify that student records belong to this school
+        $rosterUdise = null;
+        foreach ($students as $st) {
+            if (! empty($st['schUdiseCode'])) {
+                $rosterUdise = preg_replace('/[^0-9]/', '', (string) $st['schUdiseCode']);
+                break;
+            }
+        }
+
+        if ($school && $rosterUdise && ! empty($school->udise_code)) {
+            $schoolCleanUdise = preg_replace('/[^0-9]/', '', $school->udise_code);
+            if ($schoolCleanUdise !== $rosterUdise) {
+                // If DB has the school matching this roster, redirect student data to the correct school
+                $correctSchool = \App\Models\School::where('udise_code', $rosterUdise)->first();
+                if ($correctSchool) {
+                    \Illuminate\Support\Facades\Log::warning("UDISE ingest rerouted: payload targeted school {$school->id} ({$school->name}), but student records belong to school {$correctSchool->id} ({$correctSchool->name})");
+                    $school = $correctSchool;
+                } else {
+                    return response()->json([
+                        'ok'    => false,
+                        'error' => "UDISE mismatch: Received student records for school {$rosterUdise}, but request was mapped to {$school->name} ({$school->udise_code}).",
+                    ], 422, $headers);
+                }
+            }
+        }
+
         // Save / update udise_internal_id if discovered
         $discoveredInternalId = (string) ($udiseSchoolId ?: ($schoolId > 1000 ? $schoolId : ''));
         if (! empty($discoveredInternalId) && $school->udise_internal_id !== $discoveredInternalId) {

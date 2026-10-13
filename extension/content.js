@@ -2,14 +2,87 @@
 (function () {
     console.log('[HPC Assist] UDISE+ Sync script loaded.');
 
+    function getActiveSchoolFromStorage() {
+        for (const storage of [sessionStorage, localStorage]) {
+            try {
+                for (let i = 0; i < storage.length; i++) {
+                    const key = storage.key(i);
+                    if (!key || key.startsWith('hpc_')) continue;
+                    const val = storage.getItem(key);
+                    if (!val) continue;
+
+                    // Direct JWT string
+                    let jwtStr = null;
+                    if (typeof val === 'string' && val.startsWith('ey') && val.split('.').length === 3) {
+                        jwtStr = val;
+                    } else if (typeof val === 'string' && val.startsWith('{')) {
+                        try {
+                            const parsed = JSON.parse(val);
+                            if (parsed.schoolId || parsed.schId || parsed.school_id) {
+                                return {
+                                    schoolId: String(parsed.schoolId || parsed.schId || parsed.school_id),
+                                    udiseCode: String(parsed.udiseCode || parsed.schUdiseCode || parsed.udise_code || '')
+                                };
+                            }
+                            const tok = parsed.token || parsed.access_token || parsed.id_token || parsed.jwt;
+                            if (tok && typeof tok === 'string' && tok.startsWith('ey') && tok.split('.').length === 3) {
+                                jwtStr = tok;
+                            }
+                        } catch(e) {}
+                    }
+
+                    if (jwtStr) {
+                        try {
+                            const payload = JSON.parse(atob(jwtStr.split('.')[1]));
+                            const sid = payload.schoolId || payload.schId || payload.school_id || payload.sch_id;
+                            const ucode = payload.udiseCode || payload.schUdiseCode || payload.userName || payload.udise_code;
+                            if (sid) {
+                                return {
+                                    schoolId: String(sid),
+                                    udiseCode: ucode ? String(ucode) : ''
+                                };
+                            }
+                        } catch(e) {}
+                    }
+                }
+            } catch(e) {}
+        }
+        return null;
+    }
+
     function getSchoolId() {
-        return (location.href.match(/school\/(\d+)/)?.[1]) ||
-               (location.hash.match(/school\/(\d+)/)?.[1]) ||
-               (document.querySelector('[href*="school/"]')?.getAttribute('href')?.match(/school\/(\d+)/)?.[1]) ||
-               (window.performance?.getEntriesByType?.('resource')?.map(r => r.name)?.find(u => u.includes('/snapshot/students/all/'))?.match(/all\/(\d+)/)?.[1]) ||
-               (window.performance?.getEntriesByType?.('resource')?.map(r => r.name)?.find(u => u.includes('/cy/school/'))?.match(/school\/(\d+)/)?.[1]) ||
-               (window.performance?.getEntriesByType?.('resource')?.map(r => r.name)?.find(u => u.includes('/students/all/'))?.match(/all\/(\d+)/)?.[1]) ||
-               null;
+        // 1. Current active URL or hash
+        const urlMatch = (location.href.match(/\/school\/(\d+)/)?.[1]) ||
+                         (location.hash.match(/\/school\/(\d+)/)?.[1]);
+        if (urlMatch) return urlMatch;
+
+        // 2. Active DOM anchor on the visible page
+        const domLink = document.querySelector('a[href*="/school/"]')?.getAttribute('href')?.match(/\/school\/(\d+)/)?.[1];
+        if (domLink) return domLink;
+
+        // 3. Storage / JWT payload from current active session
+        const storageSchool = getActiveSchoolFromStorage();
+        if (storageSchool?.schoolId) return storageSchool.schoolId;
+
+        // 4. Performance network entries - ONLY FRESH entries within last 45s, search NEWEST FIRST
+        try {
+            const freshEntries = (window.performance?.getEntriesByType?.('resource') || [])
+                .filter(r => r.startTime > (performance.now() - 45000))
+                .map(r => r.name);
+
+            // Reverse to inspect newest calls first (avoiding stale calls from previous school sessions)
+            const recentMatch = freshEntries.slice().reverse().find(u =>
+                u.includes('/snapshot/students/all/') ||
+                u.includes('/cy/school/') ||
+                u.includes('/students/all/')
+            );
+            if (recentMatch) {
+                const match = recentMatch.match(/(?:all|school)\/(\d+)/)?.[1];
+                if (match) return match;
+            }
+        } catch(e) {}
+
+        return null;
     }
 
     function getAuthHeaders() {
@@ -162,16 +235,29 @@
                 return;
             }
 
-            // Detect UDISE code across all sources
-            let udiseCode = getActiveUdiseCode();
+            // Ground-truth UDISE code from the actual student records returned
+            const rosterUdiseCode = students.find(s => s?.schUdiseCode)?.schUdiseCode || '';
+            const configUdiseCode = window.__HPC_CONFIG?.udise_code || '';
+
+            // Guard against uploading wrong school's data if extension was generated for a different school
+            if (configUdiseCode && rosterUdiseCode && rosterUdiseCode !== configUdiseCode) {
+                renderWidget(
+                    'error',
+                    `⚠️ <strong>School Mismatch:</strong> Your active UDISE+ portal session belongs to school <code>${rosterUdiseCode}</code>, but this extension is linked to <code>${configUdiseCode}</code> (${window.__HPC_CONFIG?.school_name || 'HPC Assist'}).<br><br>Please log into UDISE+ with UDISE code <code>${configUdiseCode}</code> or re-download the extension from your current school's dashboard.`,
+                    null,
+                    rosterUdiseCode
+                );
+                isSyncing = false;
+                return;
+            }
+
+            // Resolve authoritative UDISE code for ingest
+            let udiseCode = rosterUdiseCode || configUdiseCode || getActiveUdiseCode();
             if (!udiseCode) {
-                udiseCode = students.find(s => s?.schUdiseCode)?.schUdiseCode || '';
+                udiseCode = detectUdiseCodeFromDOM();
             }
             if (!udiseCode) {
                 udiseCode = detectUdiseCodeFromStorage();
-            }
-            if (!udiseCode) {
-                udiseCode = detectUdiseCodeFromDOM();
             }
             if (!udiseCode) {
                 udiseCode = await detectUdiseCodeFromApi(schoolId);
@@ -207,7 +293,6 @@
 
             if (postData.ok) {
                 sessionStorage.setItem(syncKey, 'true');
-                if (udiseCode) localStorage.setItem('hpc_assist_last_udise', udiseCode);
                 renderWidget('success', `🎉 Synced ${postData.total} students (${postData.apaar_count} APAAR IDs) to ${postData.school_name || 'HPC Assist'}!`, postData.redirect, udiseCode);
             } else {
                 renderWidget('error', postData.error || 'Sync rejected by server', null, udiseCode);
@@ -226,8 +311,10 @@
         if (manual) return manual;
         const configCode = window.__HPC_CONFIG?.udise_code;
         if (configCode) return configCode;
-        const last = localStorage.getItem('hpc_assist_last_udise');
-        if (last) return last;
+        const storageSchool = getActiveSchoolFromStorage();
+        if (storageSchool?.udiseCode && /^\d{11}$/.test(storageSchool.udiseCode)) {
+            return storageSchool.udiseCode;
+        }
         return '';
     }
 

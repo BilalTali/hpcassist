@@ -1021,7 +1021,7 @@ class HpcController extends Controller
     public function upsertStudentToDatabase(School $school, array $data, string $source = 'udise_sync'): Student
     {
         $apaar = ! empty($data['apaar_id']) ? preg_replace('/[^0-9]/', '', (string) $data['apaar_id']) : null;
-        $pen   = ! empty($data['pen_code']) ? trim((string) $data['pen_code']) : (! empty($data['admission_no']) ? trim((string) $data['admission_no']) : (! empty($data['studentCodeNat']) ? trim((string) $data['studentCodeNat']) : null));
+        $pen   = ! empty($data['admission_no']) ? trim((string) $data['admission_no']) : (! empty($data['admnNumber']) ? trim((string) $data['admnNumber']) : (! empty($data['pen_code']) ? trim((string) $data['pen_code']) : (! empty($data['studentCodeNat']) ? trim((string) $data['studentCodeNat']) : null)));
         $firstName = trim($data['first_name'] ?? '');
         $lastName  = trim($data['last_name'] ?? '');
         $name      = trim($data['name'] ?? trim("{$firstName} {$lastName}"));

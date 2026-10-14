@@ -1646,13 +1646,110 @@
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const setVal = (el, val) => {
         if (!el) return;
+        el.focus();
         const proto = Object.getPrototypeOf(el);
         const set = Object.getOwnPropertyDescriptor(proto, 'value')?.set || Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
         if (set) set.call(el, val); else el.value = val;
+        if (el._valueTracker) {
+            el._valueTracker.setValue('');
+        }
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
         el.dispatchEvent(new Event('blur', { bubbles: true }));
     };
+
+    function findAdmissionInput() {
+        const byMaxLen = Array.from(document.querySelectorAll('input[maxlength="12"]:not([type="hidden"])'))
+            .find(i => !i.disabled && (i.type === 'text' || !i.type));
+        if (byMaxLen) return byMaxLen;
+
+        const wrappers = Array.from(document.querySelectorAll('.custom-input-label'));
+        const admWrapper = wrappers.find(w => {
+            const t = w.textContent.toLowerCase();
+            return t.includes('admission') || t.includes('admn') || t.includes('प्रवेश') || t.includes('दाखिला');
+        });
+        if (admWrapper) {
+            const inp = admWrapper.querySelector('input:not([type="hidden"]):not([maxlength="1"])');
+            if (inp) return inp;
+        }
+
+        const labels = Array.from(document.querySelectorAll('.custom-input-label label, label'));
+        const admLabel = labels.find(l => {
+            const t = l.textContent.toLowerCase();
+            return t.includes('admission') || t.includes('admn') || t.includes('प्रवेश') || t.includes('दाखिला');
+        });
+        if (admLabel) {
+            const wrapper = admLabel.closest('.custom-input-label') || admLabel.parentElement;
+            const inp = wrapper?.querySelector('input:not([type="hidden"]):not([maxlength="1"])');
+            if (inp) return inp;
+        }
+
+        const writeInputs = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="लिखें" i]'));
+        if (writeInputs.length >= 4) return writeInputs[3];
+
+        const textInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([maxlength="1"])'))
+            .filter(i => !i.disabled && (i.type === 'text' || !i.type));
+        if (textInputs.length >= 4) return textInputs[3];
+
+        return null;
+    }
+
+    async function fillAdmissionNumber(s) {
+        const admInput = findAdmissionInput();
+        const admVal = String(
+            s.admission_no ?? 
+            s.pen_code ?? 
+            s.admissionNo ?? 
+            s.admnNumber ?? 
+            s.pen ?? 
+            s.roll_no ?? 
+            s.rollNo ?? 
+            ''
+        ).trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+
+        if (!admInput || !admVal) return;
+
+        admInput.focus();
+        const proto = Object.getPrototypeOf(admInput);
+        const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set ||
+                             Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        if (nativeSetter) {
+            nativeSetter.call(admInput, admVal);
+        } else {
+            admInput.value = admVal;
+        }
+
+        if (admInput._valueTracker) {
+            admInput._valueTracker.setValue('');
+        }
+
+        admInput.dispatchEvent(new Event('input', { bubbles: true }));
+        admInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+        const propsKey = Object.keys(admInput).find(k => k.startsWith('__reactProps') || k.startsWith('__reactEventHandlers'));
+        if (propsKey && typeof admInput[propsKey]?.onChange === 'function') {
+            try {
+                admInput[propsKey].onChange({
+                    target: { value: admVal },
+                    currentTarget: { value: admVal },
+                    preventDefault: () => {},
+                    stopPropagation: () => {}
+                });
+            } catch(e) {
+                try {
+                    admInput[propsKey].onChange({
+                        target: admInput,
+                        currentTarget: admInput,
+                        preventDefault: () => {},
+                        stopPropagation: () => {}
+                    });
+                } catch(e2) {}
+            }
+        }
+
+        admInput.dispatchEvent(new Event('blur', { bubbles: true }));
+        await sleep(150);
+    }
 
     function getFieldByLabel(kw) {
         const labels = Array.from(document.querySelectorAll('.custom-input-label label, label'));
@@ -1844,28 +1941,7 @@
         }
 
         // 5. Admission Number
-        const admInput = getFieldByLabel('admission') ||
-                         Array.from(document.querySelectorAll('.custom-input-label')).find(w => w.textContent.toLowerCase().includes('admission'))?.querySelector('input') ||
-                         Array.from(document.querySelectorAll('input[placeholder*="write" i]'))[3];
-        const admVal = String(s.admission_no || s.pen_code || s.admissionNo || '').trim();
-        if (admInput && admVal) {
-            admInput.focus();
-            setVal(admInput, admVal);
-            const propsKey = Object.keys(admInput).find(k => k.startsWith('__reactProps'));
-            if (propsKey && typeof admInput[propsKey]?.onChange === 'function') {
-                try {
-                    admInput[propsKey].onChange({
-                        target: admInput,
-                        currentTarget: admInput,
-                        preventDefault: () => {},
-                        stopPropagation: () => {}
-                    });
-                } catch(e) {
-                    try { admInput[propsKey].onChange({ target: { value: admVal }, currentTarget: { value: admVal } }); } catch(e2) {}
-                }
-            }
-            await sleep(150);
-        }
+        await fillAdmissionNumber(s);
 
         // 6. Grade
         const gradeCandidates = getGradeCandidates(s.grade);
@@ -1923,6 +1999,16 @@
                     }
                     await sleep(30);
                 }
+            }
+        }
+
+        // 8b. Re-verify School Admission Number in case dropdown re-renders wiped it
+        const expectedAdm = String(s.admission_no ?? s.pen_code ?? s.admissionNo ?? s.admnNumber ?? '').trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+        if (expectedAdm) {
+            const curAdmInput = findAdmissionInput();
+            if (curAdmInput && curAdmInput.value !== expectedAdm) {
+                console.log('Re-applying Admission Number after dropdowns:', expectedAdm);
+                await fillAdmissionNumber(s);
             }
         }
 

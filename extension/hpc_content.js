@@ -28,6 +28,9 @@
         } else {
             element.value = value;
         }
+        if (element._valueTracker) {
+            element._valueTracker.setValue('');
+        }
         element.dispatchEvent(new Event('input', { bubbles: true }));
         element.dispatchEvent(new Event('change', { bubbles: true }));
         element.dispatchEvent(new Event('blur', { bubbles: true }));
@@ -612,6 +615,119 @@
         }
     }
 
+    function findAdmissionInput() {
+        // Priority 1: input with maxlength="12" (exclusive to school admission number on PARAKH student add form)
+        const byMaxLen = Array.from(document.querySelectorAll('input[maxlength="12"]:not([type="hidden"])'))
+            .find(i => !i.disabled && (i.type === 'text' || !i.type));
+        if (byMaxLen) return byMaxLen;
+
+        // Priority 2: input inside a .custom-input-label containing 'admission' or 'admn' or 'प्रवेश' or 'दाखिला'
+        const wrappers = Array.from(document.querySelectorAll('.custom-input-label'));
+        const admWrapper = wrappers.find(w => {
+            const t = w.textContent.toLowerCase();
+            return t.includes('admission') || t.includes('admn') || t.includes('प्रवेश') || t.includes('दाखिला');
+        });
+        if (admWrapper) {
+            const inp = admWrapper.querySelector('input:not([type="hidden"]):not([maxlength="1"])');
+            if (inp) return inp;
+        }
+
+        // Priority 3: by label
+        const labels = Array.from(document.querySelectorAll('.custom-input-label label, label'));
+        const admLabel = labels.find(l => {
+            const t = l.textContent.toLowerCase();
+            return t.includes('admission') || t.includes('admn') || t.includes('प्रवेश') || t.includes('दाखिला');
+        });
+        if (admLabel) {
+            const wrapper = admLabel.closest('.custom-input-label') || admLabel.parentElement;
+            const inp = wrapper?.querySelector('input:not([type="hidden"]):not([maxlength="1"])');
+            if (inp) return inp;
+        }
+
+        // Priority 4: 4th "Write here" input (0: First, 1: Last, 2: Email, 3: Admission)
+        const writeInputs = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="लिखें" i]'));
+        if (writeInputs.length >= 4) return writeInputs[3];
+
+        // Priority 5: 4th text input on page
+        const textInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([maxlength="1"])'))
+            .filter(i => !i.disabled && (i.type === 'text' || !i.type));
+        if (textInputs.length >= 4) return textInputs[3];
+
+        return null;
+    }
+
+    async function fillAdmissionNumber(student) {
+        const admInput = findAdmissionInput();
+        const admVal = String(
+            student.admission_no ?? 
+            student.pen_code ?? 
+            student.admissionNo ?? 
+            student.admnNumber ?? 
+            student.pen ?? 
+            student.roll_no ?? 
+            student.rollNo ?? 
+            ''
+        ).trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+
+        if (!admInput) {
+            console.warn('[HPC Assist] Could not find School Admission Number input');
+            return;
+        }
+
+        if (!admVal) {
+            console.log('[HPC Assist] Student has no admission number/PEN. Leaving blank.');
+            return;
+        }
+
+        logStatus(`Setting Admission No: ${admVal}...`);
+        admInput.focus();
+
+        // 1. Set DOM value via HTMLInputElement prototype setter
+        const proto = Object.getPrototypeOf(admInput);
+        const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set ||
+                             Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        if (nativeSetter) {
+            nativeSetter.call(admInput, admVal);
+        } else {
+            admInput.value = admVal;
+        }
+
+        // 2. Clear React internal _valueTracker so React recognizes value change
+        if (admInput._valueTracker) {
+            admInput._valueTracker.setValue('');
+        }
+
+        // 3. Dispatch standard input & change events
+        admInput.dispatchEvent(new Event('input', { bubbles: true }));
+        admInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+        // 4. Directly invoke React's internal onChange handler if present on fiber/props
+        const propsKey = Object.keys(admInput).find(k => k.startsWith('__reactProps') || k.startsWith('__reactEventHandlers'));
+        if (propsKey && typeof admInput[propsKey]?.onChange === 'function') {
+            try {
+                admInput[propsKey].onChange({
+                    target: { value: admVal },
+                    currentTarget: { value: admVal },
+                    preventDefault: () => {},
+                    stopPropagation: () => {}
+                });
+            } catch(e) {
+                try {
+                    admInput[propsKey].onChange({
+                        target: admInput,
+                        currentTarget: admInput,
+                        preventDefault: () => {},
+                        stopPropagation: () => {}
+                    });
+                } catch(e2) {}
+            }
+        }
+
+        // 5. Blur to finalize
+        admInput.dispatchEvent(new Event('blur', { bubbles: true }));
+        await sleep(150);
+    }
+
     async function processCurrentStudent() {
         if (!isRunning) return;
 
@@ -674,30 +790,8 @@
                 await sleep(150);
             }
 
-            // 5. School Admission Number (if available)
-            const admInput = getFieldByLabel('admission') ||
-                             Array.from(document.querySelectorAll('.custom-input-label')).find(w => w.textContent.toLowerCase().includes('admission'))?.querySelector('input') ||
-                             Array.from(document.querySelectorAll('input[placeholder*="write" i]'))[3];
-            const admVal = String(student.admission_no || student.pen_code || student.admissionNo || '').trim();
-            if (admInput && admVal) {
-                logStatus(`Setting Admission No: ${admVal}...`);
-                admInput.focus();
-                setNativeValue(admInput, admVal);
-                const propsKey = Object.keys(admInput).find(k => k.startsWith('__reactProps'));
-                if (propsKey && typeof admInput[propsKey]?.onChange === 'function') {
-                    try {
-                        admInput[propsKey].onChange({
-                            target: admInput,
-                            currentTarget: admInput,
-                            preventDefault: () => {},
-                            stopPropagation: () => {}
-                        });
-                    } catch(e) {
-                        try { admInput[propsKey].onChange({ target: { value: admVal }, currentTarget: { value: admVal } }); } catch(e2) {}
-                    }
-                }
-                await sleep(150);
-            }
+            // 5. School Admission Number
+            await fillAdmissionNumber(student);
 
             // 6. Grade Dropdown
             const gradeCandidates = getGradeCandidates(student.grade);
@@ -714,6 +808,16 @@
             // 8. APAAR ID (12 character boxes)
             await fillApaarId(student.apaar_id);
             await sleep(200);
+
+            // 8b. Re-verify School Admission Number in case dropdown re-renders wiped it
+            const expectedAdm = String(student.admission_no ?? student.pen_code ?? student.admissionNo ?? student.admnNumber ?? '').trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+            if (expectedAdm) {
+                const curAdmInput = findAdmissionInput();
+                if (curAdmInput && curAdmInput.value !== expectedAdm) {
+                    console.log('[HPC Assist] Re-applying Admission Number after dropdowns:', expectedAdm);
+                    await fillAdmissionNumber(student);
+                }
+            }
 
             // 9. Pre-Submission HTML5 Validation Check
             const form = document.querySelector('form');

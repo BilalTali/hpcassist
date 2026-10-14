@@ -580,6 +580,9 @@
                                 <tr>
                                     <th class="py-3 px-3">#</th>
                                     <th class="py-3 px-3">Student Full Name</th>
+                                    <th class="py-3 px-3">Gender</th>
+                                    <th class="py-3 px-3">Adm No</th>
+                                    <th class="py-3 px-3">PEN (UDISE)</th>
                                     <th class="py-3 px-3">Grade &amp; Sec</th>
                                     <th class="py-3 px-3">Date of Birth</th>
                                     <th class="py-3 px-3">APAAR ID (12-Digit)</th>
@@ -1014,27 +1017,53 @@
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block font-bold text-slate-700 mb-1">Grade / Class</label>
-                        <input type="text" id="modal-student-grade" placeholder="Grade 6"
-                               class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-500">
+                        <label class="block font-bold text-slate-700 mb-1">Gender *</label>
+                        <select id="modal-student-gender" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-500">
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                        </select>
                     </div>
                     <div>
-                        <label class="block font-bold text-slate-700 mb-1">Section</label>
-                        <input type="text" id="modal-student-section" value="A"
+                        <label class="block font-bold text-slate-700 mb-1">Date of Birth *</label>
+                        <input type="text" id="modal-student-dob" placeholder="DD/MM/YYYY" required
                                class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-500">
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block font-bold text-slate-700 mb-1">Date of Birth</label>
-                        <input type="text" id="modal-student-dob" placeholder="DD/MM/YYYY"
+                        <label class="block font-bold text-slate-700 mb-1">Grade / Class *</label>
+                        <input type="text" id="modal-student-grade" placeholder="Grade 6" required
                                class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-500">
                     </div>
                     <div>
-                        <label class="block font-bold text-slate-700 mb-1">APAAR ID (12-Digit)</label>
-                        <input type="text" id="modal-student-apaar" maxlength="12" placeholder="12-digit number"
+                        <label class="block font-bold text-slate-700 mb-1">Section *</label>
+                        <input type="text" id="modal-student-section" value="A" required
+                               class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:border-indigo-500">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">
+                            School Admission Number
+                            <span class="text-[10px] text-slate-400 font-normal">(Sent to PARAKH)</span>
+                        </label>
+                        <input type="text" id="modal-student-admission" maxlength="12" placeholder="e.g. 268"
                                class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono focus:outline-none focus:border-indigo-500">
                     </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">
+                            National PEN (UDISE+)
+                            <span class="text-[10px] text-slate-400 font-normal">(11-Digit ID)</span>
+                        </label>
+                        <input type="text" id="modal-student-pen" maxlength="20" placeholder="e.g. 22293390180"
+                               class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono focus:outline-none focus:border-indigo-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">APAAR ID (12-Digit)</label>
+                    <input type="text" id="modal-student-apaar" maxlength="12" placeholder="12-digit number"
+                           class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono focus:outline-none focus:border-indigo-500">
                 </div>
                 <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                     <button type="button" onclick="closeStudentModal()" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold">Cancel</button>
@@ -1403,7 +1432,7 @@
             const pageItems = window.filteredStudentRows.slice(startIdx, endIdx);
 
             if (total === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-400">No student records found.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center text-slate-400">No student records found.</td></tr>`;
                 updateStudentPaginationControls(0, 0, 0);
                 return;
             }
@@ -1411,6 +1440,9 @@
             tbody.innerHTML = pageItems.map((r, i) => {
                 const idx = startIdx + i;
                 const name = (r.first_name || r.name || '') + ' ' + (r.last_name || '');
+                const gender = r.gender || '—';
+                const adm = r.admission_no || '—';
+                const pen = r.pen_code || '—';
                 const apaar = r.apaar_id || r.apaarId || r.national_id || '—';
                 const dob = r.dob || r.date_of_birth || '—';
                 const grade = r.grade || r.class || 'Grade 6';
@@ -1419,6 +1451,9 @@
                     <tr class="hover:bg-slate-50/50 transition">
                         <td class="py-2.5 px-3 font-mono text-slate-400">${idx + 1}</td>
                         <td class="py-2.5 px-3 font-bold text-slate-800">${name.trim() || 'Student'}</td>
+                        <td class="py-2.5 px-3 text-slate-600">${gender}</td>
+                        <td class="py-2.5 px-3 font-mono text-indigo-700 font-semibold">${adm}</td>
+                        <td class="py-2.5 px-3 font-mono text-slate-500 text-[11px]">${pen}</td>
                         <td class="py-2.5 px-3 font-semibold text-slate-600">${grade} (${sec})</td>
                         <td class="py-2.5 px-3 font-mono text-slate-600">${dob}</td>
                         <td class="py-2.5 px-3 font-mono text-slate-800">${apaar}</td>
@@ -1428,8 +1463,8 @@
                             </span>
                         </td>
                         <td class="py-2.5 px-3 text-right">
-                            <button onclick="openEditStudentModal(${idx})" class="px-2 py-1 text-slate-600 hover:text-indigo-600 font-semibold bg-slate-100 hover:bg-indigo-50 rounded-lg">✏️</button>
-                            <button onclick="deleteStudentRecord(${idx})" class="px-2 py-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg ml-1">🗑️</button>
+                            <button onclick="openEditStudentModal(${idx})" class="px-2 py-1 text-slate-600 hover:text-indigo-600 font-semibold bg-slate-100 hover:bg-indigo-50 rounded-lg" title="Edit Student">✏️</button>
+                            <button onclick="deleteStudentRecord(${idx})" class="px-2 py-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg ml-1" title="Delete Student">🗑️</button>
                         </td>
                     </tr>
                 `;
@@ -1477,6 +1512,9 @@
             document.getElementById('modal-student-index').value = -1;
             document.getElementById('modal-student-first').value = '';
             document.getElementById('modal-student-last').value = '';
+            document.getElementById('modal-student-gender').value = 'Male';
+            document.getElementById('modal-student-admission').value = '';
+            document.getElementById('modal-student-pen').value = '';
             document.getElementById('modal-student-grade').value = 'Grade 6';
             document.getElementById('modal-student-section').value = 'A';
             document.getElementById('modal-student-dob').value = '';
@@ -1489,6 +1527,9 @@
             document.getElementById('modal-student-index').value = idx;
             document.getElementById('modal-student-first').value = r.first_name || r.name || '';
             document.getElementById('modal-student-last').value = r.last_name || '';
+            document.getElementById('modal-student-gender').value = r.gender || 'Male';
+            document.getElementById('modal-student-admission').value = r.admission_no || '';
+            document.getElementById('modal-student-pen').value = r.pen_code || '';
             document.getElementById('modal-student-grade').value = r.grade || 'Grade 6';
             document.getElementById('modal-student-section').value = r.section || 'A';
             document.getElementById('modal-student-dob').value = r.dob || '';
@@ -1504,6 +1545,9 @@
                 index: idx,
                 first_name: document.getElementById('modal-student-first').value,
                 last_name: document.getElementById('modal-student-last').value,
+                gender: document.getElementById('modal-student-gender').value,
+                admission_no: document.getElementById('modal-student-admission').value,
+                pen_code: document.getElementById('modal-student-pen').value,
                 grade: document.getElementById('modal-student-grade').value,
                 section: document.getElementById('modal-student-section').value,
                 dob: document.getElementById('modal-student-dob').value,
@@ -1698,12 +1742,8 @@
         const admInput = findAdmissionInput();
         const admVal = String(
             s.admission_no ?? 
-            s.pen_code ?? 
             s.admissionNo ?? 
             s.admnNumber ?? 
-            s.pen ?? 
-            s.roll_no ?? 
-            s.rollNo ?? 
             ''
         ).trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
 
@@ -2003,7 +2043,7 @@
         }
 
         // 8b. Re-verify School Admission Number in case dropdown re-renders wiped it
-        const expectedAdm = String(s.admission_no ?? s.pen_code ?? s.admissionNo ?? s.admnNumber ?? '').trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+        const expectedAdm = String(s.admission_no ?? s.admissionNo ?? s.admnNumber ?? '').trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
         if (expectedAdm) {
             const curAdmInput = findAdmissionInput();
             if (curAdmInput && curAdmInput.value !== expectedAdm) {

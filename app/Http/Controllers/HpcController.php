@@ -87,7 +87,8 @@ class HpcController extends Controller
                     'dob'          => $st->dob,
                     'gender'       => $st->getEffectiveGender(),
                     'email'        => $st->email,
-                    'admission_no' => $st->pen_code,
+                    'admission_no' => $st->admission_no ?? '',
+                    'pen_code'     => $st->pen_code ?? '',
                     'grade'        => $st->grade,
                     'section'      => $st->section,
                     'apaar_id'     => $st->apaar_id,
@@ -179,7 +180,7 @@ class HpcController extends Controller
                     $dob         = trim($st['dob'] ?? '');
                     $gender      = trim($st['gender'] ?? '');
                     $email       = trim($st['email'] ?? '');
-                    $admissionNo = trim($st['admission_no'] ?? ($st['pen_code'] ?? ''));
+                    $admissionNo = trim($st['admission_no'] ?? '');
                     $grade       = trim($st['grade'] ?? 'Grade 6');
                     $section     = trim($st['section'] ?? 'A');
                     $apaarId     = trim((string)($st['apaar_id'] ?? ''));
@@ -205,13 +206,14 @@ class HpcController extends Controller
                         $gender = $rawGen;
                     }
 
-                    $cleanPen    = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
-                    $admissionNo = ! empty($st['admnNumber']) ? trim((string)$st['admnNumber']) : (! empty($st['admission_no']) ? trim((string)$st['admission_no']) : $cleanPen);
+                    $cleanPen    = ! empty($st['studentCodeNat']) ? preg_replace('/[^0-9]/', '', (string)$st['studentCodeNat']) : '';
+                    $admissionNo = ! empty($st['admnNumber']) ? trim((string)$st['admnNumber']) : (! empty($st['admission_no']) ? trim((string)$st['admission_no']) : '');
 
                     $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL) ? trim($st['email']) : '';
                     if (empty($email) || str_contains(strtolower($email), 'gov.in')) {
                         $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
-                        $email      = "{$cleanFirst}.{$cleanPen}@gmail.com";
+                        $idPart     = $cleanPen ?: ($admissionNo ?: (string)($idx + 1));
+                        $email      = "{$cleanFirst}.{$idPart}@gmail.com";
                     }
 
                     $rawClass = trim($st['classDesc'] ?? '');
@@ -397,13 +399,14 @@ class HpcController extends Controller
                 $gender = $rawGen ?: 'Male';
             }
 
-            $cleanPen    = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
-            $admissionNo = ! empty($st['admnNumber']) ? trim((string)$st['admnNumber']) : (! empty($st['admission_no']) ? trim((string)$st['admission_no']) : $cleanPen);
+            $cleanPen    = ! empty($st['studentCodeNat']) ? preg_replace('/[^0-9]/', '', (string)$st['studentCodeNat']) : '';
+            $admissionNo = ! empty($st['admnNumber']) ? trim((string)$st['admnNumber']) : (! empty($st['admission_no']) ? trim((string)$st['admission_no']) : '');
 
             $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL) ? trim($st['email']) : '';
             if (empty($email) || str_contains(strtolower($email), 'gov.in')) {
                 $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
-                $email      = "{$cleanFirst}.{$cleanPen}@gmail.com";
+                $idPart     = $cleanPen ?: ($admissionNo ?: (string)($idx + 1));
+                $email      = "{$cleanFirst}.{$idPart}@gmail.com";
             }
 
             $rawClass = trim($st['classDesc'] ?? '');
@@ -633,7 +636,7 @@ class HpcController extends Controller
 
                     // Admission No / PEN
                     $pen = ! empty($headerMap['pen']) ? preg_replace('/[^0-9]/', '', (string)$ws->getCell($headerMap['pen'] . $r)->getValue()) : '';
-                    $admissionNo = ! empty($headerMap['admission']) ? trim((string)$ws->getCell($headerMap['admission'] . $r)->getValue()) : $pen;
+                    $admissionNo = ! empty($headerMap['admission']) ? trim((string)$ws->getCell($headerMap['admission'] . $r)->getValue()) : '';
 
                     // Email
                     $rawEmail = ! empty($headerMap['email']) ? trim((string)$ws->getCell($headerMap['email'] . $r)->getValue()) : '';
@@ -727,7 +730,7 @@ class HpcController extends Controller
                     'grade'        => $grade,
                     'section'      => $section,
                     'apaar_id'     => $apaarId,
-                    'pen_code'     => $admissionNo,
+                    'pen_code'     => $pen,
                     'errors'       => $rowErrors,
                 ];
 
@@ -784,13 +787,21 @@ class HpcController extends Controller
 
     public function validateStudentRow(array $data, int $rowNum = 1): array
     {
-        $firstName = trim((string)($data['first_name'] ?? ''));
-        $lastName  = trim((string)($data['last_name'] ?? ''));
-        $dob       = trim((string)($data['dob'] ?? ''));
-        $email     = trim((string)($data['email'] ?? ''));
-        $grade     = trim((string)($data['grade'] ?? ''));
-        $section   = trim((string)($data['section'] ?? ''));
-        $apaarId   = trim((string)($data['apaar_id'] ?? ''));
+        $firstName   = trim((string)($data['first_name'] ?? ''));
+        $lastName    = trim((string)($data['last_name'] ?? ''));
+        $gender      = trim((string)($data['gender'] ?? ''));
+        $dob         = trim((string)($data['dob'] ?? ''));
+        $email       = trim((string)($data['email'] ?? ''));
+        $admissionNo = trim((string)($data['admission_no'] ?? ($data['admnNumber'] ?? '')));
+        $penCode     = trim((string)($data['pen_code'] ?? ($data['studentCodeNat'] ?? '')));
+        $grade       = trim((string)($data['grade'] ?? ''));
+        $section     = trim((string)($data['section'] ?? ''));
+        $apaarId     = trim((string)($data['apaar_id'] ?? ''));
+
+        if (empty($gender)) {
+            $dummy  = new Student(['first_name' => $firstName, 'last_name' => $lastName]);
+            $gender = $dummy->getEffectiveGender();
+        }
 
         $rowErrors = [];
         if ($firstName === '') {
@@ -819,16 +830,20 @@ class HpcController extends Controller
         }
 
         return [
-            'row'        => $rowNum,
-            'first_name' => $firstName,
-            'last_name'  => $lastName,
-            'name'       => trim("{$firstName} {$lastName}"),
-            'dob'        => $dob,
-            'email'      => $email,
-            'grade'      => $grade,
-            'section'    => $section,
-            'apaar_id'   => $apaarId,
-            'errors'     => $rowErrors,
+            'id'           => $data['id'] ?? null,
+            'row'          => $rowNum,
+            'first_name'   => $firstName,
+            'last_name'    => $lastName,
+            'name'         => trim("{$firstName} {$lastName}"),
+            'gender'       => $gender,
+            'dob'          => $dob,
+            'email'        => $email,
+            'admission_no' => $admissionNo,
+            'pen_code'     => $penCode,
+            'grade'        => $grade,
+            'section'      => $section,
+            'apaar_id'     => $apaarId,
+            'errors'       => $rowErrors,
         ];
     }
 
@@ -1021,7 +1036,19 @@ class HpcController extends Controller
     public function upsertStudentToDatabase(School $school, array $data, string $source = 'udise_sync'): Student
     {
         $apaar = ! empty($data['apaar_id']) ? preg_replace('/[^0-9]/', '', (string) $data['apaar_id']) : null;
-        $pen   = ! empty($data['admission_no']) ? trim((string) $data['admission_no']) : (! empty($data['admnNumber']) ? trim((string) $data['admnNumber']) : (! empty($data['pen_code']) ? trim((string) $data['pen_code']) : (! empty($data['studentCodeNat']) ? trim((string) $data['studentCodeNat']) : null)));
+        
+        // National PEN is 11 digits in UDISE+ (studentCodeNat)
+        $pen = ! empty($data['studentCodeNat']) ? trim((string) $data['studentCodeNat']) : (! empty($data['pen_code']) ? trim((string) $data['pen_code']) : null);
+        
+        // School Admission Number is local school number (admnNumber)
+        $admissionNo = ! empty($data['admission_no']) ? trim((string) $data['admission_no']) : (! empty($data['admnNumber']) ? trim((string) $data['admnNumber']) : null);
+        
+        // Clean short dummy values that were accidentally placed in pen_code
+        if (! empty($pen) && strlen($pen) < 8 && empty($admissionNo)) {
+            $admissionNo = $pen;
+            $pen = null;
+        }
+
         $firstName = trim($data['first_name'] ?? '');
         $lastName  = trim($data['last_name'] ?? '');
         $name      = trim($data['name'] ?? trim("{$firstName} {$lastName}"));
@@ -1029,6 +1056,7 @@ class HpcController extends Controller
         $grade     = trim($data['grade'] ?? 'Grade 6');
         $section   = trim($data['section'] ?? 'A');
         $email     = trim($data['email'] ?? '');
+        $gender    = ! empty($data['gender']) ? trim((string)$data['gender']) : (! empty($data['genderDesc']) ? trim((string)$data['genderDesc']) : null);
 
         $student = null;
 
@@ -1062,6 +1090,17 @@ class HpcController extends Controller
             }
         }
 
+        // 4. Match by Admission Number if present
+        if (! $student && ! empty($admissionNo)) {
+            $existing = Student::where('school_id', $school->id)->where('admission_no', $admissionNo)->first();
+            if ($existing) {
+                similar_text(strtolower($existing->name), strtolower($name), $simPct);
+                if (empty($name) || soundex($existing->first_name) === soundex($firstName) || $simPct >= 70) {
+                    $student = $existing;
+                }
+            }
+        }
+
         $errors = $data['errors'] ?? [];
         $status = ! empty($errors) ? 'failed' : 'success';
         $defaultRemark = $source === 'udise_sync' ? 'Synced from UDISE+ SDMS' : ($source === 'excel_upload' ? 'Imported from Excel spreadsheet' : 'Saved via School Portal');
@@ -1079,8 +1118,9 @@ class HpcController extends Controller
             'section'          => $section ?: 'A',
             'apaar_id'         => $apaar,
             'pen_code'         => $pen,
+            'admission_no'     => $admissionNo,
             'udise_student_id' => $data['udise_student_id'] ?? ($data['studentId'] ?? null),
-            'gender'           => $data['gender'] ?? ($data['genderDesc'] ?? null),
+            'gender'           => $gender,
             'source'           => $source,
             'status'           => $status,
             'remark'           => $remark,

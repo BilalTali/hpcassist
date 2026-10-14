@@ -660,12 +660,8 @@
         const admInput = findAdmissionInput();
         const admVal = String(
             student.admission_no ?? 
-            student.pen_code ?? 
             student.admissionNo ?? 
             student.admnNumber ?? 
-            student.pen ?? 
-            student.roll_no ?? 
-            student.rollNo ?? 
             ''
         ).trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
 
@@ -810,7 +806,7 @@
             await sleep(200);
 
             // 8b. Re-verify School Admission Number in case dropdown re-renders wiped it
-            const expectedAdm = String(student.admission_no ?? student.pen_code ?? student.admissionNo ?? student.admnNumber ?? '').trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+            const expectedAdm = String(student.admission_no ?? student.admissionNo ?? student.admnNumber ?? '').trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
             if (expectedAdm) {
                 const curAdmInput = findAdmissionInput();
                 if (curAdmInput && curAdmInput.value !== expectedAdm) {

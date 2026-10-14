@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -144,7 +145,7 @@ class HpcController extends Controller
         ];
 
         foreach ($columns as $i => $col) {
-            $letter = chr(65 + $i);
+            $letter = Coordinate::stringFromColumnIndex($i + 1);
             $ws->setCellValue("{$letter}1", $col['label']);
             $ws->getColumnDimension($letter)->setWidth($col['width']);
             $ws->getStyle("{$letter}1")->applyFromArray($headerStyle);
@@ -160,7 +161,7 @@ class HpcController extends Controller
         ];
 
         foreach ($columns as $i => $col) {
-            $letter = chr(65 + $i);
+            $letter = Coordinate::stringFromColumnIndex($i + 1);
             $ws->setCellValue("{$letter}2", $col['note']);
             $ws->getStyle("{$letter}2")->applyFromArray($noteStyle);
         }
@@ -175,6 +176,7 @@ class HpcController extends Controller
                 $r = $idx + 3;
 
                 if (isset($st['first_name'])) {
+                    // Already-normalised row (from DB / previous sync)
                     $firstName   = trim($st['first_name']);
                     $lastName    = trim($st['last_name'] ?? '');
                     $dob         = trim($st['dob'] ?? '');
@@ -185,46 +187,17 @@ class HpcController extends Controller
                     $section     = trim($st['section'] ?? 'A');
                     $apaarId     = trim((string)($st['apaar_id'] ?? ''));
                 } else {
-                    $rawName   = trim($st['studentName'] ?? '');
-                    $parts     = preg_split('/\s+/', $rawName);
-                    $firstName = $parts[0] ?? 'Student';
-                    $lastName  = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
-
-                    $dob = trim($st['dob'] ?? '');
-                    if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dob, $m)) {
-                        $dob = "{$m[3]}/{$m[2]}/{$m[1]}";
-                    }
-
-                    $rawGen = trim((string)($st['genderDesc'] ?? ($st['gender'] ?? '')));
-                    if ($rawGen === '1' || $rawGen === 1 || strtolower($rawGen) === 'male' || str_starts_with(strtolower($rawGen), 'm')) {
-                        $gender = 'Male';
-                    } elseif ($rawGen === '2' || $rawGen === 2 || strtolower($rawGen) === 'female' || str_starts_with(strtolower($rawGen), 'f')) {
-                        $gender = 'Female';
-                    } elseif ($rawGen === '3' || $rawGen === 3) {
-                        $gender = 'Other';
-                    } else {
-                        $gender = $rawGen;
-                    }
-
-                    $cleanPen    = ! empty($st['studentCodeNat']) ? preg_replace('/[^0-9]/', '', (string)$st['studentCodeNat']) : '';
-                    $admissionNo = ! empty($st['admnNumber']) ? trim((string)$st['admnNumber']) : (! empty($st['admission_no']) ? trim((string)$st['admission_no']) : '');
-
-                    $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL) ? trim($st['email']) : '';
-                    if (empty($email) || str_contains(strtolower($email), 'gov.in')) {
-                        $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
-                        $idPart     = $cleanPen ?: ($admissionNo ?: (string)($idx + 1));
-                        $email      = "{$cleanFirst}.{$idPart}@gmail.com";
-                    }
-
-                    $rawClass = trim($st['classDesc'] ?? '');
-                    $grade    = $gradeMap[$rawClass] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawClass)] ?? 'Grade 6');
-                    $section  = ! empty($st['sectionDesc']) ? trim($st['sectionDesc']) : 'A';
-                    $apaarId  = ! empty($st['apaarId']) ? (string) $st['apaarId'] : '';
-                }
-
-                if (empty($gender)) {
-                    $dummy = new Student(['first_name' => $firstName, 'last_name' => $lastName]);
-                    $gender = $dummy->getEffectiveGender();
+                    // Raw UDISE student row — normalise via shared helper
+                    $norm        = $this->normalizeUdiseStudent($st, $idx, $gradeMap);
+                    $firstName   = $norm['firstName'];
+                    $lastName    = $norm['lastName'];
+                    $dob         = $norm['dob'];
+                    $gender      = $norm['gender'];
+                    $email       = $norm['email'];
+                    $admissionNo = $norm['admissionNo'];
+                    $grade       = $norm['grade'];
+                    $section     = $norm['section'];
+                    $apaarId     = $norm['apaarId'];
                 }
 
                 $rowVals  = [$firstName, $lastName, $dob, $gender, $email, $admissionNo, $grade, $section, $apaarId];
@@ -232,7 +205,7 @@ class HpcController extends Controller
                 $rowBg    = ($idx % 2 === 0) ? 'FFFFFFFF' : 'FFF8FAFC';
 
                 foreach ($rowVals as $cIdx => $val) {
-                    $colLetter = chr(65 + $cIdx);
+                    $colLetter = Coordinate::stringFromColumnIndex($cIdx + 1);
                     $ws->setCellValueExplicit("{$colLetter}{$r}", (string) $val, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
                     $cellBg = ($cIdx === 8 && $isApaar) ? 'FFCCFBF1' : $rowBg;
@@ -363,6 +336,8 @@ class HpcController extends Controller
             ], 404);
         }
 
+        $gradeMap = $this->getGradeMap();
+
         // 1. Generate and save students.xlsx in school storage
         $spreadsheet = $this->buildStudentSpreadsheet($udiseStudents);
         $dir = $this->getSchoolStorageDir($school);
@@ -371,68 +346,31 @@ class HpcController extends Controller
         $writer = new Xlsx($spreadsheet);
         $writer->save($fullPath);
 
-        // 2. Generate preview.json for Step 2
-        $preview   = [];
-        $gradeMap  = $this->getGradeMap();
+        // 2. Generate preview from normalised UDISE rows
+        $preview = [];
 
         foreach ($udiseStudents as $idx => $st) {
-            $r = $idx + 3;
-
-            $rawName   = trim($st['studentName'] ?? '');
-            $parts     = preg_split('/\s+/', $rawName);
-            $firstName = $parts[0] ?? 'Student';
-            $lastName  = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
-
-            $dob = trim($st['dob'] ?? '');
-            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dob, $m)) {
-                $dob = "{$m[3]}/{$m[2]}/{$m[1]}";
-            }
-
-            $rawGen = trim((string)($st['genderDesc'] ?? ($st['gender'] ?? '')));
-            if ($rawGen === '1' || $rawGen === 1 || strtolower($rawGen) === 'male' || str_starts_with(strtolower($rawGen), 'm')) {
-                $gender = 'Male';
-            } elseif ($rawGen === '2' || $rawGen === 2 || strtolower($rawGen) === 'female' || str_starts_with(strtolower($rawGen), 'f')) {
-                $gender = 'Female';
-            } elseif ($rawGen === '3' || $rawGen === 3) {
-                $gender = 'Other';
-            } else {
-                $gender = $rawGen ?: 'Male';
-            }
-
-            $cleanPen    = ! empty($st['studentCodeNat']) ? preg_replace('/[^0-9]/', '', (string)$st['studentCodeNat']) : '';
-            $admissionNo = ! empty($st['admnNumber']) ? trim((string)$st['admnNumber']) : (! empty($st['admission_no']) ? trim((string)$st['admission_no']) : '');
-
-            $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL) ? trim($st['email']) : '';
-            if (empty($email) || str_contains(strtolower($email), 'gov.in')) {
-                $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
-                $idPart     = $cleanPen ?: ($admissionNo ?: (string)($idx + 1));
-                $email      = "{$cleanFirst}.{$idPart}@gmail.com";
-            }
-
-            $rawClass = trim($st['classDesc'] ?? '');
-            $grade    = $gradeMap[$rawClass] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawClass)] ?? 'Grade 6');
-            $section  = ! empty($st['sectionDesc']) ? trim($st['sectionDesc']) : 'A';
-            $apaarId  = ! empty($st['apaarId']) ? (string) $st['apaarId'] : '';
+            $norm = $this->normalizeUdiseStudent($st, $idx, $gradeMap);
 
             $preview[] = [
-                'row'              => $r,
-                'first_name'       => $firstName,
-                'last_name'        => $lastName,
-                'name'             => trim("{$firstName} {$lastName}"),
-                'dob'              => $dob,
-                'gender'           => $gender,
-                'email'            => $email,
-                'admission_no'     => $admissionNo,
-                'pen_code'         => $cleanPen,
+                'row'              => $idx + 3,
+                'first_name'       => $norm['firstName'],
+                'last_name'        => $norm['lastName'],
+                'name'             => trim("{$norm['firstName']} {$norm['lastName']}"),
+                'dob'              => $norm['dob'],
+                'gender'           => $norm['gender'],
+                'email'            => $norm['email'],
+                'admission_no'     => $norm['admissionNo'],
+                'pen_code'         => $norm['cleanPen'],
                 'udise_student_id' => $st['studentId'] ?? null,
-                'grade'            => $grade,
-                'section'          => $section,
-                'apaar_id'         => $apaarId,
+                'grade'            => $norm['grade'],
+                'section'          => $norm['section'],
+                'apaar_id'         => $norm['apaarId'],
                 'errors'           => [],
             ];
         }
 
-        file_put_contents($this->getPreviewFile($school), json_encode($preview, JSON_PRETTY_PRINT));
+        $this->writePreviewFile($this->getPreviewFile($school), $preview);
 
         if ($school) {
             $syncedIds = [];
@@ -473,7 +411,9 @@ class HpcController extends Controller
         if ($school) {
             $dir = storage_path('app/hpc/schools/' . $school->id);
             if (! is_dir($dir)) {
-                @mkdir($dir, 0755, true);
+                if (! mkdir($dir, 0755, true) && ! is_dir($dir)) {
+                    Log::warning("[HPC] Could not create school storage dir: {$dir}");
+                }
             }
             return $dir;
         }
@@ -544,7 +484,8 @@ class HpcController extends Controller
     public function upload(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|max:10240',
+            'file'        => 'required|file|mimes:xlsx,xls,csv|max:10240',
+            'replace_all' => 'nullable|boolean',
         ]);
 
         $uploadedFile = $request->file('file');
@@ -743,14 +684,15 @@ class HpcController extends Controller
         }
 
         // Save preview for the automation runner
-        file_put_contents($this->getPreviewFile(), json_encode($preview, JSON_PRETTY_PRINT));
+        $this->writePreviewFile($this->getPreviewFile(), $preview);
         $this->syncSpreadsheetFromPreview($preview);
 
         if (\Illuminate\Support\Facades\Auth::check()) {
             $userSchool = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
             if ($userSchool) {
                 // By default, fresh spreadsheet upload replaces the roster so the dashboard exactly matches the file
-                $shouldReplace = ! $request->boolean('append') && ($request->boolean('replace_all', true) || $request->input('mode') !== 'append');
+                // 'replace_all' checkbox: present+1 means replace, absent means merge
+                $shouldReplace = $request->boolean('replace_all');
                 if ($shouldReplace) {
                     Student::where('school_id', $userSchool->id)->delete();
                 }
@@ -862,6 +804,20 @@ class HpcController extends Controller
 
     public function saveStudent(Request $request)
     {
+        $request->validate([
+            'first_name'   => 'required|string|max:100',
+            'last_name'    => 'nullable|string|max:100',
+            'dob'          => 'required|string|max:20',
+            'email'        => 'required|email|max:200',
+            'gender'       => 'required|in:Male,Female,Other',
+            'grade'        => 'required|string|max:30',
+            'section'      => 'required|string|max:10',
+            'apaar_id'     => 'nullable|digits:12',
+            'admission_no' => 'nullable|string|max:50',
+            'pen_code'     => 'nullable|string|max:20',
+            'index'        => 'nullable|integer|min:0',
+        ]);
+
         $previewFile = $this->getPreviewFile();
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
 
@@ -869,7 +825,10 @@ class HpcController extends Controller
         $isEdit = ($index !== null && $index !== '' && (int)$index >= 0 && isset($preview[(int)$index]));
         $targetRow = $isEdit ? ((int)$index + 1) : (count($preview) + 1);
 
-        $validated = $this->validateStudentRow($request->all(), $targetRow);
+        $validated = $this->validateStudentRow($request->only([
+            'first_name', 'last_name', 'dob', 'email', 'gender',
+            'grade', 'section', 'apaar_id', 'admission_no', 'pen_code', 'id',
+        ]), $targetRow);
 
         if (\Illuminate\Support\Facades\Auth::check()) {
             $userSchool = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
@@ -891,7 +850,7 @@ class HpcController extends Controller
         }
         unset($st);
 
-        file_put_contents($previewFile, json_encode($preview, JSON_PRETTY_PRINT));
+        $this->writePreviewFile($previewFile, $preview);
         $this->syncSpreadsheetFromPreview($preview);
 
         $valid = count(array_filter($preview, fn($r) => empty($r['errors'])));
@@ -947,7 +906,7 @@ class HpcController extends Controller
         }
         unset($st);
 
-        file_put_contents($previewFile, json_encode($preview, JSON_PRETTY_PRINT));
+        $this->writePreviewFile($previewFile, $preview);
         $this->syncSpreadsheetFromPreview($preview);
 
         $valid = count(array_filter($preview, fn($r) => empty($r['errors'])));
@@ -976,8 +935,8 @@ class HpcController extends Controller
                 'udise_apaar_count'    => 0,
             ]);
             $previewFile = $this->getPreviewFile($userSchool);
-            if (file_exists($previewFile)) {
-                @unlink($previewFile);
+            if (file_exists($previewFile) && ! unlink($previewFile)) {
+                Log::warning("[HPC] Could not delete preview file: {$previewFile}");
             }
             $this->syncSpreadsheetFromPreview([]);
         }
@@ -997,6 +956,16 @@ class HpcController extends Controller
 
     public function updateAllStudents(Request $request)
     {
+        $request->validate([
+            'students'               => 'required|array|max:2000',
+            'students.*.first_name'  => 'required|string|max:100',
+            'students.*.email'       => 'required|email|max:200',
+            'students.*.gender'      => 'required|in:Male,Female,Other',
+            'students.*.grade'       => 'required|string|max:30',
+            'students.*.section'     => 'required|string|max:10',
+            'students.*.apaar_id'    => 'nullable|digits:12',
+        ]);
+
         $items = $request->input('students', []);
         $preview = [];
         foreach ($items as $i => $item) {
@@ -1004,7 +973,7 @@ class HpcController extends Controller
         }
 
         $previewFile = $this->getPreviewFile();
-        file_put_contents($previewFile, json_encode($preview, JSON_PRETTY_PRINT));
+        $this->writePreviewFile($previewFile, $preview);
         $this->syncSpreadsheetFromPreview($preview);
 
         if (\Illuminate\Support\Facades\Auth::check()) {
@@ -1102,10 +1071,23 @@ class HpcController extends Controller
         }
 
         $errors = $data['errors'] ?? [];
-        $status = ! empty($errors) ? 'failed' : 'success';
-        $defaultRemark = $source === 'udise_sync' ? 'Synced from UDISE+ SDMS' : ($source === 'excel_upload' ? 'Imported from Excel spreadsheet' : 'Saved via School Portal');
-        $remark = ! empty($errors) ? null : ($data['remark'] ?? $defaultRemark);
-        $failureReason = ! empty($errors) ? implode(', ', (array) $errors) : null;
+
+        // For HPC portal records: always mark as success (they're already submitted)
+        if ($source === Student::SOURCE_HPC) {
+            $status = Student::STATUS_SUCCESS;
+            $remark = $data['remark'] ?? 'Confirmed on PARAKH HPC Portal';
+            $failureReason = null;
+        } else {
+            $status = ! empty($errors) ? Student::STATUS_FAILED : Student::STATUS_SUCCESS;
+            $defaultRemark = match ($source) {
+                Student::SOURCE_UDISE  => 'Synced from UDISE+ SDMS',
+                Student::SOURCE_EXCEL  => 'Imported from Excel spreadsheet',
+                Student::SOURCE_MANUAL => 'Added manually',
+                default                => 'Saved via School Portal',
+            };
+            $remark = ! empty($errors) ? null : ($data['remark'] ?? $defaultRemark);
+            $failureReason = ! empty($errors) ? implode(', ', (array) $errors) : null;
+        }
 
         $payload = [
             'school_id'        => $school->id,
@@ -1120,6 +1102,7 @@ class HpcController extends Controller
             'pen_code'         => $pen,
             'admission_no'     => $admissionNo,
             'udise_student_id' => $data['udise_student_id'] ?? ($data['studentId'] ?? null),
+            'hpc_student_id'   => $data['hpc_student_id'] ?? null,
             'gender'           => $gender,
             'source'           => $source,
             'status'           => $status,
@@ -1127,8 +1110,27 @@ class HpcController extends Controller
             'failure_reason'   => $failureReason,
         ];
 
+        // For HPC portal records, also stamp fetch time
+        if ($source === Student::SOURCE_HPC) {
+            $payload['hpc_fetched_at'] = now();
+            $payload['hpc_submitted_at'] = $payload['hpc_submitted_at'] ?? now();
+        }
+
         if ($student) {
-            $student->update($payload);
+            // When we find an existing UDISE/Excel student and discover it's
+            // already on the HPC portal, mark it as submitted without changing
+            // its original source (so it still appears in Step 3 history).
+            if ($source === Student::SOURCE_HPC) {
+                $student->update(array_merge($payload, [
+                    'source' => $student->source !== Student::SOURCE_HPC ? $student->source : Student::SOURCE_HPC,
+                    'status' => Student::STATUS_SUCCESS,
+                    'hpc_student_id' => $payload['hpc_student_id'] ?? $student->hpc_student_id,
+                    'hpc_fetched_at' => now(),
+                    'hpc_submitted_at' => $student->hpc_submitted_at ?? now(),
+                ]));
+            } else {
+                $student->update($payload);
+            }
             return $student;
         }
 
@@ -1163,6 +1165,80 @@ class HpcController extends Controller
         }
     }
 
+
+    // ─── UDISE Student Normalisation Helper ─────────────────────────────────
+
+    /**
+     * Normalise a single raw UDISE+ student row into a flat array used by
+     * both buildStudentSpreadsheet() and preloadUdise().
+     * Eliminates the previous copy-paste duplication.
+     */
+    private function normalizeUdiseStudent(array $st, int $idx, array $gradeMap): array
+    {
+        $rawName   = trim($st['studentName'] ?? '');
+        $parts     = preg_split('/\s+/', $rawName);
+        $firstName = $parts[0] ?? 'Student';
+        $lastName  = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
+
+        $dob = trim($st['dob'] ?? '');
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dob, $m)) {
+            $dob = "{$m[3]}/{$m[2]}/{$m[1]}";
+        }
+
+        $rawGen = trim((string)($st['genderDesc'] ?? ($st['gender'] ?? '')));
+        $gender = match (true) {
+            in_array($rawGen, ['1', 1], true),
+            strtolower($rawGen) === 'male',
+            str_starts_with(strtolower($rawGen), 'm') => 'Male',
+
+            in_array($rawGen, ['2', 2], true),
+            strtolower($rawGen) === 'female',
+            str_starts_with(strtolower($rawGen), 'f') => 'Female',
+
+            in_array($rawGen, ['3', 3], true) => 'Other',
+
+            default => '',
+        };
+
+        $cleanPen    = ! empty($st['studentCodeNat']) ? preg_replace('/[^0-9]/', '', (string) $st['studentCodeNat']) : '';
+        $admissionNo = ! empty($st['admnNumber'])
+            ? trim((string) $st['admnNumber'])
+            : trim((string) ($st['admission_no'] ?? ''));
+
+        $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL)
+            ? trim($st['email'])
+            : '';
+
+        if (empty($email) || str_contains(strtolower($email), 'gov.in')) {
+            $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
+            $idPart     = $cleanPen ?: ($admissionNo ?: (string) ($idx + 1));
+            $email      = "{$cleanFirst}.{$idPart}@gmail.com";
+        }
+
+        $rawClass = trim($st['classDesc'] ?? '');
+        $grade    = $gradeMap[$rawClass] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawClass)] ?? 'Grade 6');
+        $section  = ! empty($st['sectionDesc']) ? trim($st['sectionDesc']) : 'A';
+        $apaarId  = ! empty($st['apaarId']) ? (string) $st['apaarId'] : '';
+
+        return compact('firstName', 'lastName', 'dob', 'gender', 'email', 'cleanPen', 'admissionNo', 'grade', 'section', 'apaarId');
+    }
+
+    // ─── Preview JSON Writer (with exclusive lock to prevent race conditions) ──
+
+    /**
+     * Write preview JSON atomically using LOCK_EX to prevent concurrent writes
+     * from corrupting the file.
+     */
+    private function writePreviewFile(string $path, array $data): void
+    {
+        $dir = dirname($path);
+        if (! is_dir($dir) && ! mkdir($dir, 0755, true) && ! is_dir($dir)) {
+            Log::warning("[HPC] writePreviewFile: could not create dir {$dir}");
+        }
+        if (file_put_contents($path, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX) === false) {
+            Log::warning("[HPC] writePreviewFile: could not write to {$path}");
+        }
+    }
 
     // ─── Step 3: Start Automation ────────────────────────────────────────────
 
@@ -1209,14 +1285,17 @@ class HpcController extends Controller
         file_put_contents($resultsFile, json_encode($init, JSON_PRETTY_PRINT));
 
         // Launch hpc:run command in the background if CLI execution is supported on this server
-        $artisan     = base_path('artisan');
-        $schoolArg   = $school ? "--school={$school->id}" : "";
-        $logFile     = storage_path('logs/hpc_run.log');
-        $php         = PHP_BINARY;
+        $artisan     = escapeshellarg(base_path('artisan'));
+        $schoolArg   = $school ? '--school=' . (int) $school->id : '';
+        $logFile     = escapeshellarg(storage_path('logs/hpc_run.log'));
+        $php         = escapeshellarg(PHP_BINARY);
         $launchedCli = false;
 
         if (function_exists('exec')) {
-            @exec("nohup {$php} {$artisan} hpc:run {$schoolArg} > {$logFile} 2>&1 &");
+            exec("nohup {$php} {$artisan} hpc:run {$schoolArg} > {$logFile} 2>&1 &", $out, $code);
+            if ($code !== 0) {
+                Log::warning('[HPC] hpc:run CLI launch failed', ['output' => $out, 'code' => $code]);
+            }
             $launchedCli = true;
         }
 
@@ -1232,13 +1311,21 @@ class HpcController extends Controller
 
     public function runProgress(Request $request)
     {
+        // Authenticate via shared token — sent by the Chrome extension
+        $token = $request->header('X-HPC-Token') ?? $request->input('_hpc_token');
+        $expected = config('hpc.progress_token', '');
+        if ($expected !== '' && $token !== $expected) {
+            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 401);
+        }
+
         $schoolId = $request->input('school_id');
         $school   = $schoolId ? School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         if (! $school && $request->filled('udise_code')) {
             $school = School::where('udise_code', $request->input('udise_code'))->first();
         }
+        // Fix 3.1: removed school data-leak fallback; fail cleanly if school not found
         if (! $school) {
-            $school = School::whereHas('students')->latest()->first() ?? School::first();
+            return response()->json(['ok' => false, 'error' => 'School not found.'], 404);
         }
 
         $resultsFile = $this->getSchoolStorageDir($school) . '/run_results.json';
@@ -1271,28 +1358,33 @@ class HpcController extends Controller
             ];
         }
 
-        file_put_contents($resultsFile, json_encode($data, JSON_PRETTY_PRINT));
+        file_put_contents($resultsFile, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
 
+        $corsOrigin = $this->getAllowedCorsOrigin();
         return response()->json(['ok' => true], 200, [
-            'Access-Control-Allow-Origin'  => '*',
+            'Access-Control-Allow-Origin'  => $corsOrigin,
             'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers' => '*',
+            'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
         ]);
     }
 
     public function getStudentQueue(Request $request)
     {
+        // Authenticate via shared token — sent by the Chrome extension
+        $token = $request->header('X-HPC-Token') ?? $request->input('_hpc_token');
+        $expected = config('hpc.progress_token', '');
+        if ($expected !== '' && $token !== $expected) {
+            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 401);
+        }
+
         $schoolId = $request->input('school_id');
         $school   = $schoolId ? School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         if (! $school && $request->filled('udise_code')) {
             $school = School::where('udise_code', $request->input('udise_code'))->first();
         }
+        // Fix 3.1: removed school data-leak fallback; fail cleanly if school not found
         if (! $school) {
-            $school = School::whereHas('students')->latest()->first() ?? School::first();
-        }
-
-        if (! $school) {
-            return response()->json(['ok' => false, 'error' => 'School not found.'], 404);
+            return response()->json(['ok' => false, 'error' => 'School not found. Please log in.'], 404);
         }
 
         $previewFile = $this->getPreviewFile($school);
@@ -1305,6 +1397,7 @@ class HpcController extends Controller
 
         $valid = array_values(array_filter($students, fn($s) => empty($s['errors'])));
 
+        $corsOrigin = $this->getAllowedCorsOrigin();
         return response()->json([
             'ok'          => true,
             'school_id'   => $school->id,
@@ -1313,10 +1406,23 @@ class HpcController extends Controller
             'students'    => $valid,
             'add_url'     => config('hpc.add_student_url', 'https://hpc.parakh.ncert.gov.in/en/students/add'),
         ], 200, [
-            'Access-Control-Allow-Origin'  => '*',
+            'Access-Control-Allow-Origin'  => $corsOrigin,
             'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers' => '*',
+            'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
         ]);
+    }
+
+    /**
+     * Return the allowed CORS origin for public extension-facing endpoints.
+     * Prefers the configured Chrome extension ID; falls back to the app URL.
+     */
+    private function getAllowedCorsOrigin(): string
+    {
+        $extId = config('hpc.extension_id', '');
+        if ($extId !== '') {
+            return "chrome-extension://{$extId}";
+        }
+        return rtrim(config('app.url', 'http://localhost'), '/');
     }
 
     // ─── Step 4: Poll run progress & results ──────────────────────────────────
@@ -1550,7 +1656,12 @@ class HpcController extends Controller
         if (function_exists('exec')) {
             $macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
             if (file_exists($macChrome)) {
-                @exec("nohup '{$macChrome}' --user-data-dir=" . escapeshellarg($profileDir) . " " . escapeshellarg($loginUrl) . " > /dev/null 2>&1 &");
+                exec(
+                    'nohup ' . escapeshellarg($macChrome)
+                    . ' --user-data-dir=' . escapeshellarg($profileDir)
+                    . ' ' . escapeshellarg($loginUrl)
+                    . ' > /dev/null 2>&1 &'
+                );
             }
         }
 
@@ -1600,6 +1711,152 @@ class HpcController extends Controller
             'url'    => $url,
             'total'  => count($fieldsList),
             'fields' => $fieldsList,
+        ]);
+    }
+
+    // ─── Sync students already on HPC portal (Step 3 source) ─────────────────
+
+    /**
+     * Receives a list of students already present on the PARAKH HPC portal,
+     * scraped by the Chrome extension from the portal's student list page.
+     * Saves them with source='hpc_portal' and status='success'.
+     * Deduplicates against existing Step-2 students so they are automatically
+     * marked as submitted and removed from the pending queue.
+     *
+     * Public endpoint — protected by X-HPC-Token header.
+     */
+    public function syncFromPortal(Request $request): \Illuminate\Http\JsonResponse
+    {
+        // Token authentication (same as runProgress / getStudentQueue)
+        $token    = $request->header('X-HPC-Token') ?? $request->input('_hpc_token', '');
+        $expected = config('hpc.progress_token', '');
+        if ($expected !== '' && $token !== $expected) {
+            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 401);
+        }
+
+        $request->validate([
+            'students'  => 'required|array|max:5000',
+            'school_id' => 'nullable|integer',
+        ]);
+
+        // Resolve school
+        $schoolId = $request->integer('school_id', 0);
+        $school   = $schoolId ? School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        if (! $school && $request->filled('udise_code')) {
+            $school = School::where('udise_code', $request->input('udise_code'))->first();
+        }
+        if (! $school) {
+            return response()->json(['ok' => false, 'error' => 'School not found.'], 404);
+        }
+
+        $incoming   = $request->input('students', []);
+        $newCount   = 0;
+        $matchCount = 0;
+
+        foreach ($incoming as $raw) {
+            // Split full name into first / last
+            $fullName  = trim($raw['name'] ?? '');
+            $nameParts = $fullName ? explode(' ', $fullName, 2) : [];
+            $firstName = trim($raw['first_name'] ?? ($nameParts[0] ?? ''));
+            $lastName  = trim($raw['last_name']  ?? ($nameParts[1] ?? ''));
+
+            $apaar     = preg_replace('/[^0-9]/', '', (string)($raw['apaar_id'] ?? ''));
+            $hpcId     = trim((string)($raw['hpc_student_id'] ?? ($raw['id'] ?? '')));
+            $penCode   = trim($raw['pen_code'] ?? '');
+            $admNo     = trim($raw['admission_no'] ?? '');
+
+            // Skip fast if we already have this exact HPC record confirmed
+            if ($hpcId) {
+                $already = Student::where('school_id', $school->id)
+                    ->where('hpc_student_id', $hpcId)
+                    ->where('status', Student::STATUS_SUCCESS)
+                    ->first();
+                if ($already) {
+                    $already->touch(); // bump updated_at
+                    $already->update(['hpc_fetched_at' => now()]);
+                    $matchCount++;
+                    continue;
+                }
+            }
+
+            // Build normalised data array for upsert
+            $data = [
+                'first_name'     => $firstName ?: 'Student',
+                'last_name'      => $lastName,
+                'name'           => $fullName ?: trim("{$firstName} {$lastName}"),
+                'dob'            => trim($raw['dob']    ?? ''),
+                'gender'         => trim($raw['gender'] ?? ''),
+                'grade'          => trim($raw['grade']  ?? ''),
+                'section'        => trim($raw['section'] ?? 'A'),
+                'apaar_id'       => $apaar,
+                'pen_code'       => $penCode,
+                'admission_no'   => $admNo,
+                'hpc_student_id' => $hpcId,
+                'email'          => trim($raw['email'] ?? ''),
+                'errors'         => [],
+                'remark'         => 'Fetched from PARAKH HPC Portal',
+            ];
+
+            $student = $this->upsertStudentToDatabase($school, $data, Student::SOURCE_HPC);
+            if ($student->wasRecentlyCreated) {
+                $newCount++;
+            } else {
+                $matchCount++;
+            }
+        }
+
+        // Rebuild the school's Step 2 preview so the extension queue is accurate
+        $step2 = $school->students()->step2()->orderBy('id')->get();
+        $preview = $step2->map(fn ($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
+        $this->writePreviewFile($this->getPreviewFile($school), $preview);
+
+        $remaining = $step2->count();
+        $corsOrigin = $this->getAllowedCorsOrigin();
+
+        return response()->json([
+            'ok'              => true,
+            'new'             => $newCount,
+            'matched'         => $matchCount,
+            'total_hpc'       => $newCount + $matchCount,
+            'step2_remaining' => $remaining,
+            'message'         => "Synced {$newCount} new + {$matchCount} already-known HPC students. {$remaining} students remain in your pending queue.",
+        ], 200, [
+            'Access-Control-Allow-Origin'  => $corsOrigin,
+            'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
+        ]);
+    }
+
+    /**
+     * Returns Step 3 students: all records confirmed on the PARAKH HPC portal
+     * (fetched from portal list OR successfully submitted by HPC Assist).
+     * Called by the dashboard /api and also available to the extension.
+     */
+    public function getStep3Students(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        if (! $school) {
+            return response()->json(['ok' => false, 'error' => 'School not found.'], 404);
+        }
+
+        $perPage = max(1, (int) $request->input('per_page', 50));
+        $page    = max(1, (int) $request->input('page', 1));
+
+        $query = $school->students()->step3()->orderByDesc('hpc_submitted_at')->orderByDesc('hpc_fetched_at');
+
+        $total    = $query->count();
+        $students = $query->forPage($page, $perPage)
+            ->get()
+            ->map(fn ($st, $idx) => $st->toPreviewArray(($page - 1) * $perPage + $idx + 1))
+            ->values()
+            ->all();
+
+        return response()->json([
+            'ok'       => true,
+            'total'    => $total,
+            'page'     => $page,
+            'per_page' => $perPage,
+            'students' => $students,
         ]);
     }
 }

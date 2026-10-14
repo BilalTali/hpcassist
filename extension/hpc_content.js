@@ -2,8 +2,14 @@
 (function () {
     console.log('[HPC Assist] PARAKH HPC Automation script loaded on', location.href);
 
-    const SERVER_URL = (window.__HPC_CONFIG && window.__HPC_CONFIG.server_url) ? window.__HPC_CONFIG.server_url : 'https://ctetmonktest.fun';
+    // SERVER_URL is injected by the dashboard via window.__HPC_CONFIG.
+    // Never falls back to a hardcoded domain — an empty SERVER_URL will fail
+    // loudly so misconfiguration is obvious rather than silently misdirected.
+    const SERVER_URL = (window.__HPC_CONFIG && window.__HPC_CONFIG.server_url)
+        ? window.__HPC_CONFIG.server_url.replace(/\/$/, '')
+        : '';
     const SCHOOL_ID  = (window.__HPC_CONFIG && window.__HPC_CONFIG.school_id) ? window.__HPC_CONFIG.school_id : null;
+    const HPC_TOKEN  = (window.__HPC_CONFIG && window.__HPC_CONFIG.progress_token) ? window.__HPC_CONFIG.progress_token : '';
 
     let studentsQueue = [];
     let isRunning = false;
@@ -81,9 +87,19 @@
             } catch(e) {}
         }
 
+        if (!SERVER_URL) {
+            console.warn('[HPC Assist] SERVER_URL not configured — cannot fetch student queue.');
+            return;
+        }
+
         try {
             const url = `${SERVER_URL}/hpc/students/queue${SCHOOL_ID ? '?school_id=' + SCHOOL_ID : ''}`;
-            const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            const res = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-HPC-Token': HPC_TOKEN,
+                }
+            });
             const data = await res.json();
             if (data.ok && Array.isArray(data.students)) {
                 studentsQueue = data.students;
@@ -99,10 +115,15 @@
     }
 
     async function reportProgress(current, total, name, status, message, done = false) {
+        if (!SERVER_URL) return;
         try {
             await fetch(`${SERVER_URL}/hpc/run/progress`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-HPC-Token': HPC_TOKEN,
+                },
                 body: JSON.stringify({
                     school_id: SCHOOL_ID,
                     current,
@@ -280,16 +301,22 @@
     }
 
     async function fillGender(student) {
-        let target = 'Female';
+        let target;
         if (student.gender) {
             const g = String(student.gender).toLowerCase().trim();
-            if (g.startsWith('m') || g.includes('boy')) target = 'Male';
-            else if (g.startsWith('f') || g.includes('girl')) target = 'Female';
-            else if (g.includes('other')) target = 'Other';
-        } else {
-            const name = (student.name || `${student.first_name || ''} ${student.last_name || ''}`).toLowerCase();
-            const femaleNames = ['jan', 'akhter', 'begum', 'bano', 'fatima', 'zehra', 'kousar', 'maryam', 'aabroo', 'aaliya', 'adeeba', 'hafsa', 'insha', 'rabia', 'toiba', 'zaira', 'afreen', 'asma', 'nimrah', 'jannat', 'misbah', 'safoora', 'tahira', 'zenab', 'shazia', 'ayaz', 'ayat', 'muntaha', 'abreena', 'bilkeesa', 'bisma', 'farhat', 'mehnaz', 'ronak', 'rubeena', 'rukhsana', 'saimah', 'simran', 'tasleema', 'towseer', 'uzma'];
-            target = femaleNames.some(fn => name.includes(fn)) ? 'Female' : 'Male';
+            if (g.startsWith('m') || g.includes('boy'))        target = 'Male';
+            else if (g.startsWith('f') || g.includes('girl'))  target = 'Female';
+            else if (g.includes('other'))                       target = 'Other';
+        }
+
+        if (!target || target === 'Unknown') {
+            // Gender is mandatory on the PARAKH portal — do not guess from the name.
+            const stName = student.name || `${student.first_name || ''} ${student.last_name || ''}`.trim();
+            logStatus(`⚠️ ${stName} has no gender set. Please fix in the roster.`);
+            console.warn('[HPC Assist] Missing gender for student:', stName);
+            pauseAutomation();
+            alert(`⚠️ Student "${stName}" has no gender set.\n\nPlease edit this student in HPC Assist, set the gender, and restart.`);
+            return false; // signals to caller that we paused
         }
 
         logStatus(`Setting Gender: ${target}...`);
@@ -298,6 +325,7 @@
             target.toUpperCase(),
             target === 'Female' ? 'Girl' : (target === 'Male' ? 'Boy' : 'Other')
         ]);
+        return true;
     }
 
     async function fillDob(dobField, dobStr) {
@@ -409,6 +437,12 @@
                 updateWidgetContent();
                 return;
             }
+            const fetchHpcBtn = e.target.closest('#hpc-fetch-portal-btn');
+            if (fetchHpcBtn) {
+                console.log('[HPC Assist] User clicked Fetch HPC List');
+                await fetchHpcPortalStudents();
+                return;
+            }
         });
 
         updateWidgetContent(widget);
@@ -420,6 +454,8 @@
 
         const total = studentsQueue.length;
         const progressPct = total > 0 ? Math.round((currentIndex / total) * 100) : 0;
+
+        const isStudentListPage = location.pathname.includes('/students') && !location.pathname.includes('/students/add');
 
         widget.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
@@ -465,7 +501,171 @@
                     </button>
                 ` : ''}
             </div>
+
+            ${isStudentListPage ? `
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <button id="hpc-fetch-portal-btn" style="width: 100%; padding: 9px 12px; background: linear-gradient(135deg, #7c3aed, #4f46e5); color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer;" title="Scrape all students from this list and mark them as already submitted in HPC Assist">
+                        📥 Fetch HPC List → Mark as Done
+                    </button>
+                    <div style="font-size: 10px; color: #64748b; margin-top: 5px; text-align: center;">Removes already-submitted students from your queue</div>
+                </div>
+            ` : ''}
         `;
+    }
+
+    /**
+     * Scrapes the PARAKH HPC portal's student list page (/en/students) and
+     * sends the results to the HPC Assist server so those students are marked
+     * as already submitted (Step 3) and removed from the pending queue (Step 2).
+     *
+     * Handles multi-page tables by clicking "Next" until all rows are scraped.
+     */
+    async function fetchHpcPortalStudents() {
+        if (!SERVER_URL) {
+            alert('⚠️ HPC Assist server URL not configured. Please open your dashboard first.');
+            return;
+        }
+
+        // Navigate to student list if not already there
+        if (!location.pathname.includes('/students') || location.pathname.includes('/students/add')) {
+            logStatus('Navigating to HPC portal student list...');
+            window.location.href = 'https://hpc.parakh.ncert.gov.in/en/students';
+            return;
+        }
+
+        logStatus('📥 Scanning portal student list...');
+        const allStudents = [];
+        let pageNum = 0;
+        let keepGoing = true;
+
+        while (keepGoing) {
+            pageNum++;
+            await sleep(1200); // wait for table to render
+
+            // Try to find rows in any table on the page
+            const rows = Array.from(document.querySelectorAll('table tbody tr, .student-list tr, [class*="table"] tr'));
+            let foundRows = 0;
+
+            for (const row of rows) {
+                const cells = Array.from(row.querySelectorAll('td'));
+                if (cells.length < 3) continue; // header or spacer row
+
+                // Extract text from each cell
+                const texts = cells.map(c => c.textContent.trim());
+
+                // Try to identify columns heuristically
+                // Common PARAKH portal layout: S.No | Name | Class | Section | DOB | Admission No | APAAR | Status
+                let name = '', grade = '', section = 'A', dob = '', admNo = '', apaar = '', hpcId = '';
+
+                // Look for a data-id or row id attribute
+                hpcId = row.getAttribute('data-id') || row.getAttribute('data-student-id') || '';
+
+                // Look for an edit/view link with an ID
+                const idLink = row.querySelector('a[href*="/students/"][href*="/edit"], a[href*="/students/"][href*="/view"]');
+                if (idLink) {
+                    const idMatch = idLink.href.match(/\/students\/(\d+)/);
+                    if (idMatch) hpcId = idMatch[1];
+                }
+
+                // Guess name (usually 2nd cell, first is serial number)
+                for (let i = 0; i < texts.length; i++) {
+                    const t = texts[i];
+                    // Name: contains only letters and spaces, > 3 chars
+                    if (!name && /^[A-Z][A-Z\s]{2,}$/.test(t.toUpperCase()) && t.length > 3 && !/^\d/.test(t)) {
+                        name = t;
+                        continue;
+                    }
+                    // Grade: contains "grade" or roman numerals or "PP"
+                    if (!grade && /grade|class|pp-|pp\d|grade\s*\d/i.test(t)) {
+                        grade = t;
+                        continue;
+                    }
+                    // DOB: date pattern
+                    if (!dob && /\d{2}[\/-]\d{2}[\/-]\d{4}|\d{4}-\d{2}-\d{2}/.test(t)) {
+                        dob = t;
+                        continue;
+                    }
+                    // APAAR: 12 digits
+                    if (!apaar && /^\d{12}$/.test(t.replace(/\s/g, ''))) {
+                        apaar = t.replace(/\s/g, '');
+                        continue;
+                    }
+                    // Admission No: short alphanumeric
+                    if (!admNo && /^[A-Z0-9]{2,12}$/i.test(t) && t !== apaar && !/^(grade|class|pp)/i.test(t)) {
+                        admNo = t;
+                    }
+                }
+
+                if (!name) continue; // skip rows without a recognisable name
+
+                const nameParts = name.trim().split(/\s+/);
+                allStudents.push({
+                    hpc_student_id: hpcId,
+                    name:          name.trim(),
+                    first_name:    nameParts[0] || '',
+                    last_name:     nameParts.slice(1).join(' ') || '',
+                    grade:         grade,
+                    section:       section,
+                    dob:           dob,
+                    apaar_id:      apaar,
+                    admission_no:  admNo,
+                });
+                foundRows++;
+            }
+
+            logStatus(`📥 Page ${pageNum}: scraped ${foundRows} students (total ${allStudents.length})...`);
+
+            // Try to navigate to next page
+            const nextBtn = document.querySelector(
+                'button[aria-label*="next" i], a[aria-label*="next" i], ' +
+                '.pagination .next:not(.disabled) a, li.next:not(.disabled) a, ' +
+                'button:not([disabled])[class*="next"]'
+            );
+            if (nextBtn && pageNum < 50) {
+                nextBtn.click();
+                await sleep(1500);
+            } else {
+                keepGoing = false;
+            }
+        }
+
+        if (allStudents.length === 0) {
+            logStatus('⚠️ No students found on this page. Make sure you are on the portal student list.');
+            alert('⚠️ Could not find any student rows on this page.\n\nMake sure you are on:\nhttps://hpc.parakh.ncert.gov.in/en/students');
+            return;
+        }
+
+        logStatus(`📤 Sending ${allStudents.length} portal students to HPC Assist...`);
+
+        try {
+            const res = await fetch(`${SERVER_URL}/hpc/students/sync-from-portal`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-HPC-Token': HPC_TOKEN,
+                },
+                body: JSON.stringify({
+                    school_id: SCHOOL_ID,
+                    students:  allStudents,
+                }),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                logStatus(`✅ Synced! ${data.new} new, ${data.matched} matched. ${data.step2_remaining} students still pending.`);
+                alert(`✅ HPC Portal Sync Complete!\n\n• ${data.new} new students added to Step 3\n• ${data.matched} matched & marked as submitted\n• ${data.step2_remaining} students remaining in your queue\n\n${data.message}`);
+                // Reload queue so extension reflects updated pending count
+                await loadQueue(true);
+                updateWidgetContent();
+            } else {
+                logStatus(`⚠️ Sync failed: ${data.error}`);
+                alert(`⚠️ Sync failed: ${data.error}`);
+            }
+        } catch (err) {
+            logStatus(`⚠️ Error syncing: ${err.message}`);
+            console.error('[HPC Assist] fetchHpcPortalStudents error:', err);
+            alert(`⚠️ Network error syncing with HPC Assist:\n${err.message}`);
+        }
     }
 
     async function startAutomation() {
@@ -493,7 +693,7 @@
             return;
         }
 
-        await processCurrentStudent();
+        await runAutomationLoop();
     }
 
     function pauseAutomation() {
@@ -501,6 +701,17 @@
         localStorage.setItem('hpc_submission_running', 'false');
         logStatus('Paused.');
         updateWidgetContent();
+    }
+
+    /**
+     * Main automation loop — replaces the previous recursive processCurrentStudent() tail call.
+     * Using a while loop avoids stack overflow for large rosters (200+ students).
+     */
+    async function runAutomationLoop() {
+        while (isRunning && currentIndex < studentsQueue.length) {
+            const continueLoop = await processCurrentStudent();
+            if (continueLoop === false) break; // processCurrentStudent returns false when it navigated away or paused
+        }
     }
 
     function getGradeCandidates(gradeStr) {
@@ -616,39 +827,33 @@
     }
 
     function findAdmissionInput() {
-        // Priority 1: input with maxlength="12" (exclusive to school admission number on PARAKH student add form)
+        // Priority 1: Find by label text "admission" / "admn" / Hindi equivalents
+        // This is the most reliable since it directly matches the visible heading.
+        const allLabels = Array.from(document.querySelectorAll('label, .custom-input-label, span, p, div'));
+        for (const el of allLabels) {
+            const txt = el.textContent.toLowerCase().trim();
+            if (txt.includes('admission') || txt.includes('admn') || txt.includes('\u092a\u094d\u0930\u0935\u0947\u0936') || txt.includes('\u0926\u093e\u0916\u093f\u0932\u093e')) {
+                const container = el.closest('.custom-input-label, .form-group, .input-wrapper, .col, [class*="col-"]') || el.parentElement;
+                if (container) {
+                    const inp = container.querySelector('input:not([type="hidden"]):not([maxlength="1"])');
+                    if (inp && !inp.disabled) return inp;
+                }
+            }
+        }
+
+        // Priority 2: 4th "Write here" placeholder input (layout order on PARAKH Add Student page:
+        //   0=First Name, 1=Last Name, 2=Email, 3=School Admission Number)
+        const writeHereInputs = Array.from(document.querySelectorAll(
+            'input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="\u0932\u093f\u0916\u0947\u0902" i], input[placeholder*="\u092f\u0939\u093e\u0901" i]'
+        )).filter(i => !i.disabled && i.type !== 'hidden');
+        if (writeHereInputs.length >= 4) return writeHereInputs[3];
+
+        // Priority 3: input with maxlength="12" (some portal versions constrain admission no)
         const byMaxLen = Array.from(document.querySelectorAll('input[maxlength="12"]:not([type="hidden"])'))
             .find(i => !i.disabled && (i.type === 'text' || !i.type));
         if (byMaxLen) return byMaxLen;
 
-        // Priority 2: input inside a .custom-input-label containing 'admission' or 'admn' or 'प्रवेश' or 'दाखिला'
-        const wrappers = Array.from(document.querySelectorAll('.custom-input-label'));
-        const admWrapper = wrappers.find(w => {
-            const t = w.textContent.toLowerCase();
-            return t.includes('admission') || t.includes('admn') || t.includes('प्रवेश') || t.includes('दाखिला');
-        });
-        if (admWrapper) {
-            const inp = admWrapper.querySelector('input:not([type="hidden"]):not([maxlength="1"])');
-            if (inp) return inp;
-        }
-
-        // Priority 3: by label
-        const labels = Array.from(document.querySelectorAll('.custom-input-label label, label'));
-        const admLabel = labels.find(l => {
-            const t = l.textContent.toLowerCase();
-            return t.includes('admission') || t.includes('admn') || t.includes('प्रवेश') || t.includes('दाखिला');
-        });
-        if (admLabel) {
-            const wrapper = admLabel.closest('.custom-input-label') || admLabel.parentElement;
-            const inp = wrapper?.querySelector('input:not([type="hidden"]):not([maxlength="1"])');
-            if (inp) return inp;
-        }
-
-        // Priority 4: 4th "Write here" input (0: First, 1: Last, 2: Email, 3: Admission)
-        const writeInputs = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="लिखें" i]'));
-        if (writeInputs.length >= 4) return writeInputs[3];
-
-        // Priority 5: 4th text input on page
+        // Priority 4: 4th text input overall (excluding APAAR digit boxes)
         const textInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([maxlength="1"])'))
             .filter(i => !i.disabled && (i.type === 'text' || !i.type));
         if (textInputs.length >= 4) return textInputs[3];
@@ -725,7 +930,7 @@
     }
 
     async function processCurrentStudent() {
-        if (!isRunning) return;
+        if (!isRunning) return false;
 
         if (currentIndex >= studentsQueue.length) {
             isRunning = false;
@@ -733,7 +938,7 @@
             await reportProgress(studentsQueue.length, studentsQueue.length, '', 'completed', 'All students submitted successfully!', true);
             alert(`🎉 All ${studentsQueue.length} students have been successfully submitted to PARAKH HPC portal!`);
             updateWidgetContent();
-            return;
+            return false;
         }
 
         const student = studentsQueue[currentIndex];
@@ -752,8 +957,7 @@
         if (!fields.firstName) {
             logStatus('⚠️ Add Student form not ready. Retrying...');
             await sleep(1500);
-            if (isRunning) processCurrentStudent();
-            return;
+            return true; // signal loop to call us again
         }
 
         try {
@@ -777,7 +981,8 @@
             }
 
             // 3. Gender (MANDATORY FIELD)
-            await fillGender(student);
+            const genderOk = await fillGender(student);
+            if (!genderOk) return false; // paused due to missing gender
             await sleep(200);
 
             // 4. Email
@@ -823,7 +1028,7 @@
                 logStatus(`❌ Form incomplete for ${stName}. Paused.`);
                 pauseAutomation();
                 alert(`⚠️ Some required fields for ${stName} are missing or invalid.\n\nPlease check the highlighted fields on the screen.`);
-                return;
+                return false;
             }
 
             // 10. Submit via Save / Save & Add Another
@@ -908,7 +1113,7 @@
                 logStatus(`❌ ${stName} failed: ${portalError}`);
                 pauseAutomation();
                 alert(`⚠️ PARAKH Portal rejected submission for ${stName}:\n\n"${portalError}"\n\nPlease fix the highlighted field on the page.`);
-                return;
+                return false;
             }
 
             if (!confirmedSuccess && !isLast) {
@@ -919,7 +1124,7 @@
                     logStatus(`⚠️ ${stName} submission unconfirmed.`);
                     pauseAutomation();
                     alert(`⚠️ The portal did not confirm saving ${stName}.\n\nPlease check the form and click Save manually.`);
-                    return;
+                    return false;
                 }
             }
 
@@ -933,29 +1138,28 @@
 
             await sleep(1500);
 
-            if (isRunning) {
-                if (currentIndex >= studentsQueue.length) {
-                    isRunning = false;
-                    localStorage.setItem('hpc_submission_running', 'false');
-                    logStatus(`🎉 All ${studentsQueue.length} students completed!`);
-                    updateWidgetContent();
-                    alert(`🎉 All ${studentsQueue.length} students have been successfully submitted to PARAKH HPC portal!`);
-                    return;
-                }
-
-                if (!location.pathname.includes('/students/add')) {
-                    window.location.href = 'https://hpc.parakh.ncert.gov.in/en/students/add';
-                    return;
-                }
-
-                await processCurrentStudent();
+            if (isRunning && currentIndex >= studentsQueue.length) {
+                isRunning = false;
+                localStorage.setItem('hpc_submission_running', 'false');
+                logStatus(`🎉 All ${studentsQueue.length} students completed!`);
+                updateWidgetContent();
+                alert(`🎉 All ${studentsQueue.length} students have been successfully submitted to PARAKH HPC portal!`);
+                return false;
             }
+
+            if (isRunning && !location.pathname.includes('/students/add')) {
+                window.location.href = 'https://hpc.parakh.ncert.gov.in/en/students/add';
+                return false; // page navigation — loop ends here; init() will re-start it
+            }
+
+            return true; // loop continues
 
         } catch(err) {
             console.error('[HPC Assist] Error submitting student:', err);
             logStatus(`⚠️ Error on ${stName}: ${err.message}`);
             pauseAutomation();
             alert(`⚠️ Error submitting ${stName}: ${err.message}`);
+            return false;
         }
     }
 
@@ -968,11 +1172,24 @@
         if (savedIdx) currentIndex = parseInt(savedIdx, 10) || 0;
 
         const wasRunning = localStorage.getItem('hpc_submission_running') === 'true';
-        if (wasRunning && location.pathname.includes('/students/add')) {
-            isRunning = true;
-            updateWidgetContent();
-            await sleep(1500);
-            processCurrentStudent();
+        if (wasRunning && location.pathname.includes('/students/add') && currentIndex > 0) {
+            // Fix 4.1: ask the user before auto-resuming to prevent accidental double-submission
+            const resume = confirm(
+                `HPC Assist was running and has processed ${currentIndex} student(s).\n` +
+                `Resume from student ${currentIndex + 1}?\n\n` +
+                `Click Cancel to reset the counter to Student 1.`
+            );
+            if (resume) {
+                isRunning = true;
+                updateWidgetContent();
+                await sleep(1500);
+                runAutomationLoop();
+            } else {
+                currentIndex = 0;
+                localStorage.setItem('hpc_student_index', '0');
+                localStorage.setItem('hpc_submission_running', 'false');
+                updateWidgetContent();
+            }
         }
     }
 

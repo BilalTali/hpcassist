@@ -10,6 +10,18 @@ class Student extends Model
 {
     use HasFactory;
 
+    // ─── Source Constants ────────────────────────────────────────────────────
+    // Where did this student record originate?
+    const SOURCE_UDISE   = 'udise_sync';     // Fetched from UDISE+ portal
+    const SOURCE_EXCEL   = 'excel_upload';   // Uploaded via Excel spreadsheet
+    const SOURCE_MANUAL  = 'manual';         // Added manually on dashboard
+    const SOURCE_HPC     = 'hpc_portal';     // Already exists on PARAKH HPC portal
+
+    // ─── Status Constants ────────────────────────────────────────────────────
+    const STATUS_PENDING = 'pending';        // Not yet submitted to HPC
+    const STATUS_SUCCESS = 'success';        // Successfully submitted/confirmed on HPC
+    const STATUS_FAILED  = 'failed';         // Submission attempted but failed
+
     protected $fillable = [
         'school_id',
         'first_name',
@@ -23,74 +35,103 @@ class Student extends Model
         'pen_code',
         'admission_no',
         'udise_student_id',
+        'hpc_student_id',
         'gender',
         'source',
         'status',
         'remark',
         'failure_reason',
         'hpc_submitted_at',
+        'hpc_fetched_at',
     ];
 
     protected $casts = [
         'hpc_submitted_at' => 'datetime',
+        'hpc_fetched_at'   => 'datetime',
     ];
+
+    // ─── Relationships ───────────────────────────────────────────────────────
 
     public function school(): BelongsTo
     {
         return $this->belongsTo(School::class);
     }
 
-    /**
-     * Scope for querying students of a particular school.
-     */
+    // ─── Query Scopes ────────────────────────────────────────────────────────
+
+    /** Students belonging to a particular school. */
     public function scopeForSchool($query, int $schoolId)
     {
         return $query->where('school_id', $schoolId);
     }
 
     /**
-     * Scope for successfully synced or submitted students.
+     * Step 2 students: sourced from UDISE, Excel, or manual entry and still
+     * pending submission. These are shown on the dashboard roster and queued
+     * for the automation runner.
      */
+    public function scopeStep2($query)
+    {
+        return $query->whereIn('source', [self::SOURCE_UDISE, self::SOURCE_EXCEL, self::SOURCE_MANUAL])
+                     ->where('status', self::STATUS_PENDING);
+    }
+
+    /**
+     * Step 3 students: already confirmed on the PARAKH HPC portal, either
+     * fetched from the portal list or successfully submitted via HPC Assist.
+     */
+    public function scopeStep3($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('source', self::SOURCE_HPC)
+              ->orWhere('status', self::STATUS_SUCCESS);
+        });
+    }
+
+    /** All students that have been successfully handled (submitted or already on portal). */
     public function scopeSuccess($query)
     {
-        return $query->where('status', 'success');
+        return $query->where('status', self::STATUS_SUCCESS);
     }
 
-    /**
-     * Scope for failed or invalid students.
-     */
+    /** Students that failed validation or submission. */
     public function scopeFailed($query)
     {
-        return $query->where('status', 'failed');
+        return $query->where('status', self::STATUS_FAILED);
     }
 
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+
     /**
-     * Get effective gender (infer from name if not stored).
+     * Normalise and return the stored gender value.
+     * Returns 'Unknown' when gender is absent or unrecognised — callers are
+     * responsible for treating 'Unknown' as a validation error rather than
+     * guessing from the student's name.
      */
     public function getEffectiveGender(): string
     {
-        if (! empty($this->gender)) {
-            $g = strtolower(trim($this->gender));
-            if (str_starts_with($g, 'f') || str_contains($g, 'girl')) return 'Female';
-            if (str_starts_with($g, 'm') || str_contains($g, 'boy')) return 'Male';
+        if (empty($this->gender)) {
+            return 'Unknown';
         }
-
-        $name = strtolower(trim($this->name ?: "{$this->first_name} {$this->last_name}"));
-        $femaleIndicators = [
-            'jan', 'akhter', 'begum', 'bano', 'fatima', 'zehra', 'kousar', 'maryam',
-            'aabroo', 'aaliya', 'adeeba', 'hafsa', 'insha', 'rabia', 'toiba', 'zaira',
-            'afreen', 'asma', 'nimrah', 'jannat', 'misbah', 'safoora', 'tahira', 'zenab',
-            'shazia', 'ayaz', 'ayat', 'muntaha', 'abreena', 'bilkeesa', 'bisma', 'farhat',
-            'mehnaz', 'ronak', 'rubeena', 'rukhsana', 'saimah', 'simran', 'tasleema', 'towseer', 'uzma'
-        ];
-        foreach (preg_split('/\s+/', $name) as $w) {
-            if (in_array($w, $femaleIndicators)) return 'Female';
-        }
-        return 'Male';
+        $g = strtolower(trim($this->gender));
+        if (str_starts_with($g, 'f') || str_contains($g, 'girl')) return 'Female';
+        if (str_starts_with($g, 'm') || str_contains($g, 'boy'))  return 'Male';
+        if (str_contains($g, 'other') || $g === '3')              return 'Other';
+        return 'Unknown';
     }
 
     /**
-     * Format student model into preview array structure expected by dashboard and automation scripts.
+     * Whether this student is already confirmed on the HPC portal
+     * (either fetched from portal list or successfully submitted).
+     */
+    public function isHpcConfirmed(): bool
+    {
+        return $this->source === self::SOURCE_HPC || $this->status === self::STATUS_SUCCESS;
+    }
+
+    /**
+     * Format student model into preview array structure expected by dashboard
+     * and automation scripts.
      */
     public function toPreviewArray(int $rowNum = 1): array
     {
@@ -100,22 +141,24 @@ class Student extends Model
         }
 
         return [
-            'id'         => $this->id,
-            'row'        => $rowNum,
-            'first_name' => $this->first_name,
-            'last_name'  => $this->last_name ?? '',
-            'name'       => $this->name,
-            'gender'     => $this->getEffectiveGender(),
-            'dob'        => $this->dob ?? '',
-            'email'      => $this->email ?? '',
-            'grade'      => $this->grade,
-            'section'    => $this->section ?? 'A',
+            'id'           => $this->id,
+            'row'          => $rowNum,
+            'first_name'   => $this->first_name,
+            'last_name'    => $this->last_name ?? '',
+            'name'         => $this->name,
+            'gender'       => $this->getEffectiveGender(),
+            'dob'          => $this->dob ?? '',
+            'email'        => $this->email ?? '',
+            'grade'        => $this->grade,
+            'section'      => $this->section ?? 'A',
             'apaar_id'     => $this->apaar_id ?? '',
             'pen_code'     => $this->pen_code ?? '',
             'admission_no' => $this->admission_no ?? '',
-            'status'       => $this->status ?? 'pending',
-            'remark'     => $this->remark ?? '',
-            'errors'     => array_values($errors),
+            'hpc_student_id' => $this->hpc_student_id ?? '',
+            'source'       => $this->source ?? self::SOURCE_UDISE,
+            'status'       => $this->status ?? self::STATUS_PENDING,
+            'remark'       => $this->remark ?? '',
+            'errors'       => array_values($errors),
         ];
     }
 }

@@ -775,6 +775,109 @@
                     </div>
                 </div>
 
+                <!-- 3D. Already Submitted on HPC Portal ────────────────────────── -->
+                <div class="bg-white rounded-2xl shadow-xs border border-emerald-200 p-6 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                        <div>
+                            <div class="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Already on HPC Portal (Step 3)</div>
+                            <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
+                                <span>✅ Confirmed Submitted Students</span>
+                                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    {{ $step3Count }} students
+                                </span>
+                            </h3>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                Students already present on the PARAKH HPC portal — either fetched from the portal list or successfully submitted via HPC Assist. These will <strong>not</strong> be re-submitted.
+                            </p>
+                        </div>
+                        <div class="shrink-0 flex items-center gap-2">
+                            <a href="https://hpc.parakh.ncert.gov.in/en/students"
+                               target="_blank" rel="noopener noreferrer"
+                               class="inline-flex items-center gap-1.5 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95"
+                               title="Open the portal student list, then click 'Fetch HPC List' in the extension widget to import all records">
+                                📥 Open Portal &amp; Fetch List ↗
+                            </a>
+                            <button onclick="loadStep3Table()"
+                                    class="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition active:scale-95">
+                                🔄 Refresh
+                            </button>
+                        </div>
+                    </div>
+
+                    @if($step3Count > 0)
+                        <!-- Stats row -->
+                        <div class="grid grid-cols-3 gap-3 text-xs">
+                            <div class="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center">
+                                <div class="text-2xl font-black text-emerald-700">{{ $step3Count }}</div>
+                                <div class="text-emerald-600 font-medium">Total Confirmed</div>
+                            </div>
+                            <div class="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
+                                <div class="text-2xl font-black text-blue-700">{{ count($preview) }}</div>
+                                <div class="text-blue-600 font-medium">Still Pending (Step 2)</div>
+                            </div>
+                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
+                                <div class="text-2xl font-black text-slate-700">{{ $step3Count + count($preview) }}</div>
+                                <div class="text-slate-600 font-medium">Total Students</div>
+                            </div>
+                        </div>
+
+                        <!-- Table -->
+                        <div class="overflow-x-auto rounded-xl border border-slate-200">
+                            <table class="w-full text-xs" id="step3-table">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-left">
+                                        <th class="px-3 py-2.5 font-bold text-slate-500 w-8">#</th>
+                                        <th class="px-3 py-2.5 font-bold text-slate-700">Name</th>
+                                        <th class="px-3 py-2.5 font-bold text-slate-700">Grade</th>
+                                        <th class="px-3 py-2.5 font-bold text-slate-700">Sec</th>
+                                        <th class="px-3 py-2.5 font-bold text-slate-700">Adm. No</th>
+                                        <th class="px-3 py-2.5 font-bold text-slate-700">APAAR</th>
+                                        <th class="px-3 py-2.5 font-bold text-slate-700">Source</th>
+                                        <th class="px-3 py-2.5 font-bold text-slate-700">Submitted</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="step3-tbody">
+                                    @foreach(array_slice($step3Students, 0, 50) as $i => $st)
+                                        <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+                                            <td class="px-3 py-2 text-slate-400 font-mono">{{ $i + 1 }}</td>
+                                            <td class="px-3 py-2 font-semibold text-slate-900">{{ $st['name'] ?? ($st['first_name'] . ' ' . $st['last_name']) }}</td>
+                                            <td class="px-3 py-2 text-slate-600">{{ $st['grade'] ?? '—' }}</td>
+                                            <td class="px-3 py-2 text-slate-500">{{ $st['section'] ?? 'A' }}</td>
+                                            <td class="px-3 py-2 font-mono text-slate-600">{{ $st['admission_no'] ?? '—' }}</td>
+                                            <td class="px-3 py-2 font-mono text-slate-500 text-[10px]">{{ $st['apaar_id'] ? substr($st['apaar_id'], 0, 6) . '...' : '—' }}</td>
+                                            <td class="px-3 py-2">
+                                                @php $src = $st['source'] ?? 'udise_sync'; @endphp
+                                                <span class="px-1.5 py-0.5 rounded-full font-bold text-[10px] {{ $src === 'hpc_portal' ? 'bg-violet-100 text-violet-700' : ($src === 'excel_upload' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700') }}">
+                                                    {{ $src === 'hpc_portal' ? 'Portal' : ($src === 'excel_upload' ? 'Excel' : 'UDISE') }}
+                                                </span>
+                                            </td>
+                                            <td class="px-3 py-2 text-slate-400 text-[10px]">
+                                                {{ isset($st['hpc_submitted_at']) && $st['hpc_submitted_at'] ? \Carbon\Carbon::parse($st['hpc_submitted_at'])->format('d M Y') : '—' }}
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                    @if(count($step3Students) > 50)
+                                        <tr>
+                                            <td colspan="8" class="px-3 py-3 text-center text-slate-400 text-xs">
+                                                Showing 50 of {{ count($step3Students) }}. Use <strong>Refresh</strong> to load paginated view.
+                                            </td>
+                                        </tr>
+                                    @endif
+                                </tbody>
+                            </table>
+                        </div>
+                    @else
+                        <div class="text-center py-10 text-slate-400">
+                            <div class="text-4xl mb-3">📋</div>
+                            <div class="font-semibold text-slate-600 mb-1">No students confirmed on HPC portal yet</div>
+                            <div class="text-xs max-w-sm mx-auto">
+                                After submitting students via HPC Assist, they appear here automatically.
+                                You can also click <strong>Open Portal &amp; Fetch List</strong> above to import students already on the portal.
+                            </div>
+                        </div>
+                    @endif
+                </div>
+
             </div>
 
             <!-- ========================================================================= -->
@@ -2159,5 +2262,54 @@
         document.addEventListener('DOMContentLoaded', () => {
             renderStudentTablePage();
         });
+    </script>
+
+    {{-- HPC Configuration injected for the Chrome Extension (Fix 4.3).
+         The progress_token is read by hpc_content.js via window.__HPC_CONFIG.
+         It is safe to surface in the page because the same token is validated
+         server-side on /hpc/run/progress and /hpc/students/queue. --}}
+    <script>
+        window.__HPC_CONFIG = {
+            server_url: "{{ rtrim(config('app.url'), '/') }}",
+            school_id: {{ $school?->id ?? 'null' }},
+            progress_token: "{{ config('hpc.progress_token') }}"
+        };
+
+        // ── Step 3: Refresh HPC-confirmed students table via AJAX ──────────────
+        async function loadStep3Table() {
+            const tbody = document.getElementById('step3-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '<tr><td colspan="8" class="px-3 py-6 text-center text-slate-400 text-xs">Loading...</td></tr>';
+            try {
+                const res  = await fetch('{{ route("hpc.students.step3") }}?per_page=100', { headers: { 'Accept': 'application/json' } });
+                const data = await res.json();
+                if (!data.ok || !data.students.length) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="px-3 py-6 text-center text-slate-400 text-xs">No confirmed students yet.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.students.map((st, i) => {
+                    const src    = st.source || 'udise_sync';
+                    const srcLbl = src === 'hpc_portal' ? 'Portal' : (src === 'excel_upload' ? 'Excel' : 'UDISE');
+                    const srcCls = src === 'hpc_portal'
+                        ? 'bg-violet-100 text-violet-700'
+                        : (src === 'excel_upload' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700');
+                    const apaar  = st.apaar_id ? st.apaar_id.toString().slice(0, 6) + '...' : '—';
+                    const date   = st.hpc_submitted_at ? new Date(st.hpc_submitted_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+                    return `
+                        <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+                            <td class="px-3 py-2 text-slate-400 font-mono">${i + 1}</td>
+                            <td class="px-3 py-2 font-semibold text-slate-900">${st.name || (st.first_name + ' ' + st.last_name)}</td>
+                            <td class="px-3 py-2 text-slate-600">${st.grade || '—'}</td>
+                            <td class="px-3 py-2 text-slate-500">${st.section || 'A'}</td>
+                            <td class="px-3 py-2 font-mono text-slate-600">${st.admission_no || '—'}</td>
+                            <td class="px-3 py-2 font-mono text-slate-500 text-[10px]">${apaar}</td>
+                            <td class="px-3 py-2"><span class="px-1.5 py-0.5 rounded-full font-bold text-[10px] ${srcCls}">${srcLbl}</span></td>
+                            <td class="px-3 py-2 text-slate-400 text-[10px]">${date}</td>
+                        </tr>`;
+                }).join('');
+            } catch(e) {
+                tbody.innerHTML = `<tr><td colspan="8" class="px-3 py-6 text-center text-red-400 text-xs">Error: ${e.message}</td></tr>`;
+            }
+        }
     </script>
 </x-app-layout>

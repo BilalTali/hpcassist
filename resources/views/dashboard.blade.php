@@ -2569,7 +2569,12 @@
 })();`;
             try {
                 await navigator.clipboard.writeText(script);
-                alert('📋 1-Click Teacher Roster Sync Script Copied!\\n\\n1. Switch to your PARAKH Portal teacher dashboard tab\\n2. Press F12 (or Cmd+Option+J) -> Console\\n3. Paste (Cmd+V) and press Enter\\n\\nIt will grab the exact student(s) displayed on your teacher screen and sync them to HPC Assist!');
+                alert('📋 1-Click Teacher Roster Sync Script Copied!\n\n1. Switch to your PARAKH Portal teacher dashboard tab\n2. Press F12 (or Cmd+Option+J) -> Console\n3. Paste (Cmd+V) and press Enter\n\nIt will grab the exact student(s) displayed on your teacher screen and sync them to HPC Assist!');
+            } catch(e) {
+                alert('Could not copy script: ' + e.message);
+            }
+        }
+
         // ── Teacher Credentials Management Logic (Step 3 Handover) ──
         window.schoolTeachersList = @json($teachers ?? []);
         window.lastCreatedTeacherCreds = null;

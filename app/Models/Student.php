@@ -68,12 +68,21 @@ class Student extends Model
     /**
      * Step 2 students: sourced from UDISE, Excel, or manual entry and still
      * pending submission. These are shown on the dashboard roster and queued
-     * for the automation runner.
+     * for the automation runner. Includes failed rows so users can inspect
+     * and correct validation errors on the roster.
      */
     public function scopeStep2($query)
     {
         return $query->whereIn('source', [self::SOURCE_UDISE, self::SOURCE_EXCEL, self::SOURCE_MANUAL])
-                     ->where('status', self::STATUS_PENDING);
+                     ->where(function ($q) {
+                         $q->whereIn('status', [self::STATUS_PENDING, self::STATUS_FAILED])
+                           ->orWhere(function ($sub) {
+                               // Recovery for unsubmitted rows previously saved with status='success'
+                               $sub->where('status', self::STATUS_SUCCESS)
+                                   ->whereNull('hpc_submitted_at')
+                                   ->whereNull('hpc_fetched_at');
+                           });
+                     });
     }
 
     /**
@@ -84,7 +93,8 @@ class Student extends Model
     {
         return $query->where(function ($q) {
             $q->where('source', self::SOURCE_HPC)
-              ->orWhere('status', self::STATUS_SUCCESS);
+              ->orWhereNotNull('hpc_submitted_at')
+              ->orWhereNotNull('hpc_fetched_at');
         });
     }
 
@@ -126,7 +136,9 @@ class Student extends Model
      */
     public function isHpcConfirmed(): bool
     {
-        return $this->source === self::SOURCE_HPC || $this->status === self::STATUS_SUCCESS;
+        return $this->source === self::SOURCE_HPC
+            || ! empty($this->hpc_submitted_at)
+            || ! empty($this->hpc_fetched_at);
     }
 
     /**

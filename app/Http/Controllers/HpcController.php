@@ -683,8 +683,8 @@ class HpcController extends Controller
             return response()->json(['ok' => false, 'error' => 'Could not read Excel file: ' . $e->getMessage()]);
         }
 
-        // Save preview for the automation runner
-        $this->writePreviewFile($this->getPreviewFile(), $preview);
+        $schoolForFile = \Illuminate\Support\Facades\Auth::check() ? \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool() : null;
+        $this->writePreviewFile($this->getPreviewFile($schoolForFile), $preview);
         $this->syncSpreadsheetFromPreview($preview);
 
         if (\Illuminate\Support\Facades\Auth::check()) {
@@ -694,7 +694,12 @@ class HpcController extends Controller
                 // 'replace_all' checkbox: present+1 means replace, absent means merge
                 $shouldReplace = $request->boolean('replace_all');
                 if ($shouldReplace) {
-                    Student::where('school_id', $userSchool->id)->delete();
+                    Student::where('school_id', $userSchool->id)
+                        ->where(function ($q) {
+                            $q->whereNull('hpc_submitted_at')
+                              ->where('source', '!=', Student::SOURCE_HPC);
+                        })
+                        ->delete();
                 }
 
                 foreach ($preview as $pRow) {
@@ -1078,7 +1083,7 @@ class HpcController extends Controller
             $remark = $data['remark'] ?? 'Confirmed on PARAKH HPC Portal';
             $failureReason = null;
         } else {
-            $status = ! empty($errors) ? Student::STATUS_FAILED : Student::STATUS_SUCCESS;
+            $status = ! empty($errors) ? Student::STATUS_FAILED : Student::STATUS_PENDING;
             $defaultRemark = match ($source) {
                 Student::SOURCE_UDISE  => 'Synced from UDISE+ SDMS',
                 Student::SOURCE_EXCEL  => 'Imported from Excel spreadsheet',
@@ -1311,11 +1316,13 @@ class HpcController extends Controller
 
     public function runProgress(Request $request)
     {
-        // Authenticate via shared token — sent by the Chrome extension
-        $token = $request->header('X-HPC-Token') ?? $request->input('_hpc_token');
-        $expected = config('hpc.progress_token', '');
-        if ($expected !== '' && $token !== $expected) {
-            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 401);
+        $corsOrigin = $this->getAllowedCorsOrigin();
+        if ($request->isMethod('OPTIONS')) {
+            return response()->json(['ok' => true], 200, [
+                'Access-Control-Allow-Origin'  => $corsOrigin,
+                'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
+            ]);
         }
 
         $schoolId = $request->input('school_id');
@@ -1323,9 +1330,24 @@ class HpcController extends Controller
         if (! $school && $request->filled('udise_code')) {
             $school = School::where('udise_code', $request->input('udise_code'))->first();
         }
-        // Fix 3.1: removed school data-leak fallback; fail cleanly if school not found
         if (! $school) {
-            return response()->json(['ok' => false, 'error' => 'School not found.'], 404);
+            return response()->json(['ok' => false, 'error' => 'School not found.'], 404, [
+                'Access-Control-Allow-Origin'  => $corsOrigin,
+                'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
+            ]);
+        }
+
+        // Authenticate via shared token or school token — sent by the Chrome extension
+        $token = $request->header('X-HPC-Token') ?? $request->input('_hpc_token');
+        $expected = config('hpc.progress_token', '');
+        $schoolToken = substr(hash('sha256', $school->id . '_' . $school->udise_code . '_' . config('app.key')), 0, 32);
+        if ($expected !== '' && $token !== $expected && $token !== $schoolToken) {
+            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 401, [
+                'Access-Control-Allow-Origin'  => $corsOrigin,
+                'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
+            ]);
         }
 
         $resultsFile = $this->getSchoolStorageDir($school) . '/run_results.json';
@@ -1356,11 +1378,26 @@ class HpcController extends Controller
                 'message' => $message,
                 'time'    => now()->toIso8601String(),
             ];
+
+            // Mark student as confirmed in DB upon successful submission by extension
+            if ($status === 'success') {
+                $st = Student::where('school_id', $school->id)->where('name', $name)->first();
+                if (! $st) {
+                    $parts = preg_split('/\s+/', trim($name));
+                    $st = Student::where('school_id', $school->id)->where('first_name', $parts[0])->first();
+                }
+                if ($st) {
+                    $st->update([
+                        'status'           => Student::STATUS_SUCCESS,
+                        'hpc_submitted_at' => now(),
+                        'remark'           => 'Submitted via HPC Assist Browser Extension',
+                    ]);
+                }
+            }
         }
 
         file_put_contents($resultsFile, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
 
-        $corsOrigin = $this->getAllowedCorsOrigin();
         return response()->json(['ok' => true], 200, [
             'Access-Control-Allow-Origin'  => $corsOrigin,
             'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
@@ -1370,11 +1407,13 @@ class HpcController extends Controller
 
     public function getStudentQueue(Request $request)
     {
-        // Authenticate via shared token — sent by the Chrome extension
-        $token = $request->header('X-HPC-Token') ?? $request->input('_hpc_token');
-        $expected = config('hpc.progress_token', '');
-        if ($expected !== '' && $token !== $expected) {
-            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 401);
+        $corsOrigin = $this->getAllowedCorsOrigin();
+        if ($request->isMethod('OPTIONS')) {
+            return response()->json(['ok' => true], 200, [
+                'Access-Control-Allow-Origin'  => $corsOrigin,
+                'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
+            ]);
         }
 
         $schoolId = $request->input('school_id');
@@ -1382,22 +1421,36 @@ class HpcController extends Controller
         if (! $school && $request->filled('udise_code')) {
             $school = School::where('udise_code', $request->input('udise_code'))->first();
         }
-        // Fix 3.1: removed school data-leak fallback; fail cleanly if school not found
         if (! $school) {
-            return response()->json(['ok' => false, 'error' => 'School not found. Please log in.'], 404);
+            return response()->json(['ok' => false, 'error' => 'School not found. Please log in.'], 404, [
+                'Access-Control-Allow-Origin'  => $corsOrigin,
+                'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
+            ]);
+        }
+
+        // Authenticate via shared token or school token — sent by the Chrome extension
+        $token = $request->header('X-HPC-Token') ?? $request->input('_hpc_token');
+        $expected = config('hpc.progress_token', '');
+        $schoolToken = substr(hash('sha256', $school->id . '_' . $school->udise_code . '_' . config('app.key')), 0, 32);
+        if ($expected !== '' && $token !== $expected && $token !== $schoolToken) {
+            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 401, [
+                'Access-Control-Allow-Origin'  => $corsOrigin,
+                'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
+            ]);
         }
 
         $previewFile = $this->getPreviewFile($school);
         $students    = [];
         if ($school->students()->exists()) {
-            $students = $school->students()->orderBy('id')->get()->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
+            $students = $school->students()->step2()->orderBy('id')->get()->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
         } elseif (file_exists($previewFile)) {
             $students = json_decode(file_get_contents($previewFile), true) ?? [];
         }
 
         $valid = array_values(array_filter($students, fn($s) => empty($s['errors'])));
 
-        $corsOrigin = $this->getAllowedCorsOrigin();
         return response()->json([
             'ok'          => true,
             'school_id'   => $school->id,
@@ -1414,10 +1467,28 @@ class HpcController extends Controller
 
     /**
      * Return the allowed CORS origin for public extension-facing endpoints.
-     * Prefers the configured Chrome extension ID; falls back to the app URL.
+     * Accurately supports the PARAKH portal, UDISE portal, Chrome extension ID,
+     * and local/app URLs.
      */
     private function getAllowedCorsOrigin(): string
     {
+        $incoming = request()->header('Origin');
+        if (! empty($incoming)) {
+            $allowedPatterns = [
+                'https://hpc.parakh.ncert.gov.in',
+                'https://sdms.udiseplus.gov.in',
+                'chrome-extension://',
+                rtrim(config('app.url', 'http://localhost'), '/'),
+                'http://127.0.0.1',
+                'http://localhost',
+            ];
+            foreach ($allowedPatterns as $pattern) {
+                if (str_starts_with($incoming, $pattern)) {
+                    return $incoming;
+                }
+            }
+        }
+
         $extId = config('hpc.extension_id', '');
         if ($extId !== '') {
             return "chrome-extension://{$extId}";
@@ -1727,27 +1798,44 @@ class HpcController extends Controller
      */
     public function syncFromPortal(Request $request): \Illuminate\Http\JsonResponse
     {
-        // Token authentication (same as runProgress / getStudentQueue)
-        $token    = $request->header('X-HPC-Token') ?? $request->input('_hpc_token', '');
-        $expected = config('hpc.progress_token', '');
-        if ($expected !== '' && $token !== $expected) {
-            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 401);
+        $corsOrigin = $this->getAllowedCorsOrigin();
+        if ($request->isMethod('OPTIONS')) {
+            return response()->json(['ok' => true], 200, [
+                'Access-Control-Allow-Origin'  => $corsOrigin,
+                'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
+            ]);
         }
 
-        $request->validate([
-            'students'  => 'required|array|max:5000',
-            'school_id' => 'nullable|integer',
-        ]);
-
-        // Resolve school
         $schoolId = $request->integer('school_id', 0);
         $school   = $schoolId ? School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         if (! $school && $request->filled('udise_code')) {
             $school = School::where('udise_code', $request->input('udise_code'))->first();
         }
         if (! $school) {
-            return response()->json(['ok' => false, 'error' => 'School not found.'], 404);
+            return response()->json(['ok' => false, 'error' => 'School not found.'], 404, [
+                'Access-Control-Allow-Origin'  => $corsOrigin,
+                'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
+            ]);
         }
+
+        // Token authentication (same as runProgress / getStudentQueue)
+        $token    = $request->header('X-HPC-Token') ?? $request->input('_hpc_token', '');
+        $expected = config('hpc.progress_token', '');
+        $schoolToken = substr(hash('sha256', $school->id . '_' . $school->udise_code . '_' . config('app.key')), 0, 32);
+        if ($expected !== '' && $token !== $expected && $token !== $schoolToken) {
+            return response()->json(['ok' => false, 'error' => 'Unauthorized'], 401, [
+                'Access-Control-Allow-Origin'  => $corsOrigin,
+                'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
+            ]);
+        }
+
+        $request->validate([
+            'students'  => 'required|array|max:5000',
+            'school_id' => 'nullable|integer',
+        ]);
 
         $incoming   = $request->input('students', []);
         $newCount   = 0;

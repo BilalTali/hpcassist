@@ -39,13 +39,15 @@ class UdiseController extends Controller
         $zipPath = public_path('downloads/hpc-assist-udise-extension.zip');
         @mkdir(dirname($zipPath), 0755, true);
 
+        $progressToken = config('hpc.progress_token', '') ?: $schoolToken;
         $configJs = "// HPC Assist pre-configuration (generated for " . addslashes($schoolName) . ")\n" .
                     "window.__HPC_CONFIG = " . json_encode([
-                        'school_id'   => $schoolId,
-                        'school_name' => $schoolName,
-                        'udise_code'  => $schoolUdise,
-                        'token'       => $schoolToken,
-                        'server_url'  => url('/'),
+                        'school_id'      => $schoolId,
+                        'school_name'    => $schoolName,
+                        'udise_code'     => $schoolUdise,
+                        'token'          => $schoolToken,
+                        'progress_token' => $progressToken,
+                        'server_url'     => url('/'),
                     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . ";\n";
 
         $zip = new \ZipArchive();

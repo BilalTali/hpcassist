@@ -5,5 +5,6 @@ window.__HPC_CONFIG = window.__HPC_CONFIG || {
     school_name: "Boys middle school pwc",
     udise_code: "01041800702",
     token: "",
+    progress_token: "",
     server_url: "https://ctetmonktest.fun"
 };

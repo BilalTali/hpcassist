@@ -9,7 +9,9 @@
         ? window.__HPC_CONFIG.server_url.replace(/\/$/, '')
         : '';
     const SCHOOL_ID  = (window.__HPC_CONFIG && window.__HPC_CONFIG.school_id) ? window.__HPC_CONFIG.school_id : null;
-    const HPC_TOKEN  = (window.__HPC_CONFIG && window.__HPC_CONFIG.progress_token) ? window.__HPC_CONFIG.progress_token : '';
+    const HPC_TOKEN  = (window.__HPC_CONFIG && (window.__HPC_CONFIG.progress_token || window.__HPC_CONFIG.token))
+        ? (window.__HPC_CONFIG.progress_token || window.__HPC_CONFIG.token)
+        : '';
 
     let studentsQueue = [];
     let isRunning = false;
@@ -81,7 +83,7 @@
                     const parsed = JSON.parse(raw);
                     if (Array.isArray(parsed.students) && parsed.students.length > 0) {
                         studentsQueue = parsed.students;
-                        return;
+                        return true;
                     }
                 }
             } catch(e) {}
@@ -89,7 +91,7 @@
 
         if (!SERVER_URL) {
             console.warn('[HPC Assist] SERVER_URL not configured — cannot fetch student queue.');
-            return;
+            return false;
         }
 
         try {
@@ -108,9 +110,14 @@
                     school_name: data.school_name,
                     students: data.students
                 }));
+                return true;
+            } else {
+                console.warn('[HPC Assist] Queue endpoint returned error or no students:', data);
+                return false;
             }
         } catch(err) {
             console.warn('[HPC Assist] Could not fetch student queue from server:', err);
+            return false;
         }
     }
 
@@ -421,10 +428,18 @@
             const refreshBtn = e.target.closest('#hpc-refresh-btn');
             if (refreshBtn) {
                 console.log('[HPC Assist] User clicked Sync');
-                await loadQueue(true);
+                logStatus('🔄 Syncing queue from HPC Assist...');
+                const success = await loadQueue(true);
                 currentIndex = 0;
                 localStorage.setItem('hpc_student_index', '0');
                 updateWidgetContent();
+                if (studentsQueue.length > 0) {
+                    logStatus(`✅ Synced ${studentsQueue.length} student(s) from server!`);
+                } else if (!success) {
+                    logStatus('⚠️ Could not connect to server. Check network or server URL.');
+                } else {
+                    logStatus('ℹ️ No pending students in queue.');
+                }
                 return;
             }
             const resetBtn = e.target.closest('#hpc-reset-btn');

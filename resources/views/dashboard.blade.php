@@ -1561,9 +1561,15 @@
                         <td class="py-2.5 px-3 font-mono text-slate-600">${dob}</td>
                         <td class="py-2.5 px-3 font-mono text-slate-800">${apaar}</td>
                         <td class="py-2.5 px-3">
-                            <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Ready
-                            </span>
+                            ${(r.errors && r.errors.length > 0) ? `
+                                <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200" title="${r.errors.join(', ')}">
+                                    ⚠️ ${r.errors[0]}
+                                </span>
+                            ` : `
+                                <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Ready
+                                </span>
+                            `}
                         </td>
                         <td class="py-2.5 px-3 text-right">
                             <button onclick="openEditStudentModal(${idx})" class="px-2 py-1 text-slate-600 hover:text-indigo-600 font-semibold bg-slate-100 hover:bg-indigo-50 rounded-lg" title="Edit Student">✏️</button>

@@ -72,8 +72,13 @@ class HpcTeacherController extends Controller
         $selectedStage = $request->query('stage', 'all');
         $selectedGrade = $request->query('grade', $teacherClass);
 
-        $studentsFile = $schoolDir . '/teacher_students.json';
-        $students = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
+        $studentsFile = null;
+        if (file_exists($teacherProfileDir . '/teacher_students.json')) {
+            $studentsFile = $teacherProfileDir . '/teacher_students.json';
+        } elseif (file_exists($schoolDir . '/teacher_students.json')) {
+            $studentsFile = $schoolDir . '/teacher_students.json';
+        }
+        $students = $studentsFile ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
         if (empty($students)) {
             $students = $this->getTeacherTemplateStudents($selectedGrade, $selectedStage);
         }
@@ -237,6 +242,16 @@ class HpcTeacherController extends Controller
 
         // Mark teacher profile as active
         @file_put_contents($teacherProfileDir . '/session_active.txt', now()->toIso8601String());
+
+        // Also sync to all registered teachers in this school
+        if ($school) {
+            foreach ($school->teachers()->get() as $schT) {
+                $schTDir = storage_path('app/hpc/schools/' . $school->id . '/teacher-profiles/teacher_' . $schT->id);
+                if (! is_dir($schTDir)) @mkdir($schTDir, 0777, true);
+                @file_put_contents($schTDir . '/teacher_students.json', json_encode($synced, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                @file_put_contents($schTDir . '/session_active.txt', now()->toIso8601String());
+            }
+        }
 
         return response()->json([
             'ok'       => true,

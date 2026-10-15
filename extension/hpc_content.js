@@ -199,14 +199,14 @@
             }
         }
 
-        // 4. Fallback: if SCHOOL_ID has 0 pending students but another school has pending students, or if no SCHOOL_ID is set
-        if (!SCHOOL_ID || (availableSchools.length > 0 && availableSchools.find(s => s.id === SCHOOL_ID)?.pending === 0)) {
+        // 4. Fallback: only if no SCHOOL_ID is detected yet and we are in school mode
+        if (!SCHOOL_ID && CURRENT_MODE === 'school') {
             const withPending = availableSchools.find(s => s.pending > 0);
             if (withPending) {
                 console.log(`[HPC Assist] Switching active school to pending queue: ${withPending.name} (${withPending.pending} students)`);
                 SCHOOL_ID = withPending.id;
                 currentSchoolName = withPending.name;
-            } else if (availableSchools.length > 0 && !SCHOOL_ID) {
+            } else if (availableSchools.length > 0) {
                 SCHOOL_ID = availableSchools[0].id;
                 currentSchoolName = availableSchools[0].name;
             }

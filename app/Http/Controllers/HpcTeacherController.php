@@ -55,6 +55,9 @@ class HpcTeacherController extends Controller
 
         $studentsFile = $schoolDir . '/teacher_students.json';
         $students = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
+        if (empty($students)) {
+            $students = $this->getTeacherTemplateStudents();
+        }
 
         $previewFile = $schoolDir . '/teacher_preview.json';
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
@@ -120,24 +123,59 @@ class HpcTeacherController extends Controller
         $studentsFile = $schoolDir . '/teacher_students.json';
         $students     = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
 
+        // If no teacher_students.json exists for this school, pull from database:
+        // Prioritize Step 3 students (already submitted / confirmed on PARAKH HPC)
         if (empty($students) && $school && $school->students()->exists()) {
-            $students = $school->students()->orderBy('id')->get()->map(function($st) {
+            $query = $school->students()->step3();
+            if ($query->count() === 0) {
+                // If no step 3 students yet, fallback to all school students
+                $query = $school->students();
+            }
+
+            $students = $query->orderBy('id')->get()->map(function($st) {
                 return [
-                    'name'     => $st->name,
-                    'apaar_id' => $st->apaar_id ?: '',
-                    'login_id' => $st->pen_code ?: ($st->apaar_id ?: 'S' . strtoupper(substr(md5($st->id . $st->name), 0, 9))),
-                    'status'   => 'HPC Pending',
+                    'id'           => $st->id,
+                    'name'         => $st->name,
+                    'admission_no' => $st->admission_no ? (string)$st->admission_no : '',
+                    'grade'        => $st->grade ?: 'Grade 6',
+                    'section'      => $st->section ?: 'A',
+                    'apaar_id'     => $st->apaar_id ?: '',
+                    'login_id'     => $st->pen_code ?: ($st->apaar_id ?: 'S' . strtoupper(substr(md5($st->id . $st->name), 0, 9))),
+                    'status'       => $st->hpc_submitted_at ? 'HPC Completed' : 'HPC Pending',
                 ];
             })->all();
         }
 
+        // If students were loaded from teacher_students.json, enrich them with real admission numbers from DB
+        if (! empty($students) && $school) {
+            $dbStudents = $school->students()->get();
+            foreach ($students as &$s) {
+                if (empty($s['admission_no'])) {
+                    $match = $dbStudents->first(function($dbSt) use ($s) {
+                        if (! empty($s['apaar_id']) && $dbSt->apaar_id === $s['apaar_id']) return true;
+                        if (! empty($s['login_id']) && ($dbSt->pen_code === $s['login_id'] || $dbSt->apaar_id === $s['login_id'])) return true;
+                        if (! empty($s['name']) && strcasecmp(trim($dbSt->name), trim($s['name'])) === 0) return true;
+                        return false;
+                    });
+                    if ($match) {
+                        $s['admission_no'] = $match->admission_no ? (string)$match->admission_no : '';
+                        if (empty($s['grade']) && ! empty($match->grade)) $s['grade'] = $match->grade;
+                        if (empty($s['section']) && ! empty($match->section)) $s['section'] = $match->section;
+                    } else {
+                        $s['admission_no'] = '';
+                    }
+                }
+            }
+            unset($s);
+        }
+
         if (empty($students)) {
             $students = [
-                ['name' => 'Faizan Ahmad',     'login_id' => 'S1CA3C8009', 'status' => 'HPC Pending'],
-                ['name' => 'Zehra Batool',     'login_id' => 'S49C309C52', 'status' => 'HPC Pending'],
-                ['name' => 'Mohammad Yousuf',  'login_id' => 'S2C7236921', 'status' => 'HPC Pending'],
-                ['name' => 'Insha Jan',        'login_id' => 'S9CD420A51', 'status' => 'HPC Pending'],
-                ['name' => 'Sahil Bashir',     'login_id' => 'SD3675F62B', 'status' => 'HPC Pending'],
+                ['name' => 'Faizan Ahmad',     'admission_no' => '', 'login_id' => 'S1CA3C8009', 'status' => 'HPC Pending'],
+                ['name' => 'Zehra Batool',     'admission_no' => '', 'login_id' => 'S49C309C52', 'status' => 'HPC Pending'],
+                ['name' => 'Mohammad Yousuf',  'admission_no' => '', 'login_id' => 'S2C7236921', 'status' => 'HPC Pending'],
+                ['name' => 'Insha Jan',        'admission_no' => '', 'login_id' => 'S9CD420A51', 'status' => 'HPC Pending'],
+                ['name' => 'Sahil Bashir',     'admission_no' => '', 'login_id' => 'SD3675F62B', 'status' => 'HPC Pending'],
             ];
         }
 
@@ -1283,8 +1321,10 @@ class HpcTeacherController extends Controller
 
     public function getStudentStarterProfile(int $sIdx, array $st, array $defaultWorkMap, array $defaultMax, int $rowNum): array
     {
-        $admNo  = 'ADM-2026-' . str_pad($sIdx + 1, 3, '0', STR_PAD_LEFT);
-        $stName = $st['name'] ?? 'Student ' . ($sIdx + 1);
+        $admNo   = ! empty($st['admission_no']) ? (string)$st['admission_no'] : '';
+        $stName  = $st['name'] ?? 'Student ' . ($sIdx + 1);
+        $grade   = ! empty($st['grade']) ? $st['grade'] : 'Grade 6';
+        $section = ! empty($st['section']) ? $st['section'] : 'A';
 
         $monthKeys = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
         $monthlyPairs = [];
@@ -1303,10 +1343,10 @@ class HpcTeacherController extends Controller
             $st['name'] ?? $stName,
             $st['status'] ?? 'HPC Pending',
 
-            // 4-11: Part-A1 Profile (Admission No, Grade, Section pre-filled, others blank)
+            // 4-11: Part-A1 Profile (Admission No from HPC/DB or empty, Grade, Section pre-filled, others blank)
             $admNo,
-            'Grade 6',
-            'A',
+            $grade,
+            $section,
             '', // Location
             '', // Medium of Instruction
             '', // Mother Tongue

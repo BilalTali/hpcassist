@@ -317,7 +317,7 @@ class HpcTeacherRun extends Command
         }
 
         // ── 2. Fill Part-A1 ───────────────────────────────────────────────────
-        $admissionNo   = $s['admission_no'] ?? 'ADM-2026-089';
+        $admissionNo   = ! empty($s['admission_no']) ? $s['admission_no'] : '';
         $motherTongue  = $s['mother_tongue'] ?? 'Kashmiri';
         $parentName    = $s['parent_name'] ?? 'Parent';
         $absentCount   = $s['absent_count'] ?? '16';

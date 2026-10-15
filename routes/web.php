@@ -35,6 +35,8 @@ Route::middleware('auth')->group(function () {
             return redirect()->route('hpc.teacher.dashboard');
         }
 
+        $school = $user ? $user->getEffectiveSchool() : null;
+
         $teachers = $school ? $school->teachers()->orderBy('id')->get()->map(function($t) {
             $u = $t->user ?: \App\Models\User::where('email', $t->email)->first();
             return [

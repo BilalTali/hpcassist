@@ -1000,8 +1000,12 @@
                                                 class="w-full text-xs font-semibold bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 cursor-pointer">
                                             <option value="all">All School Classes ({{ count($step3Students) }} Total Students)</option>
                                             @foreach($hpcGrades ?? [] as $g)
-                                                <option value="{{ $g->grade }}">
-                                                    {{ $g->grade }} ({{ $g->count }} {{ Str::plural('Student', $g->count) }})
+                                                @php
+                                                    $gGrade = (string) data_get($g, 'grade', '');
+                                                    $gCount = (int) data_get($g, 'count', 0);
+                                                @endphp
+                                                <option value="{{ $gGrade }}">
+                                                    {{ $gGrade }} ({{ $gCount }} {{ \Illuminate\Support\Str::plural('Student', $gCount) }})
                                                 </option>
                                             @endforeach
                                         </select>

@@ -2,14 +2,20 @@
     <x-slot name="header">
         <div class="flex items-center justify-between flex-wrap gap-4">
             <div class="flex items-center gap-3">
-                <a href="{{ route('dashboard') }}" class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition">
-                    ← Dashboard
-                </a>
-                <span class="text-slate-300 text-xs">/</span>
-                <a href="{{ route('hpc.dashboard') }}" class="text-xs font-semibold text-slate-500 hover:text-indigo-600 transition">
-                    Student Registration
-                </a>
-                <span class="text-slate-300 text-xs">/</span>
+                @if(Auth::user()?->isTeacher())
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        👩‍🏫 Class Teacher Portal
+                    </span>
+                    <span class="text-slate-300 text-xs">/</span>
+                    <span class="text-xs font-semibold text-slate-700">
+                        {{ $activeSchool['name'] ?? 'My School' }}
+                    </span>
+                @else
+                    <a href="{{ route('dashboard') }}?step=3" class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition">
+                        ← Back to School Admin (Step 3)
+                    </a>
+                    <span class="text-slate-300 text-xs">/</span>
+                @endif
                 <h2 class="font-extrabold text-xl text-slate-900 tracking-tight flex items-center gap-2">
                     <span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
                     Teacher HPC Assessment Suite
@@ -18,27 +24,39 @@
 
             <!-- Profile & Active Session Controls -->
             <div class="flex items-center gap-3 flex-wrap">
-                <!-- Teacher Profile Switcher -->
-                <div class="flex items-center gap-2 bg-white border border-slate-300/80 rounded-xl px-3 py-1.5 shadow-sm">
-                    <span class="text-xs font-bold text-slate-600 flex items-center gap-1">
-                        👩‍🏫 Teacher:
-                    </span>
-                    <select id="teacher-select" onchange="handleTeacherChange(this.value)"
-                            class="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer">
-                        @foreach($activeSchool['teachers'] ?? [] as $t)
-                            <option value="{{ $t['id'] }}" {{ $t['id'] === $activeTeacher['id'] ? 'selected' : '' }}>
-                                {{ $t['name'] }}
-                            </option>
-                        @endforeach
-                        <option value="__add_new_teacher__">➕ + Add New Teacher Profile...</option>
-                    </select>
-                    @if(($activeTeacher['id'] ?? '') !== 'teacher_default')
-                        <button onclick="deleteActiveTeacher('{{ $activeTeacher['id'] }}', '{{ addslashes($activeTeacher['name']) }}')"
-                                class="text-slate-400 hover:text-rose-600 p-0.5 text-xs transition" title="Delete this teacher profile">
-                            🗑️
-                        </button>
-                    @endif
-                </div>
+                @if(Auth::user()?->isTeacher())
+                    <!-- Dedicated Teacher Badge -->
+                    <div class="flex items-center gap-2 bg-white border border-indigo-200 rounded-xl px-3 py-1.5 shadow-sm">
+                        <span class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                            <span>👩‍🏫</span> {{ $activeTeacher['name'] ?? Auth::user()->name }}
+                        </span>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
+                            {{ $activeTeacher['classes'] ?? 'Assigned Class' }}
+                        </span>
+                    </div>
+                @else
+                    <!-- Teacher Profile Switcher (For School Admin preview) -->
+                    <div class="flex items-center gap-2 bg-white border border-slate-300/80 rounded-xl px-3 py-1.5 shadow-sm">
+                        <span class="text-xs font-bold text-slate-600 flex items-center gap-1">
+                            👩‍🏫 Teacher:
+                        </span>
+                        <select id="teacher-select" onchange="handleTeacherChange(this.value)"
+                                class="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                            @foreach($activeSchool['teachers'] ?? [] as $t)
+                                <option value="{{ $t['id'] }}" {{ $t['id'] === $activeTeacher['id'] ? 'selected' : '' }}>
+                                    {{ $t['name'] }}
+                                </option>
+                            @endforeach
+                            <option value="__add_new_teacher__">➕ + Add New Teacher Profile...</option>
+                        </select>
+                        @if(($activeTeacher['id'] ?? '') !== 'teacher_default')
+                            <button onclick="deleteActiveTeacher('{{ $activeTeacher['id'] }}', '{{ addslashes($activeTeacher['name']) }}')"
+                                    class="text-slate-400 hover:text-rose-600 p-0.5 text-xs transition" title="Delete this teacher profile">
+                                🗑️
+                            </button>
+                        @endif
+                    </div>
+                @endif
 
                 <!-- Session Status Badge -->
                 @if($hasSession)

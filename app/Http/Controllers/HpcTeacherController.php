@@ -202,6 +202,14 @@ class HpcTeacherController extends Controller
         $studentsFile = $schoolDir . '/teacher_students.json';
         $students     = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
 
+        // If no explicit grade was requested and logged-in user is a Teacher, default to their assigned class
+        if (empty($grade) && \Illuminate\Support\Facades\Auth::check() && \Illuminate\Support\Facades\Auth::user()->isTeacher()) {
+            $userTeacher = \Illuminate\Support\Facades\Auth::user()->getEffectiveTeacher();
+            if ($userTeacher && ! empty($userTeacher->classes) && strcasecmp(trim($userTeacher->classes), 'All Classes') !== 0) {
+                $grade = $userTeacher->classes;
+            }
+        }
+
         // 1. If students were loaded from teacher_students.json, FIRST enrich them with real DB values (admission_no, grade, section)
         if (! empty($students) && $school) {
             $dbStudents = $school->students()->get();
@@ -904,16 +912,49 @@ class HpcTeacherController extends Controller
 
     public function getActiveSchool(): array
     {
+        $dbSchool = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         $data = $this->getSchoolsData();
         $activeId = $data['active'] ?? 'default';
-        foreach ($data['schools'] as $school) {
+
+        if ($dbSchool) {
+            foreach ($data['schools'] ?? [] as $school) {
+                if (($school['udise'] ?? '') === $dbSchool->udise_code || ($school['id'] ?? '') === (string)$dbSchool->id) {
+                    return $school;
+                }
+            }
+            return [
+                'id'       => (string)$dbSchool->id,
+                'name'     => $dbSchool->name,
+                'udise'    => $dbSchool->udise_code,
+                'teachers' => $dbSchool->teachers()->get()->map(fn($t) => [
+                    'id'   => 'teacher_' . $t->id,
+                    'name' => $t->name,
+                    'dir'  => 'teacher-profiles/teacher_' . $t->id,
+                ])->all(),
+            ];
+        }
+
+        foreach ($data['schools'] ?? [] as $school) {
             if ($school['id'] === $activeId) return $school;
         }
-        return $data['schools'][0];
+        return $data['schools'][0] ?? ['id' => 'default', 'name' => 'School', 'teachers' => []];
     }
 
     public function getActiveTeacher(): array
     {
+        if (\Illuminate\Support\Facades\Auth::check() && \Illuminate\Support\Facades\Auth::user()->isTeacher()) {
+            $userTeacher = \Illuminate\Support\Facades\Auth::user()->getEffectiveTeacher();
+            if ($userTeacher) {
+                return [
+                    'id'      => 'teacher_' . $userTeacher->id,
+                    'name'    => $userTeacher->name,
+                    'dir'     => 'teacher-profiles/teacher_' . $userTeacher->id,
+                    'classes' => $userTeacher->classes,
+                    'email'   => $userTeacher->email,
+                ];
+            }
+        }
+
         $school = $this->getActiveSchool();
         $activeTeacherId = $school['active_teacher'] ?? 'teacher_default';
         foreach ($school['teachers'] ?? [] as $t) {

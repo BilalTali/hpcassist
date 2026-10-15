@@ -13,6 +13,9 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
+    public const ROLE_SCHOOL  = 'school';
+    public const ROLE_TEACHER = 'teacher';
+
     /**
      * The attributes that are mass assignable.
      *
@@ -22,6 +25,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'school_id',
+        'teacher_id',
     ];
 
     /**
@@ -47,6 +53,21 @@ class User extends Authenticatable
         ];
     }
 
+    public function isTeacher(): bool
+    {
+        return $this->role === self::ROLE_TEACHER;
+    }
+
+    public function isSchool(): bool
+    {
+        return empty($this->role) || $this->role === self::ROLE_SCHOOL;
+    }
+
+    public function teacher(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Teacher::class);
+    }
+
     public function school(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(School::class);
@@ -59,6 +80,26 @@ class User extends Authenticatable
 
     public function getEffectiveSchool(): ?School
     {
-        return $this->school;
+        if ($this->isTeacher()) {
+            return $this->teacher?->school 
+                ?: ($this->school_id ? School::find($this->school_id) : School::first());
+        }
+
+        return $this->school 
+            ?: ($this->school_id ? School::find($this->school_id) : School::first());
+    }
+
+    public function getEffectiveTeacher(): ?Teacher
+    {
+        if ($this->teacher) {
+            return $this->teacher;
+        }
+
+        if ($this->teacher_id) {
+            return Teacher::find($this->teacher_id);
+        }
+
+        $school = $this->getEffectiveSchool();
+        return $school?->teachers()->first();
     }
 }

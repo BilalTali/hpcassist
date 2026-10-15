@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\School;
 use App\Models\Teacher;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 
 class SchoolManageController extends Controller
 {
@@ -61,12 +63,131 @@ class SchoolManageController extends Controller
     public function getTeachers(): JsonResponse
     {
         $school = $this->getCurrentSchool();
-        $teachers = $school->teachers()->orderBy('id')->get();
-
         return response()->json([
             'ok'       => true,
             'school'   => $school,
-            'teachers' => $teachers,
+            'teachers' => $this->getSchoolTeachersList($school),
+        ]);
+    }
+
+    public function createTeacherLogin(Request $request): JsonResponse
+    {
+        $school = $this->getCurrentSchool();
+
+        $validated = $request->validate([
+            'name'         => 'required|string|max:255',
+            'email'        => 'required|email|max:255',
+            'password'     => 'required|string|min:6|max:100',
+            'classes'      => 'required|string|max:255',
+            'designation'  => 'nullable|string|max:100',
+            'mobile'       => 'nullable|string|max:20',
+            'pen_code'     => 'nullable|string|max:30',
+            'hpc_username' => 'nullable|string|max:100',
+        ]);
+
+        $email = strtolower(trim($validated['email']));
+
+        // Check if an existing school admin account uses this email
+        $existingUser = User::where('email', $email)->first();
+        if ($existingUser && ! $existingUser->isTeacher()) {
+            return response()->json([
+                'ok'    => false,
+                'error' => "An account with email '{$email}' already exists. Please choose a unique email for the teacher.",
+            ], 422);
+        }
+
+        // Find or create Teacher record
+        $teacher = $school->teachers()->where('email', $email)->first();
+        if (! $teacher) {
+            $teacher = $school->teachers()->create([
+                'name'         => trim($validated['name']),
+                'email'        => $email,
+                'designation'  => ($validated['designation'] ?? null) ?: 'Class Teacher',
+                'classes'      => trim($validated['classes']),
+                'mobile'       => $validated['mobile'] ?? null,
+                'pen_code'     => $validated['pen_code'] ?? null,
+                'hpc_username' => $validated['hpc_username'] ?? null,
+                'is_active'    => true,
+            ]);
+        } else {
+            $teacher->update([
+                'name'         => trim($validated['name']),
+                'classes'      => trim($validated['classes']),
+                'designation'  => ($validated['designation'] ?? null) ?: $teacher->designation,
+                'mobile'       => $validated['mobile'] ?? $teacher->mobile,
+            ]);
+        }
+
+        // Create or update User credentials
+        if (! $existingUser) {
+            $user = User::create([
+                'name'       => $teacher->name,
+                'email'      => $email,
+                'password'   => Hash::make($validated['password']),
+                'role'       => User::ROLE_TEACHER,
+                'school_id'  => $school->id,
+                'teacher_id' => $teacher->id,
+            ]);
+        } else {
+            $user = $existingUser;
+            $user->update([
+                'name'       => $teacher->name,
+                'password'   => Hash::make($validated['password']),
+                'role'       => User::ROLE_TEACHER,
+                'school_id'  => $school->id,
+                'teacher_id' => $teacher->id,
+            ]);
+        }
+
+        $teacher->update(['user_id' => $user->id]);
+        $this->syncTeacherToSchoolsJson($school, $teacher);
+
+        return response()->json([
+            'ok'          => true,
+            'message'     => "Teacher login credentials created for '{$teacher->name}'.",
+            'teacher'     => $teacher,
+            'login_email' => $email,
+            'login_url'   => route('login'),
+            'password'    => $validated['password'],
+            'teachers'    => $this->getSchoolTeachersList($school),
+        ]);
+    }
+
+    public function resetTeacherPassword(Request $request, int $id): JsonResponse
+    {
+        $school = $this->getCurrentSchool();
+        $teacher = $school->teachers()->findOrFail($id);
+
+        $validated = $request->validate([
+            'password' => 'required|string|min:6|max:100',
+        ]);
+
+        $user = $teacher->user ?: User::where('email', $teacher->email)->first();
+        if (! $user) {
+            $user = User::create([
+                'name'       => $teacher->name,
+                'email'      => $teacher->email,
+                'password'   => Hash::make($validated['password']),
+                'role'       => User::ROLE_TEACHER,
+                'school_id'  => $school->id,
+                'teacher_id' => $teacher->id,
+            ]);
+            $teacher->update(['user_id' => $user->id]);
+        } else {
+            $user->update([
+                'password'   => Hash::make($validated['password']),
+                'role'       => User::ROLE_TEACHER,
+                'school_id'  => $school->id,
+                'teacher_id' => $teacher->id,
+            ]);
+        }
+
+        return response()->json([
+            'ok'          => true,
+            'message'     => "Password reset successfully for '{$teacher->name}'.",
+            'login_email' => $user->email,
+            'password'    => $validated['password'],
+            'teachers'    => $this->getSchoolTeachersList($school),
         ]);
     }
 
@@ -102,7 +223,7 @@ class SchoolManageController extends Controller
             'ok'       => true,
             'message'  => "Teacher '{$teacher->name}' registered successfully.",
             'teacher'  => $teacher,
-            'teachers' => $school->teachers()->get(),
+            'teachers' => $this->getSchoolTeachersList($school),
         ]);
     }
 
@@ -127,7 +248,7 @@ class SchoolManageController extends Controller
             'ok'       => true,
             'message'  => "Teacher '{$teacher->name}' updated.",
             'teacher'  => $teacher,
-            'teachers' => $school->teachers()->get(),
+            'teachers' => $this->getSchoolTeachersList($school),
         ]);
     }
 
@@ -144,13 +265,44 @@ class SchoolManageController extends Controller
         }
 
         $teacherName = $teacher->name;
+
+        // If teacher had a user login account, delete it as well
+        if ($teacher->user) {
+            $teacher->user->delete();
+        } else {
+            $user = User::where('email', $teacher->email)->where('role', User::ROLE_TEACHER)->first();
+            if ($user) {
+                $user->delete();
+            }
+        }
+
         $teacher->delete();
 
         return response()->json([
             'ok'       => true,
             'message'  => "Teacher '{$teacherName}' removed.",
-            'teachers' => $school->teachers()->get(),
+            'teachers' => $this->getSchoolTeachersList($school),
         ]);
+    }
+
+    private function getSchoolTeachersList(School $school): array
+    {
+        return $school->teachers()->orderBy('id')->get()->map(function(Teacher $t) {
+            $user = $t->user ?: User::where('email', $t->email)->first();
+            return [
+                'id'           => $t->id,
+                'name'         => $t->name,
+                'designation'  => $t->designation,
+                'email'        => $t->email,
+                'classes'      => $t->classes,
+                'mobile'       => $t->mobile,
+                'pen_code'     => $t->pen_code,
+                'hpc_username' => $t->hpc_username,
+                'is_active'    => (bool) $t->is_active,
+                'has_login'    => $user !== null && $user->isTeacher(),
+                'user_id'      => $user?->id,
+            ];
+        })->all();
     }
 
     private function syncTeacherToSchoolsJson(School $school, Teacher $teacher): void

@@ -77,9 +77,9 @@
                 </div>
             @endif
 
-            <!-- ── STEPPER PROGRESS BAR (MATCHING USER WORKFLOW PATTERN) ── -->
+            <!-- ── STEPPER PROGRESS BAR (SCHOOL ADMIN 3-STEP WORKFLOW) ── -->
             <div class="bg-white rounded-2xl shadow-xs border border-slate-200 p-3 sm:p-4">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
                     
                     <!-- STEP 1 TAB -->
                     <button @click="setStep(1)"
@@ -127,7 +127,7 @@
                         </div>
                     </button>
 
-                    <!-- STEP 3 TAB: HPC SCHOOL CONNECT & SUBMISSION -->
+                    <!-- STEP 3 TAB: HPC SCHOOL CONNECT & TEACHER HANDOVER -->
                     <button @click="setStep(3)"
                             type="button"
                             class="flex items-center gap-3 p-3 rounded-xl transition text-left relative overflow-hidden"
@@ -137,35 +137,13 @@
                             3
                         </div>
                         <div class="min-w-0">
-                            <div class="text-[10px] font-bold uppercase tracking-wider" :class="currentStep === 3 ? 'text-indigo-200' : 'text-slate-400'">Step 3</div>
-                            <div class="text-xs font-bold truncate" :class="currentStep === 3 ? 'text-white' : 'text-slate-900'">HPC School Connect</div>
+                            <div class="text-[10px] font-bold uppercase tracking-wider" :class="currentStep === 3 ? 'text-indigo-200' : 'text-slate-400'">Step 3 • Final School Step</div>
+                            <div class="text-xs font-bold truncate" :class="currentStep === 3 ? 'text-white' : 'text-slate-900'">HPC Submission &amp; Teachers</div>
                             <div class="text-[10px] font-medium truncate" :class="currentStep === 3 ? 'text-indigo-100' : 'text-slate-500'">
                                 @if(!empty($hasSchoolProfile))
-                                    <span class="text-emerald-400 font-bold">✓ Session Recorded</span>
+                                    <span class="text-emerald-400 font-bold">✓ Submitted • Setup Teachers</span>
                                 @else
-                                    <span>Record Session &amp; Submit</span>
-                                @endif
-                            </div>
-                        </div>
-                    </button>
-
-                    <!-- STEP 4 TAB: HPC TEACHER REGISTRATION & RECORD SESSION -->
-                    <button @click="setStep(4)"
-                            type="button"
-                            class="flex items-center gap-3 p-3 rounded-xl transition text-left relative overflow-hidden"
-                            :class="currentStep === 4 ? 'bg-indigo-50 border-2 border-indigo-600 shadow-xs' : 'bg-slate-50 hover:bg-slate-100 border border-slate-200/80'">
-                        <div class="w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm shrink-0"
-                             :class="currentStep === 4 ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'">
-                            4
-                        </div>
-                        <div class="min-w-0">
-                            <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Step 4</div>
-                            <div class="text-xs font-bold text-slate-900 truncate">HPC Teacher Connect</div>
-                            <div class="text-[10px] font-medium text-slate-500 truncate">
-                                @if(!empty($hasTeacherProfile))
-                                    <span class="text-emerald-600 font-bold">✓ Session Recorded</span>
-                                @else
-                                    <span>Record Session</span>
+                                    <span>Submit &amp; Setup Teachers</span>
                                 @endif
                             </div>
                         </div>
@@ -763,15 +741,15 @@
                     </div>
 
                     <!-- Step 3 Bottom Navigation -->
-                    <div class="flex items-center justify-between pt-4 border-t border-slate-100">
+                    <div class="flex items-center justify-between pt-4 border-t border-slate-100 flex-wrap gap-2">
                         <button @click="setStep(2)"
                                 class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition active:scale-95">
                             ← Back to Step 2: Student Data &amp; Roster
                         </button>
-                        <button @click="setStep(4)"
-                                class="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
-                            Proceed to Step 4: HPC Teacher Connect ➔
-                        </button>
+                        <a href="#teacher-management-card"
+                           class="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
+                            👩‍🏫 Setup Class Teacher Logins Below ↓
+                        </a>
                     </div>
                 </div>
 
@@ -875,7 +853,185 @@
                                 You can also click <strong>Open Portal &amp; Fetch List</strong> above to import students already on the portal.
                             </div>
                         </div>
-                    @endif
+                <!-- 3E. Teacher Credentials & Assessment Handover (Final School Admin Step) ── -->
+                <div id="teacher-management-card" class="bg-white rounded-2xl shadow-xs border border-indigo-200 overflow-hidden space-y-0">
+                    <!-- Header Banner -->
+                    <div class="p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded-full">
+                                    ✓ School Admin Phase Final Step
+                                </span>
+                                <span class="text-indigo-300 text-xs">•</span>
+                                <span class="text-xs text-indigo-200 font-medium">Role Separation &amp; Teacher Access</span>
+                            </div>
+                            <h3 class="text-lg font-black text-white flex items-center gap-2">
+                                <span>👩‍🏫 Class Teacher Credentials &amp; Handover</span>
+                            </h3>
+                            <p class="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                                School student registrations are complete. Now create separate login credentials for each class teacher. Teachers will sign in independently at <code class="text-indigo-300 bg-white/10 px-1.5 py-0.5 rounded font-mono">{{ url('/login') }}</code> to download their class template, record student marks &amp; attendance, and complete evaluations.
+                            </p>
+                        </div>
+                        <div class="shrink-0 flex items-center gap-2.5 flex-wrap">
+                            <a href="{{ route('hpc.teacher.dashboard') }}" target="_blank" rel="noopener noreferrer"
+                               class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition border border-white/20 shadow-xs"
+                               title="Preview the exact dashboard screen teachers will see after logging in">
+                                👀 Preview Teacher Suite ↗
+                            </a>
+                            <button type="button" onclick="toggleTeacherForm()"
+                                    class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-xs active:scale-95">
+                                ➕ Create Teacher Login
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Create Teacher Form (Collapsible / Toggleable) -->
+                    <div id="teacher-create-form-container" class="hidden p-6 bg-indigo-50/60 border-b border-indigo-100">
+                        <form id="form-create-teacher-login" onsubmit="submitCreateTeacherLogin(event)" class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
+                                    <span>🔐 Create New Teacher Account</span>
+                                </h4>
+                                <button type="button" onclick="toggleTeacherForm()" class="text-slate-400 hover:text-slate-600 text-xs font-bold">
+                                    ✕ Close
+                                </button>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Teacher Full Name <span class="text-rose-500">*</span></label>
+                                    <input type="text" name="name" id="teacher-form-name" required placeholder="e.g. Bilal Ahmad"
+                                           class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600">
+                                </div>
+
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Assigned Class / Grade <span class="text-rose-500">*</span></label>
+                                    <select name="classes" id="teacher-form-classes" required
+                                            class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 cursor-pointer">
+                                        <option value="All Classes">All Classes</option>
+                                        @foreach($hpcGrades ?? [] as $g)
+                                            @php $grName = (string) data_get($g, 'grade', ''); @endphp
+                                            @if($grName)
+                                                <option value="{{ $grName }}">{{ $grName }}</option>
+                                            @endif
+                                        @endforeach
+                                        <option value="Grade 1">Grade 1</option>
+                                        <option value="Grade 2">Grade 2</option>
+                                        <option value="Grade 3">Grade 3</option>
+                                        <option value="Grade 4">Grade 4</option>
+                                        <option value="Grade 5">Grade 5</option>
+                                        <option value="Grade 6">Grade 6</option>
+                                        <option value="Grade 7">Grade 7</option>
+                                        <option value="Grade 8">Grade 8</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Login Email / Username <span class="text-rose-500">*</span></label>
+                                    <input type="email" name="email" id="teacher-form-email" required placeholder="teacher@school.gov.in"
+                                           class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600">
+                                </div>
+
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-700 mb-1">
+                                        Password <span class="text-rose-500">*</span>
+                                    </label>
+                                    <div class="flex items-center gap-1.5">
+                                        <input type="text" name="password" id="teacher-form-pass" required
+                                               class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600">
+                                        <button type="button" onclick="generateRandomTeacherPass()" title="Generate random password"
+                                                class="px-2.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold shrink-0 transition">
+                                            🎲
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Designation</label>
+                                    <input type="text" name="designation" id="teacher-form-desig" placeholder="e.g. Primary Teacher / Class Incharge" value="Class Teacher"
+                                           class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600">
+                                </div>
+
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Mobile (Optional)</label>
+                                    <input type="text" name="mobile" id="teacher-form-mobile" placeholder="10-digit mobile number"
+                                           class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600">
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-end gap-2 pt-2">
+                                <button type="button" onclick="toggleTeacherForm()" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition">
+                                    Cancel
+                                </button>
+                                <button type="submit" id="btn-save-teacher-login"
+                                        class="inline-flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-xs active:scale-95">
+                                    <span>🔐 Create &amp; Save Teacher Login</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Credential Card Feedback Alert (Shown after creating) -->
+                    <div id="teacher-created-alert" class="hidden p-4 bg-emerald-50 border-b border-emerald-200">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="text-2xl">🎉</span>
+                                <div>
+                                    <h4 class="text-xs font-bold text-emerald-950" id="teacher-created-title">Teacher Login Created!</h4>
+                                    <p class="text-[11px] text-emerald-800" id="teacher-created-desc">
+                                        Login credentials generated. You can now share them with the teacher.
+                                    </p>
+                                </div>
+                            </div>
+                            <button type="button" id="btn-copy-new-teacher-creds" onclick="copyLastCreatedCredentials()"
+                                    class="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-xs shrink-0">
+                                📋 Copy WhatsApp Message
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Teacher Accounts Table -->
+                    <div class="p-6 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                                <span>📋 Registered Teacher Logins</span>
+                                <span id="teacher-count-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                    {{ count($teachers ?? []) }} Teachers
+                                </span>
+                            </h4>
+                            <div class="text-[11px] text-slate-500">
+                                Teachers log in at <a href="{{ route('login') }}" class="text-indigo-600 font-semibold underline">{{ url('/login') }}</a>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto rounded-xl border border-slate-200">
+                            <table class="w-full text-xs">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-left">
+                                        <th class="px-4 py-2.5 font-bold text-slate-600">Teacher Name</th>
+                                        <th class="px-4 py-2.5 font-bold text-slate-600">Login Username / Email</th>
+                                        <th class="px-4 py-2.5 font-bold text-slate-600">Assigned Class</th>
+                                        <th class="px-4 py-2.5 font-bold text-slate-600">Designation</th>
+                                        <th class="px-4 py-2.5 font-bold text-slate-600">Login Status</th>
+                                        <th class="px-4 py-2.5 font-bold text-slate-600 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="teacher-table-tbody">
+                                    <!-- Rendered dynamically by renderTeachersTable() -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- School Workflow Complete Note -->
+                        <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-start gap-3">
+                            <span class="text-xl">✅</span>
+                            <div class="text-[11px] text-slate-600 leading-relaxed">
+                                <strong class="text-slate-800">School Admin Process Ends Here:</strong> 
+                                The school admin workflow is officially concluded. You have successfully mapped all student enrollment records and uploaded them to the PARAKH HPC portal. 
+                                Give each class teacher their login username and password. Teachers will log into <strong class="text-slate-800">{{ url('/login') }}</strong> with their dedicated teacher account to perform assessments and evaluations for their assigned grades.
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
             </div>
@@ -2411,9 +2567,262 @@
             try {
                 await navigator.clipboard.writeText(script);
                 alert('📋 1-Click Teacher Roster Sync Script Copied!\\n\\n1. Switch to your PARAKH Portal teacher dashboard tab\\n2. Press F12 (or Cmd+Option+J) -> Console\\n3. Paste (Cmd+V) and press Enter\\n\\nIt will grab the exact student(s) displayed on your teacher screen and sync them to HPC Assist!');
-            } catch(e) {
-                alert('Could not copy script: ' + e.message);
+        // ── Teacher Credentials Management Logic (Step 3 Handover) ──
+        window.schoolTeachersList = @json($teachers ?? []);
+        window.lastCreatedTeacherCreds = null;
+
+        function renderTeachersTable() {
+            const tbody = document.getElementById('teacher-table-tbody');
+            const countBadge = document.getElementById('teacher-count-badge');
+            if (!tbody) return;
+
+            const teachers = window.schoolTeachersList || [];
+            if (countBadge) {
+                countBadge.textContent = teachers.length + (teachers.length === 1 ? ' Teacher' : ' Teachers');
+            }
+
+            if (teachers.length === 0) {
+                tbody.innerHTML = `<tr>
+                    <td colspan="6" class="px-4 py-8 text-center text-slate-400">
+                        <div class="text-3xl mb-1">👩‍🏫</div>
+                        <div class="font-bold text-slate-600">No Teacher Logins Created Yet</div>
+                        <div class="text-[11px] mt-0.5">Click "➕ Create Teacher Login" above to set up class teachers with their own login access.</div>
+                    </td>
+                </tr>`;
+                return;
+            }
+
+            tbody.innerHTML = teachers.map((t, idx) => {
+                const hasLogin = !!t.has_login;
+                const statusBadge = hasLogin 
+                    ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Active Login
+                       </span>`
+                    : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> No Password Set
+                       </span>`;
+
+                const safeName = (t.name || 'Teacher').replace(/'/g, "\\'");
+                const safeEmail = (t.email || '').replace(/'/g, "\\'");
+                const safeClasses = (t.classes || 'All Classes').replace(/'/g, "\\'");
+
+                return `<tr class="border-b border-slate-100 hover:bg-slate-50/80 transition">
+                    <td class="px-4 py-3 font-bold text-slate-900">
+                        <div>${t.name || 'Unnamed Teacher'}</div>
+                        <div class="text-[10px] font-medium text-slate-400">${t.designation || 'Class Teacher'}</div>
+                    </td>
+                    <td class="px-4 py-3 font-mono text-slate-700 text-xs font-semibold">
+                        ${t.email || '<span class="text-slate-400 italic">No email</span>'}
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            ${t.classes || 'All Classes'}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-slate-500 text-[11px]">
+                        ${t.designation || 'Class Teacher'}
+                    </td>
+                    <td class="px-4 py-3">
+                        ${statusBadge}
+                    </td>
+                    <td class="px-4 py-3 text-right">
+                        <div class="inline-flex items-center gap-1.5">
+                            <button type="button" onclick="copyTeacherCredentials(${idx})"
+                                    class="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-[11px] transition shadow-2xs"
+                                    title="Copy login link and details to send to the teacher">
+                                📋 Copy Login
+                            </button>
+                            <button type="button" onclick="promptResetTeacherPassword(${t.id}, '${safeName}')"
+                                    class="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition"
+                                    title="Set a new password for this teacher">
+                                🔑 Reset Pass
+                            </button>
+                            <button type="button" onclick="deleteTeacherAccount(${t.id}, '${safeName}')"
+                                    class="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition"
+                                    title="Remove this teacher and their login account">
+                                🗑️
+                            </button>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function toggleTeacherForm() {
+            const container = document.getElementById('teacher-create-form-container');
+            if (!container) return;
+            const isHidden = container.classList.contains('hidden');
+            if (isHidden) {
+                container.classList.remove('hidden');
+                generateRandomTeacherPass();
+                document.getElementById('teacher-form-name')?.focus();
+            } else {
+                container.classList.add('hidden');
             }
         }
+
+        function generateRandomTeacherPass() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+            let pass = 'Hpc@';
+            for (let i = 0; i < 4; i++) {
+                pass += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            const passInput = document.getElementById('teacher-form-pass');
+            if (passInput) passInput.value = pass;
+        }
+
+        async function submitCreateTeacherLogin(event) {
+            event.preventDefault();
+            const btn = document.getElementById('btn-save-teacher-login');
+            const form = event.target;
+            const fd = new FormData(form);
+
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Creating Account...';
+            }
+
+            try {
+                const res = await fetch("{{ route('school.teachers.create_login') }}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': CSRF,
+                        'Accept': 'application/json'
+                    },
+                    body: fd
+                });
+                const data = await res.json();
+
+                if (data.ok) {
+                    window.schoolTeachersList = data.teachers || [];
+                    renderTeachersTable();
+
+                    window.lastCreatedTeacherCreds = {
+                        name: data.teacher.name,
+                        email: data.login_email,
+                        password: data.password,
+                        classes: data.teacher.classes,
+                        login_url: data.login_url
+                    };
+
+                    // Show success alert
+                    const alertBox = document.getElementById('teacher-created-alert');
+                    const alertTitle = document.getElementById('teacher-created-title');
+                    const alertDesc = document.getElementById('teacher-created-desc');
+                    if (alertBox) alertBox.classList.remove('hidden');
+                    if (alertTitle) alertTitle.textContent = `🎉 Login Created for ${data.teacher.name}!`;
+                    if (alertDesc) {
+                        alertDesc.innerHTML = `Email: <strong class="font-mono">${data.login_email}</strong> • Password: <strong class="font-mono">${data.password}</strong> • Class: <strong>${data.teacher.classes}</strong>`;
+                    }
+
+                    // Reset and close form
+                    form.reset();
+                    toggleTeacherForm();
+                } else {
+                    alert('❌ Error: ' + (data.error || data.message || 'Could not create teacher login.'));
+                }
+            } catch(e) {
+                alert('Request failed: ' + e.message);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<span>🔐 Create &amp; Save Teacher Login</span>';
+                }
+            }
+        }
+
+        async function copyLastCreatedCredentials() {
+            if (!window.lastCreatedTeacherCreds) return;
+            const c = window.lastCreatedTeacherCreds;
+            const schoolName = "{{ addslashes($school?->name ?? 'Our School') }}";
+            const text = `👩‍🏫 *HPC Assist Teacher Login Details*\n\nSchool: ${schoolName}\nTeacher: ${c.name}\nAssigned Class: ${c.classes}\n\n*Login URL:* ${c.login_url}\n*Username / Email:* ${c.email}\n*Password:* ${c.password}\n\nPlease sign in to download your class assessment template, record marks & attendance, and complete evaluations.`;
+
+            try {
+                await navigator.clipboard.writeText(text);
+                const btn = document.getElementById('btn-copy-new-teacher-creds');
+                if (btn) btn.textContent = '✓ WhatsApp Message Copied!';
+                setTimeout(() => {
+                    if (btn) btn.textContent = '📋 Copy WhatsApp Message';
+                }, 3000);
+            } catch(e) {
+                alert('Could not copy to clipboard: ' + e.message);
+            }
+        }
+
+        async function copyTeacherCredentials(idx) {
+            const teachers = window.schoolTeachersList || [];
+            const t = teachers[idx];
+            if (!t) return;
+
+            const schoolName = "{{ addslashes($school?->name ?? 'Our School') }}";
+            const loginUrl = "{{ route('login') }}";
+            const text = `👩‍🏫 *HPC Assist Teacher Portal Access*\n\nSchool: ${schoolName}\nTeacher: ${t.name}\nAssigned Class: ${t.classes || 'All Classes'}\n\n*Portal Login URL:* ${loginUrl}\n*Username / Email:* ${t.email}\n\nPlease sign in with your password to download your class assessment template and submit evaluations.`;
+
+            try {
+                await navigator.clipboard.writeText(text);
+                alert(`📋 Login details for ${t.name} copied to clipboard! You can paste and send this via WhatsApp or SMS.`);
+            } catch(e) {
+                alert('Could not copy: ' + e.message);
+            }
+        }
+
+        async function promptResetTeacherPassword(id, name) {
+            const newPass = prompt(`Enter new password for ${name}:`, 'Hpc@' + Math.floor(1000 + Math.random() * 9000));
+            if (!newPass || newPass.trim().length < 6) {
+                if (newPass !== null) alert('Password must be at least 6 characters.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/school/teachers/${id}/reset-pass`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ password: newPass.trim() })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    window.schoolTeachersList = data.teachers || window.schoolTeachersList;
+                    renderTeachersTable();
+                    alert(`✅ Password updated successfully for ${name}!\n\nNew Password: ${data.password}`);
+                } else {
+                    alert('❌ Error: ' + (data.error || data.message || 'Could not reset password'));
+                }
+            } catch(e) {
+                alert('Request failed: ' + e.message);
+            }
+        }
+
+        async function deleteTeacherAccount(id, name) {
+            if (!confirm(`Are you sure you want to remove teacher '${name}' and delete their login access?`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/school/teachers/${id}/delete`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': CSRF,
+                        'Accept': 'application/json'
+                    }
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    window.schoolTeachersList = data.teachers || [];
+                    renderTeachersTable();
+                } else {
+                    alert('❌ Error: ' + (data.error || 'Could not remove teacher'));
+                }
+            } catch(e) {
+                alert('Request failed: ' + e.message);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTeachersTable();
+        });
     </script>
 </x-app-layout>

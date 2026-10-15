@@ -31,8 +31,23 @@ Route::middleware('auth')->group(function () {
     // ── School Central Dashboard ──────────────────────────────────────────────
     Route::get('/dashboard', function () {
         $user = \Illuminate\Support\Facades\Auth::user();
-        $school = $user ? $user->getEffectiveSchool() : null;
-        $teachers = $school ? $school->teachers()->orderBy('id')->get() : collect();
+        if ($user && $user->isTeacher()) {
+            return redirect()->route('hpc.teacher.dashboard');
+        }
+
+        $teachers = $school ? $school->teachers()->orderBy('id')->get()->map(function($t) {
+            $u = $t->user ?: \App\Models\User::where('email', $t->email)->first();
+            return [
+                'id'          => $t->id,
+                'name'        => $t->name,
+                'designation' => $t->designation,
+                'email'       => $t->email,
+                'classes'     => $t->classes,
+                'mobile'      => $t->mobile,
+                'has_login'   => $u !== null && $u->isTeacher(),
+                'user_id'     => $u?->id,
+            ];
+        }) : collect();
 
         $hpcController = app(HpcController::class);
         $preview       = [];  // Step 2: pending students (UDISE/Excel, not yet submitted)
@@ -104,9 +119,11 @@ Route::middleware('auth')->group(function () {
     // ── School & Multi-Teacher Management ─────────────────────────────────────
     Route::post('/school/update',               [SchoolManageController::class, 'updateSchool'])->name('school.update');
     Route::get('/school/teachers',              [SchoolManageController::class, 'getTeachers'])->name('school.teachers');
-    Route::post('/school/teachers',             [SchoolManageController::class, 'storeTeacher'])->name('school.teachers.store');
-    Route::post('/school/teachers/{id}/update', [SchoolManageController::class, 'updateTeacher'])->name('school.teachers.update');
-    Route::post('/school/teachers/{id}/delete', [SchoolManageController::class, 'deleteTeacher'])->name('school.teachers.delete');
+    Route::post('/school/teachers',                 [SchoolManageController::class, 'storeTeacher'])->name('school.teachers.store');
+    Route::post('/school/teachers/create-login',    [SchoolManageController::class, 'createTeacherLogin'])->name('school.teachers.create_login');
+    Route::post('/school/teachers/{id}/update',     [SchoolManageController::class, 'updateTeacher'])->name('school.teachers.update');
+    Route::post('/school/teachers/{id}/reset-pass', [SchoolManageController::class, 'resetTeacherPassword'])->name('school.teachers.reset_pass');
+    Route::post('/school/teachers/{id}/delete',     [SchoolManageController::class, 'deleteTeacher'])->name('school.teachers.delete');
     Route::post('/school/udise/skip',            [SchoolManageController::class, 'skipUdise'])->name('school.udise.skip');
     Route::post('/school/udise/reset',           [SchoolManageController::class, 'resetUdise'])->name('school.udise.reset');
     Route::post('/school/udise/sync-existing',   [SchoolManageController::class, 'syncExistingUdise'])->name('school.udise.sync_existing');

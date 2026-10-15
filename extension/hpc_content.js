@@ -147,10 +147,16 @@
     // Scoped field finders based on PARAKH DOM (.custom-input-label wrappers)
     function getFieldByLabel(labelKeyword) {
         const labels = Array.from(document.querySelectorAll('.custom-input-label label, label'));
-        const lbl = labels.find(l => l.textContent.toLowerCase().includes(labelKeyword.toLowerCase()));
+        const lbl = labels.find(l => (l.innerText || l.textContent || '').toLowerCase().includes(labelKeyword.toLowerCase()));
         if (!lbl) return null;
-        const wrapper = lbl.closest('.custom-input-label') || lbl.parentElement;
-        return wrapper ? wrapper.querySelector('input:not([type="hidden"]):not([maxlength="1"])') : null;
+        if (lbl.htmlFor) {
+            const el = document.getElementById(lbl.htmlFor);
+            if (el) return el;
+        }
+        const wrapper = lbl.closest('.custom-input-label, .form-group, .input-container, .col, [class*="col-"]') || lbl.parentElement;
+        if (!wrapper) return null;
+        const inps = Array.from(wrapper.querySelectorAll('input:not([type="hidden"]):not([maxlength="1"])'));
+        return inps.length > 0 ? inps[0] : null;
     }
 
     function getDropdownByLabel(labelKeyword) {
@@ -171,14 +177,38 @@
         // 1: Last Name
         // 2: Email *
         // 3: School Admission Number
-        const writeInputs = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i]'));
+        const writeInputs = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="लिखें" i]'));
         const allTextInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([maxlength="1"])'))
             .filter(i => !i.disabled && (i.type === 'text' || i.type === 'email' || !i.type));
 
         const firstName = getFieldByLabel('first') || writeInputs[0] || allTextInputs[0] || null;
-        const lastName  = getFieldByLabel('last') || writeInputs[1] || allTextInputs[1] || null;
-        const email     = getFieldByLabel('email') || writeInputs[2] || (document.querySelector('input[type="email"]') || allTextInputs[2] || null);
-        const admission = getFieldByLabel('admission') || writeInputs[3] || allTextInputs[3] || null;
+
+        let lastName = getFieldByLabel('last');
+        if (!lastName || lastName === firstName) {
+            lastName = writeInputs.find(i => i !== firstName) || allTextInputs.find(i => i !== firstName) || null;
+        }
+
+        let email = document.querySelector('input[type="email"]') || getFieldByLabel('email');
+        if (!email || email === firstName || email === lastName) {
+            email = writeInputs.find(i => i !== firstName && i !== lastName) || 
+                    allTextInputs.find(i => i !== firstName && i !== lastName) || null;
+        }
+
+        // Admission Number must NEVER be firstName, lastName, or email
+        let admission = null;
+        const admByLabel = getFieldByLabel('admission') || getFieldByLabel('admn');
+        if (admByLabel && admByLabel !== firstName && admByLabel !== lastName && admByLabel !== email) {
+            admission = admByLabel;
+        }
+
+        if (!admission) {
+            if (writeInputs.length >= 4 && writeInputs[3] !== firstName && writeInputs[3] !== lastName && writeInputs[3] !== email) {
+                admission = writeInputs[3];
+            } else {
+                admission = writeInputs.find(i => i !== firstName && i !== lastName && i !== email) ||
+                            allTextInputs.find(i => i !== firstName && i !== lastName && i !== email && i.getAttribute('placeholder') !== 'Select') || null;
+            }
+        }
 
         // Date of Birth input (React Datepicker wrapped in .custom-input-label)
         const dobLabel = Array.from(document.querySelectorAll('.custom-input-label label, label')).find(l => {
@@ -189,7 +219,7 @@
                   document.querySelector('.react-datepicker__input-container input') ||
                   document.querySelector('input[placeholder*="Select" i], input[type="date"]');
 
-        if (!dob || dob === firstName || dob === lastName) {
+        if (!dob || dob === firstName || dob === lastName || dob === admission) {
             const dobCandidates = Array.from(document.querySelectorAll('input:not([type="hidden"])'))
                 .filter(i => i !== firstName && i !== lastName && i !== email && i !== admission && i.getAttribute('maxlength') !== '1');
             if (dobCandidates.length > 0) dob = dobCandidates[0];
@@ -841,43 +871,70 @@
         }
     }
 
-    function findAdmissionInput() {
-        // Priority 1: Find by label text "admission" / "admn" / Hindi equivalents
-        // This is the most reliable since it directly matches the visible heading.
-        const allLabels = Array.from(document.querySelectorAll('label, .custom-input-label, span, p, div'));
-        for (const el of allLabels) {
-            const txt = el.textContent.toLowerCase().trim();
-            if (txt.includes('admission') || txt.includes('admn') || txt.includes('\u092a\u094d\u0930\u0935\u0947\u0936') || txt.includes('\u0926\u093e\u0916\u093f\u0932\u093e')) {
-                const container = el.closest('.custom-input-label, .form-group, .input-wrapper, .col, [class*="col-"]') || el.parentElement;
-                if (container) {
-                    const inp = container.querySelector('input:not([type="hidden"]):not([maxlength="1"])');
-                    if (inp && !inp.disabled) return inp;
-                }
+    function findAdmissionInput(knownFields = {}) {
+        const exclude = [knownFields.firstName, knownFields.lastName, knownFields.email, knownFields.dob].filter(Boolean);
+
+        // 1. Direct match from known fields
+        if (knownFields.admissionNo && !exclude.includes(knownFields.admissionNo) && document.body.contains(knownFields.admissionNo)) {
+            return knownFields.admissionNo;
+        }
+
+        // 2. Strict label matching (only label elements, never generic div or container)
+        const labels = Array.from(document.querySelectorAll('label, .custom-input-label label, .custom-label'));
+        const admLabel = labels.find(l => {
+            const t = (l.innerText || l.textContent || '').toLowerCase().trim();
+            return (t.includes('admission') || t.includes('admn') || t.includes('प्रवेश') || t.includes('दाखिला')) && !t.includes('date');
+        });
+
+        if (admLabel) {
+            if (admLabel.htmlFor) {
+                const el = document.getElementById(admLabel.htmlFor);
+                if (el && !exclude.includes(el)) return el;
+            }
+            const wrapper = admLabel.closest('.custom-input-label, .form-group, .col, [class*="col-"]') || admLabel.parentElement;
+            if (wrapper) {
+                const inps = Array.from(wrapper.querySelectorAll('input:not([type="hidden"]):not([maxlength="1"])')).filter(i => !exclude.includes(i) && !i.disabled);
+                if (inps.length > 0) return inps[0];
+            }
+            if (admLabel.nextElementSibling && admLabel.nextElementSibling.matches('input') && !exclude.includes(admLabel.nextElementSibling)) {
+                return admLabel.nextElementSibling;
             }
         }
 
-        // Priority 2: 4th "Write here" placeholder input (layout order on PARAKH Add Student page:
-        //   0=First Name, 1=Last Name, 2=Email, 3=School Admission Number)
+        // 3. Attribute matching (name, id, aria-label)
+        const byAttr = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([maxlength="1"])')).find(i => {
+            if (exclude.includes(i) || i.disabled) return false;
+            const str = `${i.name || ''} ${i.id || ''} ${i.getAttribute('placeholder') || ''} ${i.getAttribute('aria-label') || ''}`.toLowerCase();
+            return str.includes('admission') || str.includes('admn');
+        });
+        if (byAttr) return byAttr;
+
+        // 4. Positional fallback: 4th "Write here" placeholder input (First=0, Last=1, Email=2, Admission=3)
         const writeHereInputs = Array.from(document.querySelectorAll(
-            'input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="\u0932\u093f\u0916\u0947\u0902" i], input[placeholder*="\u092f\u0939\u093e\u0901" i]'
-        )).filter(i => !i.disabled && i.type !== 'hidden');
-        if (writeHereInputs.length >= 4) return writeHereInputs[3];
+            'input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="लिखें" i]'
+        )).filter(i => !i.disabled && i.type !== 'hidden' && !exclude.includes(i));
 
-        // Priority 3: input with maxlength="12" (some portal versions constrain admission no)
-        const byMaxLen = Array.from(document.querySelectorAll('input[maxlength="12"]:not([type="hidden"])'))
-            .find(i => !i.disabled && (i.type === 'text' || !i.type));
-        if (byMaxLen) return byMaxLen;
+        if (writeHereInputs.length >= 4 && !exclude.includes(writeHereInputs[3])) {
+            return writeHereInputs[3];
+        }
 
-        // Priority 4: 4th text input overall (excluding APAAR digit boxes)
+        if (writeHereInputs.length > 0) {
+            return writeHereInputs[writeHereInputs.length - 1];
+        }
+
+        // 5. Remaining text inputs
         const textInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([maxlength="1"])'))
-            .filter(i => !i.disabled && (i.type === 'text' || !i.type));
-        if (textInputs.length >= 4) return textInputs[3];
+            .filter(i => !i.disabled && (i.type === 'text' || !i.type) && !exclude.includes(i));
+
+        if (textInputs.length > 0) {
+            return textInputs[textInputs.length - 1];
+        }
 
         return null;
     }
 
-    async function fillAdmissionNumber(student) {
-        const admInput = findAdmissionInput();
+    async function fillAdmissionNumber(student, knownFields = {}) {
+        const admInput = findAdmissionInput(knownFields);
         const admVal = String(
             student.admission_no ?? 
             student.admissionNo ?? 
@@ -890,57 +947,23 @@
             return;
         }
 
+        // ABSOLUTE INTEGRITY GUARD: Never write admission number into First Name or Email!
+        if (knownFields.firstName && admInput === knownFields.firstName) {
+            console.error('[HPC Assist] INTEGRITY GUARD ABORT: Refusing to write Admission Number into First Name input!');
+            return;
+        }
+        if (knownFields.email && admInput === knownFields.email) {
+            console.error('[HPC Assist] INTEGRITY GUARD ABORT: Refusing to write Admission Number into Email input!');
+            return;
+        }
+
         if (!admVal) {
             console.log('[HPC Assist] Student has no admission number/PEN. Leaving blank.');
             return;
         }
 
         logStatus(`Setting Admission No: ${admVal}...`);
-        admInput.focus();
-
-        // 1. Set DOM value via HTMLInputElement prototype setter
-        const proto = Object.getPrototypeOf(admInput);
-        const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set ||
-                             Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-        if (nativeSetter) {
-            nativeSetter.call(admInput, admVal);
-        } else {
-            admInput.value = admVal;
-        }
-
-        // 2. Clear React internal _valueTracker so React recognizes value change
-        if (admInput._valueTracker) {
-            admInput._valueTracker.setValue('');
-        }
-
-        // 3. Dispatch standard input & change events
-        admInput.dispatchEvent(new Event('input', { bubbles: true }));
-        admInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-        // 4. Directly invoke React's internal onChange handler if present on fiber/props
-        const propsKey = Object.keys(admInput).find(k => k.startsWith('__reactProps') || k.startsWith('__reactEventHandlers'));
-        if (propsKey && typeof admInput[propsKey]?.onChange === 'function') {
-            try {
-                admInput[propsKey].onChange({
-                    target: { value: admVal },
-                    currentTarget: { value: admVal },
-                    preventDefault: () => {},
-                    stopPropagation: () => {}
-                });
-            } catch(e) {
-                try {
-                    admInput[propsKey].onChange({
-                        target: admInput,
-                        currentTarget: admInput,
-                        preventDefault: () => {},
-                        stopPropagation: () => {}
-                    });
-                } catch(e2) {}
-            }
-        }
-
-        // 5. Blur to finalize
-        admInput.dispatchEvent(new Event('blur', { bubbles: true }));
+        setNativeValue(admInput, admVal);
         await sleep(150);
     }
 
@@ -1007,7 +1030,7 @@
             }
 
             // 5. School Admission Number
-            await fillAdmissionNumber(student);
+            await fillAdmissionNumber(student, fields);
 
             // 6. Grade Dropdown
             const gradeCandidates = getGradeCandidates(student.grade);
@@ -1028,10 +1051,10 @@
             // 8b. Re-verify School Admission Number in case dropdown re-renders wiped it
             const expectedAdm = String(student.admission_no ?? student.admissionNo ?? student.admnNumber ?? '').trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
             if (expectedAdm) {
-                const curAdmInput = findAdmissionInput();
-                if (curAdmInput && curAdmInput.value !== expectedAdm) {
+                const curAdmInput = findAdmissionInput(fields);
+                if (curAdmInput && curAdmInput !== fields.firstName && curAdmInput.value !== expectedAdm) {
                     console.log('[HPC Assist] Re-applying Admission Number after dropdowns:', expectedAdm);
-                    await fillAdmissionNumber(student);
+                    await fillAdmissionNumber(student, fields);
                 }
             }
 

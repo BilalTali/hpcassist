@@ -1811,44 +1811,42 @@
         el.dispatchEvent(new Event('blur', { bubbles: true }));
     };
 
-    function findAdmissionInput() {
-        const byMaxLen = Array.from(document.querySelectorAll('input[maxlength="12"]:not([type="hidden"])'))
-            .find(i => !i.disabled && (i.type === 'text' || !i.type));
-        if (byMaxLen) return byMaxLen;
-
-        const wrappers = Array.from(document.querySelectorAll('.custom-input-label'));
-        const admWrapper = wrappers.find(w => {
-            const t = w.textContent.toLowerCase();
-            return t.includes('admission') || t.includes('admn') || t.includes('प्रवेश') || t.includes('दाखिला');
-        });
-        if (admWrapper) {
-            const inp = admWrapper.querySelector('input:not([type="hidden"]):not([maxlength="1"])');
-            if (inp) return inp;
-        }
-
-        const labels = Array.from(document.querySelectorAll('.custom-input-label label, label'));
+    function findAdmissionInput(excludeInputs = []) {
+        const labels = Array.from(document.querySelectorAll('label, .custom-input-label label, .custom-label'));
         const admLabel = labels.find(l => {
-            const t = l.textContent.toLowerCase();
-            return t.includes('admission') || t.includes('admn') || t.includes('प्रवेश') || t.includes('दाखिला');
+            const t = (l.innerText || l.textContent || '').toLowerCase().trim();
+            return (t.includes('admission') || t.includes('admn') || t.includes('प्रवेश') || t.includes('दाखिला')) && !t.includes('date');
         });
+
         if (admLabel) {
-            const wrapper = admLabel.closest('.custom-input-label') || admLabel.parentElement;
-            const inp = wrapper?.querySelector('input:not([type="hidden"]):not([maxlength="1"])');
-            if (inp) return inp;
+            if (admLabel.htmlFor) {
+                const el = document.getElementById(admLabel.htmlFor);
+                if (el && !excludeInputs.includes(el)) return el;
+            }
+            const wrapper = admLabel.closest('.custom-input-label, .form-group, .col, [class*="col-"]') || admLabel.parentElement;
+            if (wrapper) {
+                const inp = Array.from(wrapper.querySelectorAll('input:not([type="hidden"]):not([maxlength="1"])')).find(i => !excludeInputs.includes(i) && !i.disabled);
+                if (inp) return inp;
+            }
+            if (admLabel.nextElementSibling && admLabel.nextElementSibling.matches('input') && !excludeInputs.includes(admLabel.nextElementSibling)) {
+                return admLabel.nextElementSibling;
+            }
         }
 
-        const writeInputs = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="लिखें" i]'));
-        if (writeInputs.length >= 4) return writeInputs[3];
+        const writeInputs = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="लिखें" i]'))
+            .filter(i => !i.disabled && !excludeInputs.includes(i));
+        if (writeInputs.length >= 4 && !excludeInputs.includes(writeInputs[3])) return writeInputs[3];
+        if (writeInputs.length > 0) return writeInputs[writeInputs.length - 1];
 
         const textInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([maxlength="1"])'))
-            .filter(i => !i.disabled && (i.type === 'text' || !i.type));
-        if (textInputs.length >= 4) return textInputs[3];
+            .filter(i => !i.disabled && (i.type === 'text' || !i.type) && !excludeInputs.includes(i));
+        if (textInputs.length > 0) return textInputs[textInputs.length - 1];
 
         return null;
     }
 
-    async function fillAdmissionNumber(s) {
-        const admInput = findAdmissionInput();
+    async function fillAdmissionNumber(s, excludeInputs = [], preferredInput = null) {
+        const admInput = preferredInput || findAdmissionInput(excludeInputs);
         const admVal = String(
             s.admission_no ?? 
             s.admissionNo ?? 
@@ -1857,46 +1855,9 @@
         ).trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
 
         if (!admInput || !admVal) return;
+        if (excludeInputs.includes(admInput)) return; // Absolutely never write into First Name or Email
 
-        admInput.focus();
-        const proto = Object.getPrototypeOf(admInput);
-        const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set ||
-                             Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-        if (nativeSetter) {
-            nativeSetter.call(admInput, admVal);
-        } else {
-            admInput.value = admVal;
-        }
-
-        if (admInput._valueTracker) {
-            admInput._valueTracker.setValue('');
-        }
-
-        admInput.dispatchEvent(new Event('input', { bubbles: true }));
-        admInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-        const propsKey = Object.keys(admInput).find(k => k.startsWith('__reactProps') || k.startsWith('__reactEventHandlers'));
-        if (propsKey && typeof admInput[propsKey]?.onChange === 'function') {
-            try {
-                admInput[propsKey].onChange({
-                    target: { value: admVal },
-                    currentTarget: { value: admVal },
-                    preventDefault: () => {},
-                    stopPropagation: () => {}
-                });
-            } catch(e) {
-                try {
-                    admInput[propsKey].onChange({
-                        target: admInput,
-                        currentTarget: admInput,
-                        preventDefault: () => {},
-                        stopPropagation: () => {}
-                    });
-                } catch(e2) {}
-            }
-        }
-
-        admInput.dispatchEvent(new Event('blur', { bubbles: true }));
+        setVal(admInput, admVal);
         await sleep(150);
     }
 
@@ -2004,31 +1965,33 @@
         let candidates = [raw, raw.toLowerCase(), raw.toUpperCase()];
         if (isBalvatika) {
             const bNum = cleanNum || '1';
-            candidates.push(\`Balvatika \${bNum}\`, \`balvatika \${bNum}\`, \`Balvatika-\${bNum}\`, \`PP-\${bNum}\`, \`pp-\${bNum}\`, \`Pre-Primary \${bNum}\`, 'Balvatika');
-        } else if (cleanNum) {
-            const roman = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][parseInt(cleanNum, 10)] || cleanNum;
-            candidates.push(\`Grade \${cleanNum}\`, \`grade \${cleanNum}\`, \`Class \${cleanNum}\`, \`class \${cleanNum}\`, \`Grade \${roman}\`, \`Class \${roman}\`, roman, cleanNum);
+            candidates.push(`Grade ${cleanNum}`, `grade ${cleanNum}`, `Class ${cleanNum}`, `class ${cleanNum}`, `Grade ${roman}`, `Class ${roman}`, roman, cleanNum);
         }
         return candidates;
     }
 
     function getSectionCandidates(sectionStr) {
         const sec = String(sectionStr || 'A').toUpperCase().trim().replace(/[^A-Z]/g, '') || 'A';
-        return [\`Section \${sec}\`, \`section \${sec}\`, sec, sec.toLowerCase(), \`SECTION \${sec}\`, \`Section - \${sec}\`, \`Section-\${sec}\`];
+        return [`Section ${sec}`, `section ${sec}`, sec, sec.toLowerCase(), `SECTION ${sec}`, `Section - ${sec}`, `Section-${sec}`];
     }
 
     for (let i = 0; i < students.length; i++) {
         const s = students[i];
         const stName = s.name || ((s.first_name || '') + ' ' + (s.last_name || '')).trim() || 'Student';
-        console.log(\`[\${i+1}/\${students.length}] Filling \${stName}...\`);
+        console.log(`[${i+1}/${students.length}] Filling ${stName}...`);
 
-        const writeInputs = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i]'));
+        const writeInputs = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="लिखें" i]'));
         const allTextInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([maxlength="1"])')).filter(inp => !inp.disabled);
 
         const fName = getFieldByLabel('first') || writeInputs[0] || allTextInputs[0];
-        const lName = getFieldByLabel('last') || writeInputs[1] || allTextInputs[1];
-        const email = getFieldByLabel('email') || writeInputs[2] || (document.querySelector('input[type="email"]') || allTextInputs[2]);
-        const admission = getFieldByLabel('admission') || writeInputs[3] || allTextInputs[3];
+        let lName = getFieldByLabel('last');
+        if (!lName || lName === fName) lName = writeInputs.find(i => i !== fName) || allTextInputs.find(i => i !== fName);
+
+        let email = document.querySelector('input[type="email"]') || getFieldByLabel('email');
+        if (!email || email === fName || email === lName) email = writeInputs.find(i => i !== fName && i !== lName) || allTextInputs.find(i => i !== fName && i !== lName);
+
+        const knownExcluded = [fName, lName, email].filter(Boolean);
+        const admission = findAdmissionInput(knownExcluded);
 
         const dobLabel = Array.from(document.querySelectorAll('.custom-input-label label, label')).find(l => {
             const t = l.textContent.toLowerCase();
@@ -2090,7 +2053,7 @@
         }
 
         // 5. Admission Number
-        await fillAdmissionNumber(s);
+        await fillAdmissionNumber(s, knownExcluded, admission);
 
         // 6. Grade
         const gradeCandidates = getGradeCandidates(s.grade);
@@ -2154,10 +2117,10 @@
         // 8b. Re-verify School Admission Number in case dropdown re-renders wiped it
         const expectedAdm = String(s.admission_no ?? s.admissionNo ?? s.admnNumber ?? '').trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
         if (expectedAdm) {
-            const curAdmInput = findAdmissionInput();
-            if (curAdmInput && curAdmInput.value !== expectedAdm) {
+            const curAdmInput = findAdmissionInput(knownExcluded);
+            if (curAdmInput && !knownExcluded.includes(curAdmInput) && curAdmInput.value !== expectedAdm) {
                 console.log('Re-applying Admission Number after dropdowns:', expectedAdm);
-                await fillAdmissionNumber(s);
+                await fillAdmissionNumber(s, knownExcluded, curAdmInput);
             }
         }
 

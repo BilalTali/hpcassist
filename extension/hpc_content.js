@@ -366,12 +366,30 @@
         options = Array.from(new Set(options)).filter(el => el.offsetParent !== null || el.textContent.trim().length > 0);
 
         let found = null;
+        // PASS 1: Strict Exact Match (CRITICAL: prevents 'female'.includes('male') matching Male)
         for (const tgt of candidates) {
-            found = options.find(el => {
-                const txt = el.textContent.toLowerCase().trim();
-                return txt === tgt || txt.startsWith(tgt) || txt.includes(tgt) || tgt.includes(txt);
-            });
+            found = options.find(el => el.textContent.trim().toLowerCase() === tgt);
             if (found) break;
+        }
+
+        // PASS 2: Starts with
+        if (!found) {
+            for (const tgt of candidates) {
+                found = options.find(el => el.textContent.trim().toLowerCase().startsWith(tgt));
+                if (found) break;
+            }
+        }
+
+        // PASS 3: Word boundary / option text contains candidate (NEVER candidate includes option text)
+        if (!found) {
+            for (const tgt of candidates) {
+                found = options.find(el => {
+                    const txt = el.textContent.trim().toLowerCase();
+                    return new RegExp('\\b' + tgt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(txt)
+                        || txt.includes(tgt);
+                });
+                if (found) break;
+            }
         }
 
         if (found) {
@@ -393,7 +411,8 @@
             await sleep(300);
             const filtered = Array.from(document.querySelectorAll('.custom-dropdown-item')).filter(el => el.offsetParent !== null);
             if (filtered.length > 0) {
-                const item = filtered[0];
+                const exactFiltered = filtered.find(el => el.textContent.trim().toLowerCase() === String(targetValue).trim().toLowerCase());
+                const item = exactFiltered || filtered[0];
                 const itemPropsKey = Object.keys(item).find(k => k.startsWith('__reactProps'));
                 if (itemPropsKey && typeof item[itemPropsKey]?.onClick === 'function') {
                     try { item[itemPropsKey].onClick({ stopPropagation: () => {}, preventDefault: () => {} }); } catch(e) {}
@@ -413,9 +432,13 @@
         let target;
         if (student.gender) {
             const g = String(student.gender).toLowerCase().trim();
-            if (g.startsWith('m') || g.includes('boy'))        target = 'Male';
-            else if (g.startsWith('f') || g.includes('girl'))  target = 'Female';
-            else if (g.includes('other'))                       target = 'Other';
+            if (g === 'female' || g.startsWith('f') || g.includes('girl') || g === '2') {
+                target = 'Female';
+            } else if (g === 'male' || g.startsWith('m') || g.includes('boy') || g === '1') {
+                target = 'Male';
+            } else if (g.includes('other') || g === '3') {
+                target = 'Other';
+            }
         }
 
         if (!target || target === 'Unknown') {

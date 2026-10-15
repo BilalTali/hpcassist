@@ -845,7 +845,7 @@ class HpcController extends Controller
 
         $schoolForFile = \Illuminate\Support\Facades\Auth::check() ? \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool() : null;
         $this->writePreviewFile($this->getPreviewFile($schoolForFile), $preview);
-        $this->syncSpreadsheetFromPreview($preview);
+        $this->syncSpreadsheetFromPreview($preview, $schoolForFile);
 
         if (\Illuminate\Support\Facades\Auth::check()) {
             $userSchool = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
@@ -954,12 +954,12 @@ class HpcController extends Controller
         ];
     }
 
-    public function syncSpreadsheetFromPreview(array $preview): void
+    public function syncSpreadsheetFromPreview(array $preview, $school = null): void
     {
         try {
             $sheet = $this->buildStudentSpreadsheet($preview);
             $writer = new Xlsx($sheet);
-            $dir = $this->getSchoolStorageDir();
+            $dir = $this->getSchoolStorageDir($school);
             @mkdir($dir, 0755, true);
             $writer->save($dir . '/students.xlsx');
         } catch (\Throwable $e) {

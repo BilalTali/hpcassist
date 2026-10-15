@@ -753,6 +753,10 @@
                     const t = texts[i];
                     // Name: contains only letters and spaces, > 3 chars
                     if (!name && /^[A-Z][A-Z\s]{2,}$/.test(t.toUpperCase()) && t.length > 3 && !/^\d/.test(t)) {
+                        const cleanLower = t.toLowerCase().trim();
+                        if (['select', 'action', 'actions', 'edit', 'view', 'delete', 'sr no', 's.no', 'sr.no', 'status'].includes(cleanLower)) {
+                            continue;
+                        }
                         name = t;
                         continue;
                     }

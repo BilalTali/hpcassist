@@ -1062,37 +1062,42 @@ class HpcController extends Controller
             $student = Student::where('school_id', $school->id)->where('udise_student_id', $udiseStId)->first();
         }
 
-        // 6. Fallback: Match by Name + DOB only if no unique IDs matched AND no conflicting identifiers exist
-        if (! $student && ! empty($name) && ! empty($dob)) {
-            $candidates = Student::where('school_id', $school->id)
-                ->where('name', $name)
-                ->where('dob', $dob)
-                ->get();
+        // 6. Fallback: Match by Name (+ DOB if present)
+        if (! $student && ! empty($name)) {
+            $query = Student::where('school_id', $school->id)->where('name', $name);
+            if (! empty($dob)) {
+                $dobMatch = (clone $query)->where('dob', $dob)->first();
+                if ($dobMatch) {
+                    $student = $dobMatch;
+                }
+            }
+            if (! $student) {
+                $candidates = $query->get();
+                foreach ($candidates as $cand) {
+                    // Must not conflict with APAAR ID
+                    if ($apaar && ! empty($cand->apaar_id) && $cand->apaar_id !== $apaar) {
+                        continue;
+                    }
+                    // Must not conflict with PEN
+                    if (! empty($pen) && ! empty($cand->pen_code) && $cand->pen_code !== $pen) {
+                        continue;
+                    }
+                    // Must not conflict with Admission Number
+                    if (! empty($admissionNo) && ! empty($cand->admission_no) && $cand->admission_no !== $admissionNo) {
+                        continue;
+                    }
+                    // Must not conflict with Gender if both are provided
+                    if (! empty($gender) && ! empty($cand->gender) && strtolower($cand->gender) !== strtolower($gender)) {
+                        continue;
+                    }
+                    // Must not conflict with Grade if both are provided
+                    if (! empty($grade) && ! empty($cand->grade) && strtolower($cand->grade) !== strtolower($grade)) {
+                        continue;
+                    }
 
-            foreach ($candidates as $cand) {
-                // Must not conflict with APAAR ID
-                if ($apaar && ! empty($cand->apaar_id) && $cand->apaar_id !== $apaar) {
-                    continue;
+                    $student = $cand;
+                    break;
                 }
-                // Must not conflict with PEN
-                if (! empty($pen) && ! empty($cand->pen_code) && $cand->pen_code !== $pen) {
-                    continue;
-                }
-                // Must not conflict with Admission Number
-                if (! empty($admissionNo) && ! empty($cand->admission_no) && $cand->admission_no !== $admissionNo) {
-                    continue;
-                }
-                // Must not conflict with Gender if both are provided
-                if (! empty($gender) && ! empty($cand->gender) && strtolower($cand->gender) !== strtolower($gender)) {
-                    continue;
-                }
-                // Must not conflict with Grade if both are provided
-                if (! empty($grade) && ! empty($cand->grade) && strtolower($cand->grade) !== strtolower($grade)) {
-                    continue;
-                }
-
-                $student = $cand;
-                break;
             }
         }
 
@@ -1946,6 +1951,11 @@ class HpcController extends Controller
         foreach ($incoming as $raw) {
             // Split full name into first / last
             $fullName  = trim($raw['name'] ?? '');
+            if (empty($fullName) || strlen($fullName) < 2) continue;
+            if (in_array(strtolower($fullName), ['select', 'student', 'action', 'actions', 'name', 's.no', 'sr.no', 'sr no', 's no', 'status', 'view', 'edit', 'delete'])) {
+                continue;
+            }
+
             $nameParts = $fullName ? explode(' ', $fullName, 2) : [];
             $firstName = trim($raw['first_name'] ?? ($nameParts[0] ?? ''));
             $lastName  = trim($raw['last_name']  ?? ($nameParts[1] ?? ''));
@@ -1955,18 +1965,45 @@ class HpcController extends Controller
             $penCode   = trim($raw['pen_code'] ?? '');
             $admNo     = trim($raw['admission_no'] ?? '');
 
-            // Skip fast if we already have this exact HPC record confirmed
+            // Deduplication Matcher: Find existing student in this school
+            $existing = null;
             if ($hpcId) {
-                $already = Student::where('school_id', $school->id)
-                    ->where('hpc_student_id', $hpcId)
-                    ->where('status', Student::STATUS_SUCCESS)
+                $existing = Student::where('school_id', $school->id)->where('hpc_student_id', $hpcId)->first();
+            }
+            if (! $existing && $apaar && strlen($apaar) === 12) {
+                $existing = Student::where('school_id', $school->id)->where('apaar_id', $apaar)->first();
+            }
+            if (! $existing && $admNo) {
+                $existing = Student::where('school_id', $school->id)->where('admission_no', $admNo)->first();
+            }
+            if (! $existing && $fullName) {
+                $existing = Student::where('school_id', $school->id)->where('name', $fullName)->first();
+            }
+            if (! $existing && $firstName) {
+                $existing = Student::where('school_id', $school->id)
+                    ->where('first_name', $firstName)
+                    ->when($lastName, fn($q) => $q->where('last_name', $lastName))
                     ->first();
-                if ($already) {
-                    $already->touch(); // bump updated_at
-                    $already->update(['hpc_fetched_at' => now()]);
-                    $matchCount++;
-                    continue;
+            }
+
+            if ($existing) {
+                $updateData = [
+                    'hpc_fetched_at'   => now(),
+                    'hpc_submitted_at' => $existing->hpc_submitted_at ?? now(),
+                    'status'           => Student::STATUS_SUCCESS,
+                ];
+                if ($hpcId && empty($existing->hpc_student_id)) {
+                    $updateData['hpc_student_id'] = $hpcId;
                 }
+                if ($apaar && empty($existing->apaar_id)) {
+                    $updateData['apaar_id'] = $apaar;
+                }
+                if ($admNo && empty($existing->admission_no)) {
+                    $updateData['admission_no'] = $admNo;
+                }
+                $existing->update($updateData);
+                $matchCount++;
+                continue;
             }
 
             // Build normalised data array for upsert

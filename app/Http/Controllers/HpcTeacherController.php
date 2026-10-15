@@ -86,9 +86,9 @@ class HpcTeacherController extends Controller
      * Download Filled Roster Template.
      *
      * @param Request|null $request
-     * @return \Symfony\Component\HttpFoundation\StreamedResponse
+     * @return \Symfony\Component\HttpFoundation\StreamedResponse|\Illuminate\Http\RedirectResponse
      */
-    public function downloadTemplate(?Request $request = null)
+    public function downloadTemplate(?Request $request = null): \Symfony\Component\HttpFoundation\Response
     {
         $school            = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         $teacherProfileDir = $this->getActiveTeacherProfileDir($school);

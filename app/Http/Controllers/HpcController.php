@@ -1535,6 +1535,38 @@ class HpcController extends Controller
         ]);
     }
 
+    public function getSchoolsList(Request $request)
+    {
+        $corsOrigin = $this->getAllowedCorsOrigin();
+        if ($request->isMethod('OPTIONS')) {
+            return response()->json(['ok' => true], 200, [
+                'Access-Control-Allow-Origin'  => $corsOrigin,
+                'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
+            ]);
+        }
+
+        $schools = School::orderBy('name')->get()->map(function($sc) {
+            return [
+                'id'         => $sc->id,
+                'name'       => $sc->name,
+                'udise_code' => $sc->udise_code,
+                'pending'    => $sc->students()->step2()->count(),
+                'submitted'  => $sc->students()->step3()->count(),
+                'total'      => $sc->students()->count(),
+            ];
+        });
+
+        return response()->json([
+            'ok'      => true,
+            'schools' => $schools,
+        ], 200, [
+            'Access-Control-Allow-Origin'  => $corsOrigin,
+            'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
+        ]);
+    }
+
     /**
      * Return the allowed CORS origin for public extension-facing endpoints.
      * Accurately supports the PARAKH portal, UDISE portal, Chrome extension ID,

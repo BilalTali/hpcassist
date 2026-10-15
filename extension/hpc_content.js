@@ -5,13 +5,15 @@
     // SERVER_URL is injected by the dashboard via window.__HPC_CONFIG.
     // Never falls back to a hardcoded domain — an empty SERVER_URL will fail
     // loudly so misconfiguration is obvious rather than silently misdirected.
-    const SERVER_URL = (window.__HPC_CONFIG && window.__HPC_CONFIG.server_url)
+    let SERVER_URL = (window.__HPC_CONFIG && window.__HPC_CONFIG.server_url)
         ? window.__HPC_CONFIG.server_url.replace(/\/$/, '')
-        : '';
-    const SCHOOL_ID  = (window.__HPC_CONFIG && window.__HPC_CONFIG.school_id) ? window.__HPC_CONFIG.school_id : null;
-    const HPC_TOKEN  = (window.__HPC_CONFIG && (window.__HPC_CONFIG.progress_token || window.__HPC_CONFIG.token))
+        : 'https://ctetmonktest.fun';
+    let SCHOOL_ID  = (window.__HPC_CONFIG && window.__HPC_CONFIG.school_id) ? window.__HPC_CONFIG.school_id : null;
+    let HPC_TOKEN  = (window.__HPC_CONFIG && (window.__HPC_CONFIG.progress_token || window.__HPC_CONFIG.token))
         ? (window.__HPC_CONFIG.progress_token || window.__HPC_CONFIG.token)
         : '';
+    let currentSchoolName = (window.__HPC_CONFIG && window.__HPC_CONFIG.school_name) || '';
+    let availableSchools = [];
 
     let studentsQueue = [];
     let isRunning = false;
@@ -74,6 +76,70 @@
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    async function fetchSchoolsList() {
+        if (!SERVER_URL) return [];
+        try {
+            const res = await fetch(`${SERVER_URL}/hpc/schools/list`, {
+                headers: { 'Accept': 'application/json', 'X-HPC-Token': HPC_TOKEN }
+            });
+            const data = await res.json();
+            if (data.ok && Array.isArray(data.schools)) {
+                availableSchools = data.schools;
+                return availableSchools;
+            }
+        } catch(e) {
+            console.warn('[HPC Assist] Could not fetch schools list:', e);
+        }
+        return [];
+    }
+
+    async function autoDetectActiveSchool() {
+        // 1. Check chrome.storage.local (synced from ctetmonktest.fun dashboard)
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            try {
+                const stored = await new Promise(r => chrome.storage.local.get(['hpc_active_school'], r));
+                if (stored && stored.hpc_active_school && stored.hpc_active_school.school_id) {
+                    const st = stored.hpc_active_school;
+                    SCHOOL_ID = st.school_id;
+                    currentSchoolName = st.school_name || currentSchoolName;
+                    if (st.server_url) SERVER_URL = st.server_url.replace(/\/$/, '');
+                    if (st.progress_token) HPC_TOKEN = st.progress_token;
+                    console.log('[HPC Assist] Loaded active school from extension storage:', currentSchoolName, 'ID:', SCHOOL_ID);
+                }
+            } catch(e) {}
+        }
+
+        // 2. Fetch available schools list from server
+        await fetchSchoolsList();
+
+        // 3. Scan PARAKH portal page text for school UDISE code or name
+        const pageText = (document.body ? (document.body.innerText || '') : '').toLowerCase();
+        for (const sc of availableSchools) {
+            const scUdise = (sc.udise_code || '').trim().toLowerCase();
+            const scName  = (sc.name || '').trim().toLowerCase();
+            if ((scUdise && scUdise.length >= 6 && pageText.includes(scUdise)) || 
+                (scName && scName.length >= 5 && pageText.includes(scName))) {
+                console.log('[HPC Assist] Auto-detected matching school from PARAKH portal text:', sc.name, 'ID:', sc.id);
+                SCHOOL_ID = sc.id;
+                currentSchoolName = sc.name;
+                break;
+            }
+        }
+
+        // 4. Fallback: if SCHOOL_ID has 0 pending students but another school has pending students, or if no SCHOOL_ID is set
+        if (!SCHOOL_ID || (availableSchools.length > 0 && availableSchools.find(s => s.id === SCHOOL_ID)?.pending === 0)) {
+            const withPending = availableSchools.find(s => s.pending > 0);
+            if (withPending) {
+                console.log(`[HPC Assist] Switching active school to pending queue: ${withPending.name} (${withPending.pending} students)`);
+                SCHOOL_ID = withPending.id;
+                currentSchoolName = withPending.name;
+            } else if (availableSchools.length > 0 && !SCHOOL_ID) {
+                SCHOOL_ID = availableSchools[0].id;
+                currentSchoolName = availableSchools[0].name;
+            }
+        }
+    }
+
     // Load queue from localStorage or Server API
     async function loadQueue(forceServer = false) {
         if (!forceServer) {
@@ -81,8 +147,9 @@
                 const raw = localStorage.getItem('hpc_student_queue');
                 if (raw) {
                     const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed.students) && parsed.students.length > 0) {
+                    if (parsed.school_id === SCHOOL_ID && Array.isArray(parsed.students) && parsed.students.length > 0) {
                         studentsQueue = parsed.students;
+                        currentSchoolName = parsed.school_name || currentSchoolName;
                         return true;
                     }
                 }
@@ -105,14 +172,16 @@
             const data = await res.json();
             if (data.ok && Array.isArray(data.students)) {
                 studentsQueue = data.students;
+                currentSchoolName = data.school_name || currentSchoolName;
                 localStorage.setItem('hpc_student_queue', JSON.stringify({
-                    school_id: data.school_id,
-                    school_name: data.school_name,
+                    school_id: data.school_id || SCHOOL_ID,
+                    school_name: data.school_name || currentSchoolName,
                     students: data.students
                 }));
                 return true;
             } else {
                 console.warn('[HPC Assist] Queue endpoint returned error or no students:', data);
+                studentsQueue = [];
                 return false;
             }
         } catch(err) {
@@ -493,6 +562,27 @@
             }
         });
 
+        // School switcher dropdown handler
+        widget.addEventListener('change', async (e) => {
+            if (e.target.id === 'hpc-school-switcher') {
+                const newId = parseInt(e.target.value, 10);
+                if (newId) {
+                    SCHOOL_ID = newId;
+                    const matched = availableSchools.find(s => s.id === newId);
+                    currentSchoolName = matched ? matched.name : '';
+                    localStorage.setItem('hpc_active_school_id', String(newId));
+                    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                        chrome.storage.local.set({ hpc_active_school: { school_id: newId, school_name: currentSchoolName } });
+                    }
+                    logStatus(`🏫 Switched to ${currentSchoolName}. Syncing queue...`);
+                    await loadQueue(true);
+                    currentIndex = 0;
+                    localStorage.setItem('hpc_student_index', '0');
+                    updateWidgetContent();
+                }
+            }
+        });
+
         updateWidgetContent(widget);
     }
 
@@ -505,6 +595,25 @@
 
         const isStudentListPage = location.pathname.includes('/students') && !location.pathname.includes('/students/add');
 
+        let schoolSelectHtml = '';
+        if (availableSchools.length > 0) {
+            schoolSelectHtml = `
+                <div style="background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 6px 10px; margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <span style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase;">🏫 Active School</span>
+                        <span style="font-size: 10px; color: #38bdf8; font-weight: 700; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${currentSchoolName || 'Select'}</span>
+                    </div>
+                    <select id="hpc-school-switcher" style="width: 100%; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 4px 6px; font-size: 11px; font-weight: 600; cursor: pointer; outline: none;">
+                        ${availableSchools.map(s => `
+                            <option value="${s.id}" ${s.id === SCHOOL_ID ? 'selected' : ''}>
+                                ${s.name} (${s.pending} queued)
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+            `;
+        }
+
         widget.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -515,9 +624,11 @@
                     ${isRunning ? '⚡ RUNNING' : 'READY'}
                 </span>
             </div>
+
+            ${schoolSelectHtml}
             
             <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px; line-height: 1.4;">
-                ${total > 0 ? `<strong>${total}</strong> students queued for portal submission.` : 'No student queue found. Upload spreadsheet in HPC Assist.'}
+                ${total > 0 ? `<strong>${total}</strong> students queued for portal submission.` : 'No student queue found. Select school or upload spreadsheet.'}
             </div>
 
             ${total > 0 ? `
@@ -1198,6 +1309,7 @@
 
     // Auto-resume if running flag is present
     async function init() {
+        await autoDetectActiveSchool();
         await loadQueue();
         injectWidget();
 

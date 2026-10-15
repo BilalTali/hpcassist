@@ -23,6 +23,7 @@ Route::get('/extension/download', [UdiseController::class, 'downloadExtension'])
 Route::match(['post','options'], '/udise/ingest', [UdiseController::class, 'ingest'])->name('udise.ingest');
 // HPC Portal Queue & Progress: called by extension or browser automation on PARAKH portal
 Route::match(['get', 'options'],  '/hpc/students/queue',             [HpcController::class, 'getStudentQueue'])->name('hpc.students.queue');
+Route::match(['get', 'options'],  '/hpc/schools/list',               [HpcController::class, 'getSchoolsList'])->name('hpc.schools.list');
 Route::match(['post', 'options'], '/hpc/run/progress',               [HpcController::class, 'runProgress'])->name('hpc.run.progress');
 // Extension-facing: receive students already on HPC portal (token-protected)
 Route::match(['post', 'options'], '/hpc/students/sync-from-portal',  [HpcController::class, 'syncFromPortal'])->name('hpc.students.sync_from_portal');

@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'hpc/teacher/*',
             'hpc/run/progress',
             'hpc/students/*',
+            'hpc/schools/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

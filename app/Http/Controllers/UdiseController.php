@@ -55,6 +55,9 @@ class UdiseController extends Controller
             $zip->addFile(base_path('extension/manifest.json'), 'manifest.json');
             $zip->addFile(base_path('extension/content.js'), 'content.js');
             $zip->addFile(base_path('extension/hpc_content.js'), 'hpc_content.js');
+            if (file_exists(base_path('extension/dashboard_bridge.js'))) {
+                $zip->addFile(base_path('extension/dashboard_bridge.js'), 'dashboard_bridge.js');
+            }
             $zip->addFromString('config.js', $configJs);
             $zip->close();
         }

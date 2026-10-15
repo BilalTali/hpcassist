@@ -1833,14 +1833,9 @@
             }
         }
 
-        const writeInputs = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="लिखें" i]'))
-            .filter(i => !i.disabled && !excludeInputs.includes(i));
-        if (writeInputs.length >= 4 && !excludeInputs.includes(writeInputs[3])) return writeInputs[3];
-        if (writeInputs.length > 0) return writeInputs[writeInputs.length - 1];
-
-        const textInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([maxlength="1"])'))
-            .filter(i => !i.disabled && (i.type === 'text' || !i.type) && !excludeInputs.includes(i));
-        if (textInputs.length > 0) return textInputs[textInputs.length - 1];
+        const allWriteHere = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="लिखें" i]'))
+            .filter(i => !i.disabled);
+        if (allWriteHere.length >= 4 && !excludeInputs.includes(allWriteHere[3])) return allWriteHere[3];
 
         return null;
     }

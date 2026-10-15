@@ -909,25 +909,13 @@
         });
         if (byAttr) return byAttr;
 
-        // 4. Positional fallback: 4th "Write here" placeholder input (First=0, Last=1, Email=2, Admission=3)
-        const writeHereInputs = Array.from(document.querySelectorAll(
+        // 4. Positional fallback: 4th "Write here" placeholder input ONLY (First=0, Last=1, Email=2, Admission=3)
+        const allWriteHere = Array.from(document.querySelectorAll(
             'input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="लिखें" i]'
-        )).filter(i => !i.disabled && i.type !== 'hidden' && !exclude.includes(i));
+        )).filter(i => !i.disabled && i.type !== 'hidden');
 
-        if (writeHereInputs.length >= 4 && !exclude.includes(writeHereInputs[3])) {
-            return writeHereInputs[3];
-        }
-
-        if (writeHereInputs.length > 0) {
-            return writeHereInputs[writeHereInputs.length - 1];
-        }
-
-        // 5. Remaining text inputs
-        const textInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([maxlength="1"])'))
-            .filter(i => !i.disabled && (i.type === 'text' || !i.type) && !exclude.includes(i));
-
-        if (textInputs.length > 0) {
-            return textInputs[textInputs.length - 1];
+        if (allWriteHere.length >= 4 && !exclude.includes(allWriteHere[3])) {
+            return allWriteHere[3];
         }
 
         return null;

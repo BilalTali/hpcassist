@@ -284,12 +284,12 @@ class SchoolManageController extends Controller
 
         // Authenticate school: logged in user OR match by token / ID / UDISE
         $school = null;
-        if (\Illuminate\Support\Facades\Auth::check()) {
-            $school = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
+        if (Auth::check()) {
+            $school = Auth::user()->getEffectiveSchool();
         }
 
         if (! $school && $schoolId) {
-            $candidate = \App\Models\School::find($schoolId);
+            $candidate = School::find($schoolId);
             if ($candidate) {
                 $expectedToken = substr(hash('sha256', $candidate->id . '_' . $candidate->udise_code . '_' . config('app.key')), 0, 32);
                 if ($token === $expectedToken || $token === (string)$candidate->udise_code || empty($token)) {
@@ -299,7 +299,7 @@ class SchoolManageController extends Controller
         }
 
         if (! $school && $udiseCode) {
-            $candidate = \App\Models\School::where('udise_code', preg_replace('/[^0-9]/', '', $udiseCode))->first();
+            $candidate = School::where('udise_code', preg_replace('/[^0-9]/', '', $udiseCode))->first();
             if ($candidate) {
                 $school = $candidate;
             }

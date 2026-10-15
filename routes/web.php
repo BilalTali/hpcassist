@@ -176,7 +176,6 @@ Route::middleware('auth')->group(function () {
     // ── Teacher Assessment Portal Routes ──────────────────────────────────────
     Route::get('/dashboard/hpc/teacher',             [HpcTeacherController::class, 'dashboard'])->name('hpc.teacher.dashboard');
     Route::get('/hpc/teacher/template/download',     [HpcTeacherController::class, 'downloadTemplate'])->name('hpc.teacher.template.download');
-    Route::post('/hpc/teacher/sync-roster',          [HpcTeacherController::class, 'syncRoster'])->name('hpc.teacher.sync_roster');
     Route::post('/hpc/teacher/upload',               [HpcTeacherController::class, 'upload'])->name('hpc.teacher.upload');
     Route::post('/hpc/teacher/discover',             [HpcTeacherController::class, 'discover'])->name('hpc.teacher.discover');
     Route::post('/hpc/teacher/run/start',            [HpcTeacherController::class, 'runStart'])->name('hpc.teacher.run.start');

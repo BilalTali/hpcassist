@@ -30,6 +30,52 @@
     let teacherCurrentIndex = 0;
 
     let lastLogMessage = '';
+    let isWidgetMinimized = localStorage.getItem('hpc_widget_minimized') === 'true';
+    let showSchoolSelector = false;
+
+    function renderActiveSchoolCard(totalQueueCount) {
+        const activeSchool = availableSchools.find(s => s.id === SCHOOL_ID) || { id: SCHOOL_ID, name: currentSchoolName || 'Active School' };
+        const schoolDisplayName = activeSchool.name || currentSchoolName || 'School Under Process';
+
+        return `
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 3.5px solid #FF671F; border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
+                    <div style="flex: 1; min-width: 0; padding-right: 6px;">
+                        <div style="font-size: 9px; font-weight: 800; color: #ea580c; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">
+                            🏫 School Under Process
+                        </div>
+                        <div style="font-size: 13px; font-weight: 700; color: #1e3a8a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${schoolDisplayName}">
+                            ${schoolDisplayName}
+                        </div>
+                    </div>
+                    ${availableSchools.length > 1 ? `
+                        <button id="hpc-toggle-school-select" style="background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; font-size: 10px; font-weight: 700; cursor: pointer; padding: 2px 8px; border-radius: 6px; white-space: nowrap;">
+                            ${showSchoolSelector ? 'Hide' : 'Switch'}
+                        </button>
+                    ` : ''}
+                </div>
+                <div style="display: flex; gap: 8px; font-size: 10px; color: #475569; align-items: center; margin-top: 4px; flex-wrap: wrap;">
+                    ${activeSchool.udise_code ? `<span style="background: #e2e8f0; color: #1e293b; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-weight: 600;">UDISE: ${activeSchool.udise_code}</span>` : ''}
+                    <span style="color: ${(isRunning || isTeacherRunning) ? '#2563eb' : '#16a34a'}; font-weight: 700;">
+                        ● ${(isRunning || isTeacherRunning) ? 'Processing' : (totalQueueCount > 0 ? `${totalQueueCount} queued` : 'Idle')}
+                    </span>
+                </div>
+
+                ${showSchoolSelector && availableSchools.length > 1 ? `
+                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #cbd5e1;">
+                        <div style="font-size: 10px; color: #64748b; margin-bottom: 4px; font-weight: 600;">Select Different School:</div>
+                        <select id="hpc-school-switcher" style="width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #94a3b8; border-radius: 6px; padding: 5px 8px; font-size: 11px; font-weight: 600; cursor: pointer; outline: none;">
+                            ${availableSchools.map(s => `
+                                <option value="${s.id}" ${s.id === SCHOOL_ID ? 'selected' : ''}>
+                                    ${s.name} ${s.pending !== undefined ? `(${s.pending} queued)` : ''}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
 
     function detectCurrentMode() {
         const url = location.href.toLowerCase();
@@ -609,33 +655,121 @@
         await sleep(150);
     }
 
-    // Inject Floating Automation Widget with Persistent Event Delegation
+    // Inject Floating Automation Widget with Persistent Event Delegation and Draggable Support
     function injectWidget() {
         if (document.getElementById('hpc-parakh-widget')) return;
+
+        let initPosCss = 'bottom: 24px; right: 24px;';
+        try {
+            const p = JSON.parse(localStorage.getItem('hpc_widget_pos'));
+            if (p && p.left && p.top) {
+                initPosCss = `left: ${p.left}; top: ${p.top};`;
+            }
+        } catch(e) {}
 
         const widget = document.createElement('div');
         widget.id = 'hpc-parakh-widget';
         widget.style.cssText = `
             position: fixed;
-            bottom: 24px;
-            right: 24px;
+            ${initPosCss}
             z-index: 9999999;
-            background: #0f172a;
-            color: #f8fafc;
-            border-radius: 16px;
-            padding: 16px 20px;
+            background: #ffffff;
+            color: #0f172a;
+            border-radius: 14px;
+            padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             font-size: 13px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.08);
+            border: 1px solid #cbd5e1;
             width: 320px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
         `;
 
         document.body.appendChild(widget);
 
+        // DRAGGABLE IMPLEMENTATION
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let startLeft = 0, startTop = 0;
+
+        widget.addEventListener('mousedown', (e) => {
+            const dragHandle = e.target.closest('#hpc-widget-drag-header, #hpc-minimized-pill');
+            if (!dragHandle) return;
+            if (e.target.closest('button, select, a, input')) return;
+
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            const rect = widget.getBoundingClientRect();
+            startLeft = rect.left;
+            startTop = rect.top;
+
+            widget.style.right = 'auto';
+            widget.style.bottom = 'auto';
+            widget.style.left = `${startLeft}px`;
+            widget.style.top = `${startTop}px`;
+            widget.style.userSelect = 'none';
+
+            function onMouseMove(moveEv) {
+                if (!isDragging) return;
+                const dx = moveEv.clientX - startX;
+                const dy = moveEv.clientY - startY;
+                const maxLeft = Math.max(0, window.innerWidth - widget.offsetWidth);
+                const maxTop = Math.max(0, window.innerHeight - widget.offsetHeight);
+                const newLeft = Math.max(0, Math.min(maxLeft, startLeft + dx));
+                const newTop = Math.max(0, Math.min(maxTop, startTop + dy));
+
+                widget.style.left = `${newLeft}px`;
+                widget.style.top = `${newTop}px`;
+            }
+
+            function onMouseUp() {
+                if (!isDragging) return;
+                isDragging = false;
+                widget.style.userSelect = '';
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+
+                try {
+                    localStorage.setItem('hpc_widget_pos', JSON.stringify({
+                        left: widget.style.left,
+                        top: widget.style.top
+                    }));
+                } catch(err) {}
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+            e.preventDefault();
+        });
+
         // Event delegation on widget
         widget.addEventListener('click', async (e) => {
+            // Minimize / Maximize Toggles
+            const minBtn = e.target.closest('#hpc-minimize-btn');
+            if (minBtn) {
+                isWidgetMinimized = true;
+                localStorage.setItem('hpc_widget_minimized', 'true');
+                updateWidgetContent(widget);
+                return;
+            }
+            const maxBtn = e.target.closest('#hpc-maximize-btn');
+            if (maxBtn) {
+                isWidgetMinimized = false;
+                localStorage.setItem('hpc_widget_minimized', 'false');
+                updateWidgetContent(widget);
+                return;
+            }
+
+            // School selector toggle
+            const toggleSchoolBtn = e.target.closest('#hpc-toggle-school-select');
+            if (toggleSchoolBtn) {
+                showSchoolSelector = !showSchoolSelector;
+                updateWidgetContent(widget);
+                return;
+            }
+
             const startBtn = e.target.closest('#hpc-start-btn');
             if (startBtn) {
                 console.log('[HPC Assist] User clicked Start Auto-Submit');
@@ -753,6 +887,7 @@
                     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                         chrome.storage.local.set({ hpc_active_school: { school_id: newId, school_name: currentSchoolName } });
                     }
+                    showSchoolSelector = false; // Collapse selector back to active school view
                     logStatus(`🏫 Switched to ${currentSchoolName}. Syncing queue...`);
                     await loadQueue(true);
                     currentIndex = 0;
@@ -769,84 +904,117 @@
         if (!widget) widget = document.getElementById('hpc-parakh-widget');
         if (!widget) return;
 
+        // ─── MINIMIZED PILL STATE ────────────────────────────────────────────
+        if (isWidgetMinimized) {
+            widget.style.width = 'auto';
+            widget.style.padding = '8px 14px';
+            widget.style.borderRadius = '9999px';
+            widget.style.background = '#ffffff';
+            widget.style.border = '1.5px solid #cbd5e1';
+            widget.style.boxShadow = '0 8px 25px -4px rgba(0, 0, 0, 0.18)';
+
+            const activeLabel = CURRENT_MODE === 'teacher' ? 'Teacher HPC' : 'HPC Assist';
+            const progressCount = CURRENT_MODE === 'teacher'
+                ? `[${teacherCurrentIndex}/${teacherQueue.length}]`
+                : `[${currentIndex}/${studentsQueue.length}]`;
+            const isAnyRunning = CURRENT_MODE === 'teacher' ? isTeacherRunning : isRunning;
+
+            widget.innerHTML = `
+                <div id="hpc-minimized-pill" style="display: flex; align-items: center; gap: 8px; cursor: move; user-select: none; border-left: 3.5px solid #FF671F; padding-left: 6px;">
+                    <span style="font-size: 14px;">${CURRENT_MODE === 'teacher' ? '👩‍🏫' : '🚀'}</span>
+                    <span style="font-weight: 700; font-size: 12px; color: #0f172a; white-space: nowrap;">
+                        ${activeLabel}
+                        <span style="color: #1e40af; font-weight: 700; margin-left: 4px;">${progressCount}</span>
+                    </span>
+                    <span style="font-size: 9px; padding: 2px 7px; border-radius: 8px; font-weight: 700; background: ${isAnyRunning ? '#dbeafe' : '#dcfce7'}; color: ${isAnyRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isAnyRunning ? '#bfdbfe' : '#bbf7d0'};">
+                        ${isAnyRunning ? '⚡ RUNNING' : 'READY'}
+                    </span>
+                    <button id="hpc-maximize-btn" title="Expand Submitter" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #334155; width: 22px; height: 22px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; padding: 0; line-height: 1; margin-left: 2px;">
+                        ⤢
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        // Expanded styles
+        widget.style.width = '320px';
+        widget.style.padding = '0';
+        widget.style.borderRadius = '14px';
+        widget.style.background = '#ffffff';
+        widget.style.border = '1px solid #cbd5e1';
+
+        const tricolorBanner = `
+            <div style="height: 5px; width: 100%; background: linear-gradient(90deg, #FF671F 0%, #FF9933 33.3%, #ffffff 33.3%, #ffffff 35%, #000080 35%, #000080 65%, #ffffff 65%, #ffffff 66.6%, #138808 66.6%, #046A38 100%);"></div>
+        `;
+
         // ─── TEACHER EVALUATION MODE WIDGET ─────────────────────────────────
         if (CURRENT_MODE === 'teacher') {
             const tTotal = teacherQueue.length;
             const tPct = tTotal > 0 ? Math.round((teacherCurrentIndex / tTotal) * 100) : 0;
 
-            let schoolSelectHtml = '';
-            if (availableSchools.length > 0) {
-                schoolSelectHtml = `
-                    <div style="background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 6px 10px; margin-bottom: 10px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                            <span style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase;">🏫 Active School</span>
-                            <span style="font-size: 10px; color: #38bdf8; font-weight: 700; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${currentSchoolName || 'Select'}</span>
-                        </div>
-                        <select id="hpc-school-switcher" style="width: 100%; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 4px 6px; font-size: 11px; font-weight: 600; cursor: pointer; outline: none;">
-                            ${availableSchools.map(s => `
-                                <option value="${s.id}" ${s.id === SCHOOL_ID ? 'selected' : ''}>
-                                    ${s.name}
-                                </option>
-                            `).join('')}
-                        </select>
-                    </div>
-                `;
-            }
-
             widget.innerHTML = `
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 16px;">👩‍🏫</span>
-                        <strong style="font-weight: 700; font-size: 13px; letter-spacing: -0.2px;">Teacher Evaluation</strong>
+                ${tricolorBanner}
+                <div style="padding: 14px 18px;">
+                    <div id="hpc-widget-drag-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; cursor: move; user-select: none; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 16px;">👩‍🏫</span>
+                            <strong style="font-weight: 800; font-size: 13px; color: #0f172a; letter-spacing: -0.2px;">Teacher Evaluation</strong>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 10px; background: ${isTeacherRunning ? '#dbeafe' : '#dcfce7'}; color: ${isTeacherRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isTeacherRunning ? '#bfdbfe' : '#bbf7d0'}; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
+                                ${isTeacherRunning ? '⚡ EVALUATING' : 'READY'}
+                            </span>
+                            <button id="hpc-minimize-btn" title="Minimize Submitter" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; width: 22px; height: 22px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; padding: 0; line-height: 1;">
+                                ─
+                            </button>
+                        </div>
                     </div>
-                    <span style="font-size: 10px; background: ${isTeacherRunning ? 'rgba(99, 102, 241, 0.25)' : 'rgba(16, 185, 129, 0.2)'}; color: ${isTeacherRunning ? '#818cf8' : '#34d399'}; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
-                        ${isTeacherRunning ? '⚡ EVALUATING' : 'READY'}
-                    </span>
-                </div>
 
-                ${schoolSelectHtml}
+                    ${renderActiveSchoolCard(tTotal)}
 
-                <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px; line-height: 1.4;">
-                    ${tTotal > 0 ? `<strong>${tTotal}</strong> student evaluations loaded across 15 parts.` : 'No evaluation data loaded. Click Sync or upload spreadsheet in Step 4.'}
-                </div>
-
-                ${tTotal > 0 ? `
-                    <div style="background: rgba(255, 255, 255, 0.08); border-radius: 8px; height: 6px; overflow: hidden; margin-bottom: 10px;">
-                        <div style="background: #6366f1; height: 100%; width: ${tPct}%; transition: width 0.3s ease;"></div>
+                    <div style="font-size: 12px; color: #64748b; margin-bottom: 12px; line-height: 1.4;">
+                        ${tTotal > 0 ? `<strong>${tTotal}</strong> student evaluations loaded across 15 parts.` : 'No evaluation data loaded. Click Sync or upload spreadsheet in Step 4.'}
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 11px; color: #cbd5e1; margin-bottom: 12px;">
-                        <span id="hpc-widget-status">${lastLogMessage || (isTeacherRunning ? `Evaluating ${teacherCurrentIndex + 1} of ${tTotal}...` : `${teacherCurrentIndex}/${tTotal} completed`)}</span>
-                        <span>${tPct}%</span>
-                    </div>
-                ` : ''}
 
-                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    ${isTeacherRunning ? `
-                        <button id="hpc-teacher-pause-btn" style="flex: 1; min-width: 100px; padding: 8px 12px; background: #e11d48; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer;">
-                            ⏸ Pause
-                        </button>
-                    ` : `
-                        <button id="hpc-teacher-start-btn" ${tTotal === 0 ? 'disabled' : ''} style="flex: 1; min-width: 120px; padding: 8px 12px; background: #6366f1; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; opacity: ${tTotal === 0 ? '0.5' : '1'};">
-                            🚀 ${teacherCurrentIndex >= tTotal ? 'Restart from #1' : (teacherCurrentIndex > 0 ? 'Resume (' + (teacherCurrentIndex + 1) + '/' + tTotal + ')' : 'Start Auto-Evaluation')}
-                        </button>
-                    `}
-                    <button id="hpc-teacher-sync-btn" style="padding: 8px 12px; background: rgba(255, 255, 255, 0.1); color: #e2e8f0; border: none; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer;" title="Refresh evaluations queue from HPC Assist server">
-                        🔄 Sync
-                    </button>
-                    ${teacherCurrentIndex > 0 && !isTeacherRunning ? `
-                        <button id="hpc-teacher-reset-btn" style="padding: 8px 10px; background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: none; border-radius: 8px; font-weight: 600; font-size: 11px; cursor: pointer;" title="Reset progress to student 1">
-                            ⏮ Reset
-                        </button>
+                    ${tTotal > 0 ? `
+                        <div style="background: #e2e8f0; border-radius: 8px; height: 7px; overflow: hidden; margin-bottom: 6px;">
+                            <div style="background: linear-gradient(90deg, #FF671F 0%, #2563eb 50%, #16a34a 100%); height: 100%; width: ${tPct}%; transition: width 0.3s ease;"></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; color: #475569; margin-bottom: 12px; font-weight: 500;">
+                            <span id="hpc-widget-status">${lastLogMessage || (isTeacherRunning ? `Evaluating ${teacherCurrentIndex + 1} of ${tTotal}...` : `${teacherCurrentIndex}/${tTotal} completed`)}</span>
+                            <span style="font-weight: 700; color: #1e40af;">${tPct}%</span>
+                        </div>
                     ` : ''}
-                </div>
 
-                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
-                    <button id="hpc-mode-toggle-btn" style="background: none; border: none; color: #94a3b8; font-size: 11px; cursor: pointer; padding: 2px 4px; text-decoration: underline;">
-                        🏫 Switch to School Submitter
-                    </button>
-                    <a href="https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage" style="color: #818cf8; font-size: 11px; text-decoration: none;">
-                        Stages ↗
-                    </a>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        ${isTeacherRunning ? `
+                            <button id="hpc-teacher-pause-btn" style="flex: 1; min-width: 100px; padding: 8px 12px; background: #dc2626; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer;">
+                                ⏸ Pause
+                            </button>
+                        ` : `
+                            <button id="hpc-teacher-start-btn" ${tTotal === 0 ? 'disabled' : ''} style="flex: 1; min-width: 120px; padding: 8px 12px; background: linear-gradient(135deg, #1e40af, #2563eb); color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.25); opacity: ${tTotal === 0 ? '0.5' : '1'};">
+                                🚀 ${teacherCurrentIndex >= tTotal ? 'Restart from #1' : (teacherCurrentIndex > 0 ? 'Resume (' + (teacherCurrentIndex + 1) + '/' + tTotal + ')' : 'Start Auto-Evaluation')}
+                            </button>
+                        `}
+                        <button id="hpc-teacher-sync-btn" style="padding: 8px 12px; background: #f8fafc; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer;" title="Refresh evaluations queue from HPC Assist server">
+                            🔄 Sync
+                        </button>
+                        ${teacherCurrentIndex > 0 && !isTeacherRunning ? `
+                            <button id="hpc-teacher-reset-btn" style="padding: 8px 10px; background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; border-radius: 8px; font-weight: 600; font-size: 11px; cursor: pointer;" title="Reset progress to student 1">
+                                ⏮ Reset
+                            </button>
+                        ` : ''}
+                    </div>
+
+                    <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                        <button id="hpc-mode-toggle-btn" style="background: none; border: none; color: #64748b; font-size: 11px; cursor: pointer; padding: 2px 4px; text-decoration: underline;">
+                            🏫 Switch to School Submitter
+                        </button>
+                        <a href="https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage" style="color: #1e40af; font-weight: 600; font-size: 11px; text-decoration: none;">
+                            Stages ↗
+                        </a>
+                    </div>
                 </div>
             `;
             return;
@@ -858,85 +1026,74 @@
 
         const isStudentListPage = location.pathname.includes('/students') && !location.pathname.includes('/students/add');
 
-        let schoolSelectHtml = '';
-        if (availableSchools.length > 0) {
-            schoolSelectHtml = `
-                <div style="background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 6px 10px; margin-bottom: 10px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                        <span style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase;">🏫 Active School</span>
-                        <span style="font-size: 10px; color: #38bdf8; font-weight: 700; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${currentSchoolName || 'Select'}</span>
-                    </div>
-                    <select id="hpc-school-switcher" style="width: 100%; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 4px 6px; font-size: 11px; font-weight: 600; cursor: pointer; outline: none;">
-                        ${availableSchools.map(s => `
-                            <option value="${s.id}" ${s.id === SCHOOL_ID ? 'selected' : ''}>
-                                ${s.name} (${s.pending} queued)
-                            </option>
-                        `).join('')}
-                    </select>
-                </div>
-            `;
-        }
-
         widget.innerHTML = `
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 16px;">🚀</span>
-                    <strong style="font-weight: 700; font-size: 13px; letter-spacing: -0.2px;">HPC Assist Submitter</strong>
+            ${tricolorBanner}
+            <div style="padding: 14px 18px;">
+                <div id="hpc-widget-drag-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; cursor: move; user-select: none; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 16px;">🚀</span>
+                        <strong style="font-weight: 800; font-size: 13px; color: #0f172a; letter-spacing: -0.2px;">HPC Assist Submitter</strong>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 10px; background: ${isRunning ? '#dbeafe' : '#dcfce7'}; color: ${isRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isRunning ? '#bfdbfe' : '#bbf7d0'}; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
+                            ${isRunning ? '⚡ RUNNING' : 'READY'}
+                        </span>
+                        <button id="hpc-minimize-btn" title="Minimize Submitter" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; width: 22px; height: 22px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; padding: 0; line-height: 1;">
+                            ─
+                        </button>
+                    </div>
                 </div>
-                <span style="font-size: 10px; background: ${isRunning ? 'rgba(59, 130, 246, 0.25)' : 'rgba(16, 185, 129, 0.2)'}; color: ${isRunning ? '#60a5fa' : '#34d399'}; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
-                    ${isRunning ? '⚡ RUNNING' : 'READY'}
-                </span>
-            </div>
 
-            ${schoolSelectHtml}
-            
-            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px; line-height: 1.4;">
-                ${total > 0 ? `<strong>${total}</strong> students queued for portal submission.` : 'No student queue found. Select school or upload spreadsheet.'}
-            </div>
-
-            ${total > 0 ? `
-                <div style="background: rgba(255, 255, 255, 0.08); border-radius: 8px; height: 6px; overflow: hidden; margin-bottom: 10px;">
-                    <div style="background: #10b981; height: 100%; width: ${progressPct}%; transition: width 0.3s ease;"></div>
+                ${renderActiveSchoolCard(total)}
+                
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 12px; line-height: 1.4;">
+                    ${total > 0 ? `<strong>${total}</strong> students queued for portal submission.` : 'No student queue found. Select school or upload spreadsheet.'}
                 </div>
-                <div style="display: flex; justify-content: space-between; font-size: 11px; color: #cbd5e1; margin-bottom: 12px;">
-                    <span id="hpc-widget-status">${lastLogMessage || (isRunning ? `Submitting ${currentIndex + 1} of ${total}...` : `${currentIndex}/${total} completed`)}</span>
-                    <span>${progressPct}%</span>
-                </div>
-            ` : ''}
 
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                ${isRunning ? `
-                    <button id="hpc-pause-btn" style="flex: 1; min-width: 100px; padding: 8px 12px; background: #e11d48; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer;">
-                        ⏸ Pause
-                    </button>
-                ` : `
-                    <button id="hpc-start-btn" ${total === 0 ? 'disabled' : ''} style="flex: 1; min-width: 120px; padding: 8px 12px; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; opacity: ${total === 0 ? '0.5' : '1'};">
-                        ▶ ${currentIndex >= total ? 'Restart from #1' : (currentIndex > 0 ? 'Resume (' + (currentIndex + 1) + '/' + total + ')' : 'Start Auto-Submit')}
-                    </button>
-                `}
-                <button id="hpc-refresh-btn" style="padding: 8px 12px; background: rgba(255, 255, 255, 0.1); color: #e2e8f0; border: none; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer;" title="Refresh student queue from HPC Assist server">
-                    🔄 Sync
-                </button>
-                ${currentIndex > 0 && !isRunning ? `
-                    <button id="hpc-reset-btn" style="padding: 8px 10px; background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: none; border-radius: 8px; font-weight: 600; font-size: 11px; cursor: pointer;" title="Reset progress to student 1">
-                        ⏮ Reset
-                    </button>
+                ${total > 0 ? `
+                    <div style="background: #e2e8f0; border-radius: 8px; height: 7px; overflow: hidden; margin-bottom: 6px;">
+                        <div style="background: linear-gradient(90deg, #FF671F 0%, #2563eb 50%, #16a34a 100%); height: 100%; width: ${progressPct}%; transition: width 0.3s ease;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; color: #475569; margin-bottom: 12px; font-weight: 500;">
+                        <span id="hpc-widget-status">${lastLogMessage || (isRunning ? `Submitting ${currentIndex + 1} of ${total}...` : `${currentIndex}/${total} completed`)}</span>
+                        <span style="font-weight: 700; color: #1e40af;">${progressPct}%</span>
+                    </div>
                 ` : ''}
-            </div>
 
-            ${isStudentListPage ? `
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
-                    <button id="hpc-fetch-portal-btn" style="width: 100%; padding: 9px 12px; background: linear-gradient(135deg, #7c3aed, #4f46e5); color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer;" title="Scrape all students from this list and mark them as already submitted in HPC Assist">
-                        📥 Fetch HPC List → Mark as Done
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    ${isRunning ? `
+                        <button id="hpc-pause-btn" style="flex: 1; min-width: 100px; padding: 8px 12px; background: #dc2626; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer;">
+                            ⏸ Pause
+                        </button>
+                    ` : `
+                        <button id="hpc-start-btn" ${total === 0 ? 'disabled' : ''} style="flex: 1; min-width: 120px; padding: 8px 12px; background: linear-gradient(135deg, #1e40af, #2563eb); color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.25); opacity: ${total === 0 ? '0.5' : '1'};">
+                            ▶ ${currentIndex >= total ? 'Restart from #1' : (currentIndex > 0 ? 'Resume (' + (currentIndex + 1) + '/' + total + ')' : 'Start Auto-Submit')}
+                        </button>
+                    `}
+                    <button id="hpc-refresh-btn" style="padding: 8px 12px; background: #f8fafc; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer;" title="Refresh student queue from HPC Assist server">
+                        🔄 Sync
                     </button>
-                    <div style="font-size: 10px; color: #64748b; margin-top: 5px; text-align: center;">Removes already-submitted students from your queue</div>
+                    ${currentIndex > 0 && !isRunning ? `
+                        <button id="hpc-reset-btn" style="padding: 8px 10px; background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; border-radius: 8px; font-weight: 600; font-size: 11px; cursor: pointer;" title="Reset progress to student 1">
+                            ⏮ Reset
+                        </button>
+                    ` : ''}
                 </div>
-            ` : ''}
 
-            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
-                <button id="hpc-mode-toggle-btn" style="background: none; border: none; color: #94a3b8; font-size: 11px; cursor: pointer; padding: 2px 4px; text-decoration: underline;">
-                    👩‍🏫 Switch to Teacher Evaluation Mode
-                </button>
+                ${isStudentListPage ? `
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+                        <button id="hpc-fetch-portal-btn" style="width: 100%; padding: 9px 12px; background: linear-gradient(135deg, #FF671F, #ea580c); color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.25);" title="Scrape all students from this list and mark them as already submitted in HPC Assist">
+                            📥 Fetch HPC List → Mark as Done
+                        </button>
+                        <div style="font-size: 10px; color: #64748b; margin-top: 5px; text-align: center;">Removes already-submitted students from your queue</div>
+                    </div>
+                ` : ''}
+
+                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                    <button id="hpc-mode-toggle-btn" style="background: none; border: none; color: #64748b; font-size: 11px; cursor: pointer; padding: 2px 4px; text-decoration: underline;">
+                        👩‍🏫 Switch to Teacher Evaluation Mode
+                    </button>
+                </div>
             </div>
         `;
     }
@@ -1475,22 +1632,58 @@
             targetBtn.click();
 
             // 11. WAIT AND STRICTLY VERIFY: Did PARAKH accept the submission?
-            // PARAKH opens #custom_modal with "Student has been added successfully" on success
             let confirmedSuccess = false;
             let portalError = null;
+            let isDuplicate = false;
 
-            for (let poll = 0; poll < 15; poll++) {
+            function checkDuplicateInElements() {
+                const candidates = Array.from(document.querySelectorAll(
+                    '.Toastify__toast, [role="alert"], .alert, .error, [class*="error" i], [class*="invalid" i], .text-danger, .invalid-feedback, #custom_modal, div.modal, [class*="toast" i]'
+                )).filter(el => el.offsetParent !== null || (window.getComputedStyle(el).display !== 'none' && el.textContent.trim().length > 0));
+
+                for (const el of candidates) {
+                    const txt = (el.innerText || el.textContent || '').toLowerCase().trim();
+                    if (
+                        txt.includes('already exist') ||
+                        txt.includes('already register') ||
+                        txt.includes('already added') ||
+                        txt.includes('already present') ||
+                        txt.includes('already in use') ||
+                        txt.includes('duplicate') ||
+                        txt.includes('already taken') ||
+                        txt.includes('pehley se') ||
+                        txt.includes('pahle se')
+                    ) {
+                        return el.innerText.trim() || 'Student already exists on portal';
+                    }
+                }
+                return null;
+            }
+
+            for (let poll = 0; poll < 25; poll++) {
                 await sleep(400);
 
-                // Check for custom success modal (#custom_modal or .modal.show or style*="block")
-                const successModal = document.querySelector('#custom_modal, .modal.show, div.modal[style*="block"]');
+                // A. Check for duplicate error immediately
+                const dupMsg = checkDuplicateInElements();
+                if (dupMsg) {
+                    console.log(`[HPC Assist] Duplicate detected for ${stName}:`, dupMsg);
+                    isDuplicate = true;
+                    portalError = dupMsg;
+                    break;
+                }
+
+                // B. Check for custom success modal (#custom_modal or .modal.show or style*="block")
+                const successModal = document.querySelector('#custom_modal, .modal.show, div.modal[style*="block"], div[role="dialog"]');
                 if (successModal) {
                     const mTxt = (successModal.innerText || successModal.textContent || '').toLowerCase();
                     if (mTxt.includes('successfully') || mTxt.includes('success') || mTxt.includes('added') || mTxt.includes('updated')) {
                         console.log('[HPC Assist] Success modal appeared for', stName);
                         // Click confirmation button in modal-footer to dismiss modal and reset form
                         const okBtn = successModal.querySelector('.modal-footer button.custom-btn:not(.custom-btn-secondary), .modal-footer button, button.close-modal') ||
-                                      Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim().toLowerCase() === 'ok');
+                                      Array.from(document.querySelectorAll('button')).find(b => {
+                                          const t = b.textContent.trim().toLowerCase();
+                                          return t === 'ok' || t === 'close' || t === 'done';
+                                      });
                         if (okBtn) {
                             const btnPropsKey = Object.keys(okBtn).find(k => k.startsWith('__reactProps'));
                             if (btnPropsKey && typeof okBtn[btnPropsKey]?.onClick === 'function') {
@@ -1499,18 +1692,44 @@
                             okBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
                             okBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
                             okBtn.click();
-                            await sleep(800);
+                            await sleep(600);
                         }
                         confirmedSuccess = true;
                         break;
                     }
                 }
 
-                // Check for error toasts / alerts
+                // C. Check for success toast (.Toastify__toast--success, .alert-success, etc.)
+                const successToasts = Array.from(document.querySelectorAll(
+                    '.Toastify__toast--success, .alert-success, div[class*="toast--success" i], div[class*="alert-success" i]'
+                )).filter(el => el.offsetParent !== null || window.getComputedStyle(el).display !== 'none');
+                if (successToasts.length > 0) {
+                    console.log('[HPC Assist] Success toast notification appeared for', stName);
+                    confirmedSuccess = true;
+                    break;
+                }
+
+                // D. Check for URL redirect away from /students/add
+                if (location.pathname.includes('/students') && !location.pathname.includes('/students/add')) {
+                    console.log('[HPC Assist] Portal redirected away from /students/add - save confirmed!');
+                    confirmedSuccess = true;
+                    break;
+                }
+
+                // E. Check if form has cleared/reset (re-query freshly from DOM!)
+                const freshFields = findFormFields();
+                const freshFirstVal = (freshFields.firstName?.value || '').trim();
+                if (poll >= 2 && (!freshFields.firstName || freshFirstVal === '' || (freshFirstVal !== firstName && freshFirstVal.length === 0))) {
+                    console.log('[HPC Assist] Form cleared after submission - save confirmed!');
+                    confirmedSuccess = true;
+                    break;
+                }
+
+                // F. Check for error alerts (excluding duplicates handled above)
                 const errorElements = Array.from(document.querySelectorAll(
                     '.Toastify__toast--error, [role="alert"], .error, [class*="error" i], [class*="invalid" i], .text-danger, .invalid-feedback, div[class*="tooltip" i]'
                 )).filter(el => {
-                    if (el.offsetParent === null) return false;
+                    if (el.offsetParent === null && window.getComputedStyle(el).display === 'none') return false;
                     const txt = el.textContent.toLowerCase().trim();
                     return txt.includes('required') || txt.includes('mandatory') || txt.includes('invalid') || txt.includes('failed') || txt.includes('error');
                 });
@@ -1521,6 +1740,44 @@
                 }
             }
 
+            // DUPLICATE ENTRY HANDLING:
+            // If the student already exists on PARAKH portal, mark as complete and advance!
+            if (isDuplicate) {
+                console.log(`[HPC Assist] ${stName} is already registered on PARAKH. Marking as complete and advancing...`);
+                logStatus(`ℹ️ [${currentIndex + 1}/${studentsQueue.length}] ${stName} already exists on portal. Advancing...`);
+                
+                await reportProgress(currentIndex + 1, studentsQueue.length, stName, 'success', `${stName} (already existed on portal)`, false, {
+                    student_id:   student.id,
+                    admission_no: student.admission_no,
+                    apaar_id:     student.apaar_id,
+                    already_existed: true
+                });
+
+                currentIndex++;
+                localStorage.setItem('hpc_student_index', String(currentIndex));
+                updateWidgetContent();
+
+                // If form is still holding the duplicate data, reset it or navigate back to /students/add
+                if (location.pathname.includes('/students/add')) {
+                    const resetBtn = document.querySelector('button[type="reset"], button.reset-btn') ||
+                                    Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim().toLowerCase() === 'reset');
+                    if (resetBtn) {
+                        resetBtn.click();
+                        await sleep(500);
+                    } else {
+                        window.location.href = 'https://hpc.parakh.ncert.gov.in/en/students/add';
+                        return false;
+                    }
+                } else {
+                    window.location.href = 'https://hpc.parakh.ncert.gov.in/en/students/add';
+                    return false;
+                }
+
+                await sleep(1000);
+                return true; // continue next student!
+            }
+
+            // GENUINE ERROR HANDLING
             if (portalError) {
                 console.error('[HPC Assist] Submission rejected by portal:', portalError);
                 logStatus(`❌ ${stName} failed: ${portalError}`);
@@ -1529,10 +1786,29 @@
                 return false;
             }
 
+            // POST-POLL VERIFICATION:
+            // Re-query fresh fields one final time
+            const freshFieldsFinal = findFormFields();
+            const finalFirstVal = (freshFieldsFinal.firstName?.value || '').trim();
+
             if (!confirmedSuccess && !isLast) {
-                // If modal didn't appear, check if form cleared
-                const currentFirstVal = (fields.firstName?.value || '').trim();
-                if (currentFirstVal === firstName) {
+                // If still on /students/add and the form is strictly still filled with identical firstName:
+                if (location.pathname.includes('/students/add') && finalFirstVal === firstName) {
+                    // Check duplicate one more time in case it appeared late
+                    const lateDup = checkDuplicateInElements();
+                    if (lateDup) {
+                        logStatus(`ℹ️ ${stName} already registered on portal.`);
+                        await reportProgress(currentIndex + 1, studentsQueue.length, stName, 'success', `${stName} (already registered)`, false, {
+                            student_id: student.id,
+                            already_existed: true
+                        });
+                        currentIndex++;
+                        localStorage.setItem('hpc_student_index', String(currentIndex));
+                        updateWidgetContent();
+                        window.location.href = 'https://hpc.parakh.ncert.gov.in/en/students/add';
+                        return false;
+                    }
+
                     console.warn('[HPC Assist] Form did not clear and no success modal appeared.');
                     logStatus(`⚠️ ${stName} submission unconfirmed.`);
                     pauseAutomation();

@@ -183,7 +183,7 @@ class HpcController extends Controller
                     $gender      = trim($st['gender'] ?? '');
                     $email       = trim($st['email'] ?? '');
                     $admissionNo = trim($st['admission_no'] ?? '');
-                    $grade       = trim($st['grade'] ?? 'Grade 6');
+                    $grade       = $this->normalizeGrade($st['grade'] ?? '');
                     $section     = trim($st['section'] ?? 'A');
                     $apaarId     = trim((string)($st['apaar_id'] ?? ''));
                 } else {
@@ -441,26 +441,202 @@ class HpcController extends Controller
     public function getGradeMap(): array
     {
         return [
-            'PP-1'  => 'Balvatika 1',
-            'PP-2'  => 'Balvatika 2',
-            'PP-3'  => 'Balvatika 3',
-            'I'     => 'Grade 1',
-            'II'    => 'Grade 2',
-            'III'   => 'Grade 3',
-            'IV'    => 'Grade 4',
-            'V'     => 'Grade 5',
-            'VI'    => 'Grade 6',
-            'VII'   => 'Grade 7',
-            'VIII'  => 'Grade 8',
-            '1'     => 'Grade 1',
-            '2'     => 'Grade 2',
-            '3'     => 'Grade 3',
-            '4'     => 'Grade 4',
-            '5'     => 'Grade 5',
-            '6'     => 'Grade 6',
-            '7'     => 'Grade 7',
-            '8'     => 'Grade 8',
+            // Balvatika / Pre-Primary
+            'Balvatika 1'   => 'Balvatika 1',
+            'Balvatika 2'   => 'Balvatika 2',
+            'Balvatika 3'   => 'Balvatika 3',
+            'Balvatika-1'   => 'Balvatika 1',
+            'Balvatika-2'   => 'Balvatika 2',
+            'Balvatika-3'   => 'Balvatika 3',
+            'Balvatika'     => 'Balvatika 1',
+            'PP-1'          => 'Balvatika 1',
+            'PP-2'          => 'Balvatika 2',
+            'PP-3'          => 'Balvatika 3',
+            'PP1'           => 'Balvatika 1',
+            'PP2'           => 'Balvatika 2',
+            'PP3'           => 'Balvatika 3',
+            'PP 1'          => 'Balvatika 1',
+            'PP 2'          => 'Balvatika 2',
+            'PP 3'          => 'Balvatika 3',
+            '-1'            => 'Balvatika 1',
+            '-2'            => 'Balvatika 2',
+            '-3'            => 'Balvatika 3',
+            'Nursery'       => 'Balvatika 1',
+            'LKG'           => 'Balvatika 2',
+            'UKG'           => 'Balvatika 3',
+            'Pre-Primary 1' => 'Balvatika 1',
+            'Pre-Primary 2' => 'Balvatika 2',
+            'Pre-Primary 3' => 'Balvatika 3',
+            'Pre-Primary'   => 'Balvatika 1',
+            'Pre Primary 1' => 'Balvatika 1',
+            'Pre Primary 2' => 'Balvatika 2',
+            'Pre Primary 3' => 'Balvatika 3',
+
+            // Roman Numerals
+            'I'             => 'Grade 1',
+            'II'            => 'Grade 2',
+            'III'           => 'Grade 3',
+            'IV'            => 'Grade 4',
+            'V'             => 'Grade 5',
+            'VI'            => 'Grade 6',
+            'VII'           => 'Grade 7',
+            'VIII'          => 'Grade 8',
+            'IX'            => 'Grade 9',
+            'X'             => 'Grade 10',
+            'XI'            => 'Grade 11',
+            'XII'           => 'Grade 12',
+
+            // Arabic Digits
+            '1'             => 'Grade 1',
+            '2'             => 'Grade 2',
+            '3'             => 'Grade 3',
+            '4'             => 'Grade 4',
+            '5'             => 'Grade 5',
+            '6'             => 'Grade 6',
+            '7'             => 'Grade 7',
+            '8'             => 'Grade 8',
+            '9'             => 'Grade 9',
+            '10'            => 'Grade 10',
+            '11'            => 'Grade 11',
+            '12'            => 'Grade 12',
+
+            // Ordinal format
+            '1st'           => 'Grade 1',
+            '2nd'           => 'Grade 2',
+            '3rd'           => 'Grade 3',
+            '4th'           => 'Grade 4',
+            '5th'           => 'Grade 5',
+            '6th'           => 'Grade 6',
+            '7th'           => 'Grade 7',
+            '8th'           => 'Grade 8',
+            '9th'           => 'Grade 9',
+            '10th'          => 'Grade 10',
+            '11th'          => 'Grade 11',
+            '12th'          => 'Grade 12',
+
+            // Standard Grade string
+            'Grade 1'       => 'Grade 1',
+            'Grade 2'       => 'Grade 2',
+            'Grade 3'       => 'Grade 3',
+            'Grade 4'       => 'Grade 4',
+            'Grade 5'       => 'Grade 5',
+            'Grade 6'       => 'Grade 6',
+            'Grade 7'       => 'Grade 7',
+            'Grade 8'       => 'Grade 8',
+            'Grade 9'       => 'Grade 9',
+            'Grade 10'      => 'Grade 10',
+            'Grade 11'      => 'Grade 11',
+            'Grade 12'      => 'Grade 12',
+
+            // Class string
+            'Class 1'       => 'Grade 1',
+            'Class 2'       => 'Grade 2',
+            'Class 3'       => 'Grade 3',
+            'Class 4'       => 'Grade 4',
+            'Class 5'       => 'Grade 5',
+            'Class 6'       => 'Grade 6',
+            'Class 7'       => 'Grade 7',
+            'Class 8'       => 'Grade 8',
+            'Class 9'       => 'Grade 9',
+            'Class 10'      => 'Grade 10',
+            'Class 11'      => 'Grade 11',
+            'Class 12'      => 'Grade 12',
         ];
+    }
+
+    /**
+     * Normalise any class/grade string from UDISE+, Excel uploads, or HPC portal into
+     * standard format: "Balvatika 1-3" or "Grade 1-12".
+     */
+    public function normalizeGrade($rawGrade): string
+    {
+        if ($rawGrade === null || $rawGrade === '') {
+            return 'Grade 1';
+        }
+
+        $raw = trim((string) $rawGrade);
+        if ($raw === '') {
+            return 'Grade 1';
+        }
+
+        $lower = strtolower($raw);
+
+        // Pre-primary / Balvatika keywords
+        if (
+            str_contains($lower, 'balvatika') ||
+            str_contains($lower, 'pre-primary') ||
+            str_contains($lower, 'pre primary') ||
+            str_contains($lower, 'pre-school') ||
+            str_contains($lower, 'pre school') ||
+            str_contains($lower, 'bal vatika') ||
+            str_contains($lower, 'balwadi') ||
+            str_contains($lower, 'anganwadi') ||
+            preg_match('/\bpp[\s\-_]?[1-3]?\b/i', $lower)
+        ) {
+            if (str_contains($lower, '3') || str_contains($lower, 'iii') || str_contains($lower, 'ukg') || str_contains($lower, 'sr')) {
+                return 'Balvatika 3';
+            }
+            if (str_contains($lower, '2') || str_contains($lower, 'ii') || str_contains($lower, 'lkg') || str_contains($lower, 'jr')) {
+                return 'Balvatika 2';
+            }
+            return 'Balvatika 1';
+        }
+
+        // Direct standard preschool aliases
+        if (in_array($lower, ['nursery', 'nur', 'pp1', 'pp-1', '-1', 'pre-1', 'pre 1'], true)) {
+            return 'Balvatika 1';
+        }
+        if (in_array($lower, ['lkg', 'kg-1', 'kg1', 'jr kg', 'junior kg', 'pp2', 'pp-2', '-2', 'pre-2', 'pre 2'], true)) {
+            return 'Balvatika 2';
+        }
+        if (in_array($lower, ['ukg', 'kg-2', 'kg2', 'sr kg', 'senior kg', 'pp3', 'pp-3', '-3', 'pre-3', 'pre 3'], true)) {
+            return 'Balvatika 3';
+        }
+
+        // Check standard grade map directly (case-sensitive and case-insensitive)
+        $gradeMap = $this->getGradeMap();
+        if (isset($gradeMap[$raw])) {
+            return $gradeMap[$raw];
+        }
+        foreach ($gradeMap as $k => $v) {
+            if (strcasecmp($k, $raw) === 0) {
+                return $v;
+            }
+        }
+
+        // Check patterns like "Grade 6", "Class 6", "6th", "6"
+        if (preg_match('/\b(1[0-2]|[1-9])(?:st|nd|rd|th)?\b/i', $raw, $m)) {
+            return 'Grade ' . (int)$m[1];
+        }
+
+        // Check standalone Roman numerals
+        $romanMap = [
+            'xii'  => 'Grade 12',
+            'xi'   => 'Grade 11',
+            'x'    => 'Grade 10',
+            'ix'   => 'Grade 9',
+            'viii' => 'Grade 8',
+            'vii'  => 'Grade 7',
+            'vi'   => 'Grade 6',
+            'v'    => 'Grade 5',
+            'iv'   => 'Grade 4',
+            'iii'  => 'Grade 3',
+            'ii'   => 'Grade 2',
+            'i'    => 'Grade 1',
+        ];
+
+        $cleanLetters = strtolower(trim(preg_replace('/[^a-z]/i', '', $raw)));
+        if (isset($romanMap[$cleanLetters])) {
+            return $romanMap[$cleanLetters];
+        }
+
+        // Digits anywhere (e.g. "C-1", "Sec-5", etc.)
+        $digits = preg_replace('/[^0-9]/', '', $raw);
+        if ($digits !== '' && (int)$digits >= 1 && (int)$digits <= 12) {
+            return 'Grade ' . (int)$digits;
+        }
+
+        return $raw ?: 'Grade 1';
     }
 
     // ─── Step 2: Upload & validate the filled Excel ───────────────────────────
@@ -512,7 +688,7 @@ class HpcController extends Controller
                     elseif (str_contains($k, 'gender') || str_contains($k, 'sex')) $headerMap['gender'] = $ltr;
                     elseif (str_contains($k, 'email')) $headerMap['email'] = $ltr;
                     elseif (str_contains($k, 'admission') || str_contains($k, 'admn') || str_contains($k, 'adm no') || str_contains($k, 'adm.') || str_contains($k, 'roll')) $headerMap['admission'] = $ltr;
-                    elseif (str_contains($k, 'grade') || str_contains($k, 'class')) $headerMap['grade'] = $ltr;
+                    elseif (str_contains($k, 'grade') || str_contains($k, 'class') || str_contains($k, 'standard') || str_contains($k, 'std') || str_contains($k, 'कक्षा') || str_contains($k, 'kaksha')) $headerMap['grade'] = $ltr;
                     elseif (str_contains($k, 'section')) $headerMap['section'] = $ltr;
                     elseif (str_contains($k, 'apaar')) $headerMap['apaar'] = $ltr;
                     elseif (str_contains($k, 'pen') || str_contains($k, 'permanent education')) $headerMap['pen'] = $ltr;
@@ -574,8 +750,8 @@ class HpcController extends Controller
                     }
 
                     // Grade & Section
-                    $rawGrade = ! empty($headerMap['grade']) ? trim((string)$ws->getCell($headerMap['grade'] . $r)->getValue()) : 'Grade 6';
-                    $grade    = $gradeMap[$rawGrade] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawGrade)] ?? 'Grade 6');
+                    $rawGrade = ! empty($headerMap['grade']) ? trim((string)$ws->getCell($headerMap['grade'] . $r)->getValue()) : '';
+                    $grade    = $this->normalizeGrade($rawGrade);
                     $section  = ! empty($headerMap['section']) ? (trim((string)$ws->getCell($headerMap['section'] . $r)->getValue()) ?: 'A') : 'A';
                     $apaarId  = ! empty($headerMap['apaar']) ? preg_replace('/[^0-9]/', '', (string)$ws->getCell($headerMap['apaar'] . $r)->getValue()) : '';
 
@@ -598,7 +774,7 @@ class HpcController extends Controller
                         $gender      = $valD;
                         $email       = trim((string) $ws->getCell("E{$r}")->getValue());
                         $admissionNo = trim((string) $ws->getCell("F{$r}")->getValue());
-                        $grade       = trim((string) $ws->getCell("G{$r}")->getValue());
+                        $grade       = $this->normalizeGrade($ws->getCell("G{$r}")->getValue());
                         $section     = trim((string) $ws->getCell("H{$r}")->getValue());
                         $apaarId     = trim((string) $ws->getCell("I{$r}")->getValue());
                     } else {
@@ -606,7 +782,7 @@ class HpcController extends Controller
                         $gender      = '';
                         $email       = $valD;
                         $admissionNo = '';
-                        $grade       = trim((string) $ws->getCell("E{$r}")->getValue());
+                        $grade       = $this->normalizeGrade($ws->getCell("E{$r}")->getValue());
                         $section     = trim((string) $ws->getCell("F{$r}")->getValue());
                         $apaarId     = trim((string) $ws->getCell("G{$r}")->getValue());
                     }
@@ -725,7 +901,7 @@ class HpcController extends Controller
         $email       = trim((string)($data['email'] ?? ''));
         $admissionNo = trim((string)($data['admission_no'] ?? ($data['admnNumber'] ?? '')));
         $penCode     = trim((string)($data['pen_code'] ?? ($data['studentCodeNat'] ?? '')));
-        $grade       = trim((string)($data['grade'] ?? ''));
+        $grade       = $this->normalizeGrade($data['grade'] ?? '');
         $section     = trim((string)($data['section'] ?? ''));
         $apaarId     = trim((string)($data['apaar_id'] ?? ''));
 
@@ -1011,7 +1187,7 @@ class HpcController extends Controller
         $lastName  = trim($data['last_name'] ?? '');
         $name      = trim($data['name'] ?? trim("{$firstName} {$lastName}"));
         $dob       = trim($data['dob'] ?? '');
-        $grade     = trim($data['grade'] ?? 'Grade 6');
+        $grade     = $this->normalizeGrade($data['grade'] ?? '');
         $section   = trim($data['section'] ?? 'A');
         $email     = trim($data['email'] ?? '');
         $gender    = ! empty($data['gender']) ? trim((string)$data['gender']) : (! empty($data['genderDesc']) ? trim((string)$data['genderDesc']) : null);
@@ -1260,9 +1436,9 @@ class HpcController extends Controller
             $email      = "{$cleanFirst}.{$idPart}@gmail.com";
         }
 
-        $rawClass = trim($st['classDesc'] ?? '');
-        $grade    = $gradeMap[$rawClass] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawClass)] ?? 'Grade 6');
-        $section  = ! empty($st['sectionDesc']) ? trim($st['sectionDesc']) : 'A';
+        $rawClass = trim($st['classDesc'] ?? ($st['class_desc'] ?? ($st['class'] ?? ($st['grade'] ?? ''))));
+        $grade    = $this->normalizeGrade($rawClass);
+        $section  = ! empty($st['sectionDesc']) ? trim($st['sectionDesc']) : (! empty($st['section']) ? trim($st['section']) : 'A');
         $apaarId  = ! empty($st['apaarId']) ? (string) $st['apaarId'] : '';
 
         return compact('firstName', 'lastName', 'dob', 'gender', 'email', 'cleanPen', 'admissionNo', 'grade', 'section', 'apaarId');
@@ -2013,7 +2189,7 @@ class HpcController extends Controller
                 'name'           => $fullName ?: trim("{$firstName} {$lastName}"),
                 'dob'            => trim($raw['dob']    ?? ''),
                 'gender'         => trim($raw['gender'] ?? ''),
-                'grade'          => trim($raw['grade']  ?? ''),
+                'grade'          => $this->normalizeGrade($raw['grade'] ?? ''),
                 'section'        => trim($raw['section'] ?? 'A'),
                 'apaar_id'       => $apaar,
                 'pen_code'       => $penCode,

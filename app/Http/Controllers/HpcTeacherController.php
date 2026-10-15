@@ -271,7 +271,7 @@ class HpcTeacherController extends Controller
                     'id'           => $st->id,
                     'name'         => $st->name,
                     'admission_no' => $st->admission_no ? (string)$st->admission_no : '',
-                    'grade'        => $st->grade ?: 'Grade 6',
+                    'grade'        => $st->grade ?: 'Grade 1',
                     'section'      => $st->section ?: 'A',
                     'apaar_id'     => $st->apaar_id ?: '',
                     'login_id'     => $st->pen_code ?: ($st->apaar_id ?: 'S' . strtoupper(substr(md5($st->id . $st->name), 0, 9))),
@@ -1537,7 +1537,7 @@ class HpcTeacherController extends Controller
     {
         $admNo   = ! empty($st['admission_no']) ? (string)$st['admission_no'] : '';
         $stName  = $st['name'] ?? 'Student ' . ($sIdx + 1);
-        $grade   = ! empty($st['grade']) ? $st['grade'] : 'Grade 6';
+        $grade   = ! empty($st['grade']) ? $st['grade'] : 'Grade 1';
         $section = ! empty($st['section']) ? $st['section'] : 'A';
 
         $monthKeys = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];

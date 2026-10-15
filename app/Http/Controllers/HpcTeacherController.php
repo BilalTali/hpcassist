@@ -152,8 +152,16 @@ class HpcTeacherController extends Controller
         return $this->generateSpreadsheetResponse($students, $grade);
     }
 
-    public function syncRoster(Request $request): \Illuminate\Http\JsonResponse
+    public function syncRoster(Request $request): \Symfony\Component\HttpFoundation\Response
     {
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 200, [
+                'Access-Control-Allow-Origin'  => '*',
+                'Access-Control-Allow-Methods' => 'POST, GET, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token, X-CSRF-TOKEN',
+            ]);
+        }
+
         $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         if (! $school && $request->filled('school_id')) {
             $school = \App\Models\School::find($request->input('school_id'));
@@ -763,6 +771,14 @@ class HpcTeacherController extends Controller
 
     public function evaluationsQueue(Request $request)
     {
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 200, [
+                'Access-Control-Allow-Origin'  => '*',
+                'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token, X-CSRF-TOKEN',
+            ]);
+        }
+
         $schoolId = $request->input('school_id');
         $school = $schoolId ? \App\Models\School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         
@@ -808,6 +824,14 @@ class HpcTeacherController extends Controller
 
     public function evaluationsProgress(Request $request)
     {
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 200, [
+                'Access-Control-Allow-Origin'  => '*',
+                'Access-Control-Allow-Methods' => 'POST, OPTIONS',
+                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token, X-CSRF-TOKEN',
+            ]);
+        }
+
         $schoolId = $request->input('school_id');
         $school = $schoolId ? \App\Models\School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         $schoolDir = $this->getSchoolStorageDir($school);

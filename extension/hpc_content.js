@@ -1306,50 +1306,65 @@
             const rows = Array.from(document.querySelectorAll('table tbody tr, tbody tr, .table tr'));
             let pageFound = 0;
 
+            // Dynamically inspect header columns if available
+            const headerThs = Array.from(document.querySelectorAll('table thead th, table th')).map(th => th.textContent.trim().toLowerCase());
+            let apaarIdx = headerThs.findIndex(t => t.includes('apaar'));
+            let loginIdx = headerThs.findIndex(t => t.includes('login') || t.includes('pen') || t.includes('hpc id'));
+            let nameIdx = headerThs.findIndex(t => t.includes('name'));
+            let statusIdx = headerThs.findIndex(t => t.includes('status'));
+
             for (const row of rows) {
                 const cells = Array.from(row.querySelectorAll('td'));
                 if (cells.length < 2) continue; // skip header or empty row
 
                 const texts = cells.map(c => c.textContent.trim());
 
-                // Common stage page layout:
-                // [0] = S.No
-                // [1] = HPC Login ID / PEN / APAAR
-                // [2] = Student Name
-                // [3] = Status (e.g. "HPC In Progress", "HPC Pending", "HPC Completed")
-                let sNo = texts[0] || '';
-                let loginId = '';
-                let name = '';
-                let status = 'HPC In Progress';
-                let apaarId = '';
+                let apaarId = (apaarIdx !== -1 && texts[apaarIdx]) ? texts[apaarIdx] : '';
+                let loginId = (loginIdx !== -1 && texts[loginIdx]) ? texts[loginIdx] : '';
+                let name = (nameIdx !== -1 && texts[nameIdx]) ? texts[nameIdx] : '';
+                let status = (statusIdx !== -1 && texts[statusIdx]) ? texts[statusIdx] : 'HPC In Progress';
 
-                if (texts.length >= 3) {
-                    loginId = texts[1];
-                    name = texts[2];
-                    if (texts[3]) {
-                        status = texts[3];
+                // Positional fallback for PARAKH stage table:
+                // Column layout: [0] APAAR ID | [1] HPC Login ID | [2] Name | [3] Status | [4] Action
+                if (!loginId || !name) {
+                    if (texts.length >= 4) {
+                        if (/^S[0-9A-Z]{6,16}$/i.test(texts[1])) {
+                            apaarId = apaarId || texts[0];
+                            loginId = loginId || texts[1];
+                            name = name || texts[2];
+                            status = texts[3] || status;
+                        } else if (/^S[0-9A-Z]{6,16}$/i.test(texts[0])) {
+                            loginId = loginId || texts[0];
+                            name = name || texts[1];
+                            status = texts[2] || status;
+                        }
+                    } else if (texts.length >= 3) {
+                        loginId = loginId || texts[0];
+                        name = name || texts[1];
+                        status = texts[2] || status;
                     }
                 }
 
-                // If not matched by index, search cells for patterns
+                // Generic text heuristics if still not resolved
                 if (!name || /^\d+$/.test(name)) {
                     for (let i = 0; i < texts.length; i++) {
                         const t = texts[i];
-                        if (!name && /^[A-Z][A-Za-z\s.'-]{2,}$/.test(t) && t.length > 2 && !/^\d+$/.test(t)) {
+                        if (!name && /^[A-Z][A-Za-z\s.'-]{2,}$/.test(t) && t.length > 2 && !/^\d+$/.test(t) && !/^S[0-9A-Z]{6,}$/i.test(t)) {
                             const low = t.toLowerCase();
-                            if (!['action', 'actions', 'open', 'edit', 'view', 'status', 's.no', 'sr.no', 'select'].includes(low)) {
+                            if (!['action', 'actions', 'open', 'edit', 'view', 'status', 's.no', 'sr.no', 'select', 'hpc pending', 'hpc completed'].includes(low)) {
                                 name = t;
                             }
                         }
                     }
                 }
 
-                // Check for 11-12 digit numbers (PEN / APAAR)
                 for (let i = 0; i < texts.length; i++) {
                     const cleanNum = texts[i].replace(/\s+/g, '');
                     if (/^\d{11,12}$/.test(cleanNum)) {
-                        if (!loginId || loginId === sNo) loginId = cleanNum;
                         if (!apaarId && cleanNum.length === 12) apaarId = cleanNum;
+                        if (!loginId) loginId = cleanNum;
+                    } else if (/^S[0-9A-Z]{6,16}$/i.test(cleanNum) && !loginId) {
+                        loginId = cleanNum;
                     }
                 }
 

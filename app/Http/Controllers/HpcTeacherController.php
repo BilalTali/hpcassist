@@ -34,7 +34,7 @@ class HpcTeacherController extends Controller
         return storage_path('app/hpc');
     }
 
-    public function dashboard()
+    public function dashboard(Request $request)
     {
         $storagePath = config('hpc.storage_path');
         $schoolsData = $this->getSchoolsData();
@@ -51,19 +51,31 @@ class HpcTeacherController extends Controller
             }
         }
 
-        $stagesFile = $storagePath . '/stages.json';
-        $stages = file_exists($stagesFile) ? (json_decode(file_get_contents($stagesFile), true) ?? []) : [
-            ['title' => 'Middle Stage', 'slug' => 'middle-stage', 'url' => 'https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage'],
-            ['title' => 'Preparatory Stage', 'slug' => 'preparatory-stage', 'url' => 'https://hpc.parakh.ncert.gov.in/en/hpc/preparatory-stage']
+        $stages = [
+            ['title' => 'Middle Stage (Class 6 - 8)', 'slug' => 'middle-stage', 'url' => 'https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage'],
+            ['title' => 'Preparatory Stage (Class 3 - 5)', 'slug' => 'preparatory-stage', 'url' => 'https://hpc.parakh.ncert.gov.in/en/hpc/preparatory-stage'],
+            ['title' => 'Foundational Stage (Balvatika - Class 2)', 'slug' => 'foundational-stage', 'url' => 'https://hpc.parakh.ncert.gov.in/en/hpc/foundational-stage'],
         ];
 
         $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $schoolId = $school?->id ?? (int)preg_replace('/[^0-9]/', '', (string)($activeSchool['id'] ?? '')) ?: null;
         $schoolDir = $this->getSchoolStorageDir($school);
+
+        $teacherClass = null;
+        if (\Illuminate\Support\Facades\Auth::check() && \Illuminate\Support\Facades\Auth::user()->isTeacher()) {
+            $userTeacher = \Illuminate\Support\Facades\Auth::user()->getEffectiveTeacher();
+            if ($userTeacher && ! empty($userTeacher->classes) && strcasecmp(trim($userTeacher->classes), 'All Classes') !== 0) {
+                $teacherClass = trim($userTeacher->classes);
+            }
+        }
+
+        $selectedStage = $request->query('stage', 'all');
+        $selectedGrade = $request->query('grade', $teacherClass);
 
         $studentsFile = $schoolDir . '/teacher_students.json';
         $students = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
         if (empty($students)) {
-            $students = $this->getTeacherTemplateStudents();
+            $students = $this->getTeacherTemplateStudents($selectedGrade, $selectedStage);
         }
 
         $previewFile = $schoolDir . '/teacher_preview.json';
@@ -87,6 +99,11 @@ class HpcTeacherController extends Controller
             'schoolsData',
             'activeSchool',
             'activeTeacher',
+            'school',
+            'schoolId',
+            'teacherClass',
+            'selectedStage',
+            'selectedGrade',
             'hasSession',
             'stages',
             'students',
@@ -117,15 +134,19 @@ class HpcTeacherController extends Controller
         }
 
         $grade = $request->input('grade', request('grade'));
+        $stage = $request->input('stage', request('stage'));
         if ($grade === 'all' || trim((string)$grade) === '') {
             $grade = null;
         }
+        if ($stage === 'all' || trim((string)$stage) === '') {
+            $stage = null;
+        }
 
-        $students = $this->getTeacherTemplateStudents($grade);
+        $students = $this->getTeacherTemplateStudents($grade, $stage);
 
         if (empty($students)) {
-            $msg = 'No students found' . ($grade ? " for {$grade}" : '') . '. Please connect your Teacher Session on PARAKH HPC or select your assigned class.';
-            return redirect()->to(route('dashboard') . '?step=4' . ($grade ? '&grade=' . urlencode($grade) : ''))->with('error', $msg);
+            $msg = 'No students found' . ($grade ? " for {$grade}" : ($stage ? " for {$stage}" : '')) . '. Please connect your Teacher Session on PARAKH HPC or select your assigned class.';
+            return redirect()->to(route('hpc.teacher.dashboard') . ($grade ? '?grade=' . urlencode($grade) : ''))->with('error', $msg);
         }
 
         return $this->generateSpreadsheetResponse($students, $grade);
@@ -215,22 +236,26 @@ class HpcTeacherController extends Controller
         ]);
     }
 
-    private function getTeacherTemplateStudents(?string $grade = null): array
+    public function getStageGrades(?string $stage): array
+    {
+        return match (strtolower(trim((string)$stage))) {
+            'middle-stage', 'middle'             => ['Grade 6', 'Grade 7', 'Grade 8'],
+            'preparatory-stage', 'preparatory'   => ['Grade 3', 'Grade 4', 'Grade 5'],
+            'foundational-stage', 'foundational' => ['Balvatika 1', 'Balvatika 2', 'Balvatika 3', 'Grade 1', 'Grade 2'],
+            default                              => []
+        };
+    }
+
+    private function getTeacherTemplateStudents(?string $grade = null, ?string $stage = null): array
     {
         $school       = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         $schoolDir    = $this->getSchoolStorageDir($school);
         $studentsFile = $schoolDir . '/teacher_students.json';
         $students     = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
 
-        // If no explicit grade was requested and logged-in user is a Teacher, default to their assigned class
-        if (empty($grade) && \Illuminate\Support\Facades\Auth::check() && \Illuminate\Support\Facades\Auth::user()->isTeacher()) {
-            $userTeacher = \Illuminate\Support\Facades\Auth::user()->getEffectiveTeacher();
-            if ($userTeacher && ! empty($userTeacher->classes) && strcasecmp(trim($userTeacher->classes), 'All Classes') !== 0) {
-                $grade = $userTeacher->classes;
-            }
-        }
+        $stageGrades = (! empty($stage) && $stage !== 'all') ? $this->getStageGrades($stage) : [];
 
-        // 1. If students were loaded from teacher_students.json, FIRST enrich them with real DB values (admission_no, grade, section)
+        // 1. If students were loaded from teacher_students.json, enrich from DB
         if (! empty($students) && $school) {
             $dbStudents = $school->students()->get();
             foreach ($students as &$s) {
@@ -250,21 +275,25 @@ class HpcTeacherController extends Controller
             }
             unset($s);
 
-            // Filter teacher_students.json by grade if specified:
+            // Filter by grade or stage
             if (! empty($grade) && $grade !== 'all') {
                 $normGrade = strtolower(trim(str_ireplace('grade', '', $grade)));
                 $students = array_values(array_filter($students, function($s) use ($grade, $normGrade) {
                     $stGrade = trim((string)($s['grade'] ?? ''));
                     if (empty($stGrade)) return false;
-                    if (strcasecmp($stGrade, trim($grade)) === 0) return true;
-                    return strtolower(trim(str_ireplace('grade', '', $stGrade))) === $normGrade;
+                    return strcasecmp($stGrade, trim($grade)) === 0 || strtolower(trim(str_ireplace('grade', '', $stGrade))) === $normGrade;
+                }));
+            } elseif (! empty($stageGrades)) {
+                $students = array_values(array_filter($students, function($s) use ($stageGrades) {
+                    return in_array(trim((string)($s['grade'] ?? '')), $stageGrades, true);
                 }));
             }
+
+            return $students;
         }
 
-        // 2. If no teacher_students.json exists for this school, pull from database:
-        // Prioritize Step 3 students (already submitted / confirmed on PARAKH HPC)
-        if (empty($students) && $school && $school->students()->exists()) {
+        // 2. If no teacher_students.json exists for this school, pull real students from database:
+        if ($school && $school->students()->exists()) {
             $hasStep3 = $school->students()->step3()->exists();
             $query = $hasStep3 ? $school->students()->step3() : $school->students();
 
@@ -276,9 +305,11 @@ class HpcTeacherController extends Controller
                       ->orWhere('grade', 'Grade ' . $numGrade)
                       ->orWhere('grade', $numGrade);
                 });
+            } elseif (! empty($stageGrades)) {
+                $query->whereIn('grade', $stageGrades);
             }
 
-            $students = $query->orderBy('id')->get()->map(function($st) {
+            $students = $query->orderBy('grade')->orderBy('id')->get()->map(function($st) {
                 return [
                     'id'           => $st->id,
                     'name'         => $st->name,
@@ -292,7 +323,6 @@ class HpcTeacherController extends Controller
             })->all();
         }
 
-        // Return only real students — never any dummy mock records
         return $students;
     }
 
@@ -814,6 +844,7 @@ class HpcTeacherController extends Controller
     public function discover(Request $request)
     {
         $stage     = trim((string) $request->input('stage'));
+        $grade     = trim((string) $request->input('grade'));
         $school    = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         $schoolDir = $this->getSchoolStorageDir($school);
 
@@ -822,23 +853,21 @@ class HpcTeacherController extends Controller
 
         // If no teacher_students.json exists yet for this school, pull real students from database
         if (empty($students)) {
-            $students = $this->getTeacherTemplateStudents();
-        }
-
-        // Filter by stage if specified
-        if (! empty($stage) && $stage !== 'all' && ! empty($students)) {
-            $stageGrades = match ($stage) {
-                'middle-stage'       => ['Grade 6', 'Grade 7', 'Grade 8'],
-                'preparatory-stage'  => ['Grade 3', 'Grade 4', 'Grade 5'],
-                'foundational-stage' => ['Balvatika 1', 'Balvatika 2', 'Balvatika 3', 'Grade 1', 'Grade 2'],
-                default              => []
-            };
-
-            if (! empty($stageGrades)) {
-                $students = array_values(array_filter($students, function($s) use ($stageGrades) {
+            $students = $this->getTeacherTemplateStudents($grade ?: null, $stage ?: null);
+        } else {
+            if (! empty($grade) && $grade !== 'all') {
+                $normGrade = strtolower(trim(str_ireplace('grade', '', $grade)));
+                $students = array_values(array_filter($students, function($s) use ($grade, $normGrade) {
                     $stGrade = trim((string)($s['grade'] ?? ''));
-                    return in_array($stGrade, $stageGrades, true);
+                    return strcasecmp($stGrade, trim($grade)) === 0 || strtolower(trim(str_ireplace('grade', '', $stGrade))) === $normGrade;
                 }));
+            } elseif (! empty($stage) && $stage !== 'all') {
+                $stageGrades = $this->getStageGrades($stage);
+                if (! empty($stageGrades)) {
+                    $students = array_values(array_filter($students, function($s) use ($stageGrades) {
+                        return in_array(trim((string)($s['grade'] ?? '')), $stageGrades, true);
+                    }));
+                }
             }
         }
 

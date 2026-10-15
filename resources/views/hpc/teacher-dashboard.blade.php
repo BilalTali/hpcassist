@@ -280,7 +280,7 @@
                         </div>
                     </div>
 
-                    <a href="{{ route('hpc.teacher.template.download') }}"
+                    <a id="btn-download-template" href="{{ route('hpc.teacher.template.download') }}{{ !empty($selectedGrade) ? '?grade=' . urlencode($selectedGrade) : (!empty($selectedStage) && $selectedStage !== 'all' ? '?stage=' . urlencode($selectedStage) : '') }}"
                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow">
                         📥 Download Template (.xlsx)
                     </a>
@@ -367,11 +367,18 @@
 
                         <!-- Stage Sync Controls -->
                         <div class="flex items-center gap-2">
-                            <select id="stage-select"
+                            <select id="stage-select" onchange="discoverStageStudents()"
                                     class="text-xs font-bold bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer">
-                                <option value="all" selected>All Stages</option>
+                                @if(!empty($teacherClass))
+                                    <option value="class:{{ $teacherClass }}" {{ ($selectedGrade === $teacherClass) ? 'selected' : '' }}>
+                                        👩‍🏫 My Class ({{ $teacherClass }})
+                                    </option>
+                                @endif
+                                <option value="all" {{ (empty($selectedGrade) && $selectedStage === 'all') ? 'selected' : '' }}>
+                                    🏫 All Students (Whole School)
+                                </option>
                                 @foreach($stages as $st)
-                                    <option value="{{ $st['slug'] }}">
+                                    <option value="{{ $st['slug'] }}" {{ ($selectedStage === $st['slug'] && empty($selectedGrade)) ? 'selected' : '' }}>
                                         {{ $st['title'] }}
                                     </option>
                                 @endforeach
@@ -595,33 +602,49 @@
 
         // ── Stage Student Discovery ───────────────────────────────────────────
         async function discoverStageStudents() {
-            const stage = document.getElementById('stage-select').value;
+            const stageVal = document.getElementById('stage-select').value;
+            let stage = stageVal;
+            let grade = '';
+            if (stageVal.startsWith('class:')) {
+                grade = stageVal.replace('class:', '');
+                stage = 'all';
+            }
+
             const btn = document.getElementById('btn-discover');
             const spinner = document.getElementById('discover-spinner');
             const tbody = document.getElementById('students-table-body');
             const countBadge = document.getElementById('students-count');
+            const dlBtn = document.getElementById('btn-download-template');
 
-            btn.disabled = true;
-            spinner.classList.remove('hidden');
+            // Dynamically update Step 1 template download URL
+            if (dlBtn) {
+                const params = new URLSearchParams();
+                if (grade) params.set('grade', grade);
+                if (stage && stage !== 'all') params.set('stage', stage);
+                dlBtn.href = '{{ route('hpc.teacher.template.download') }}' + (params.toString() ? '?' + params.toString() : '');
+            }
+
+            if (btn) btn.disabled = true;
+            if (spinner) spinner.classList.remove('hidden');
 
             try {
                 const res = await fetch('{{ route('hpc.teacher.discover') }}', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-                    body: JSON.stringify({ stage })
+                    body: JSON.stringify({ stage, grade })
                 });
                 const d = await res.json();
                 if (d.ok && d.students) {
                     tbody.innerHTML = '';
                     if (d.students.length === 0) {
-                        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400 italic">No enrolled students found for stage ${stage} on portal.</td></tr>`;
+                        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400 italic">No enrolled students found for selected filter.</td></tr>`;
                         countBadge.innerText = '0';
                     } else {
                         d.students.forEach((st, idx) => {
                             const isCompleted = (st.status || '').toLowerCase().includes('completed');
                             const statusBadge = isCompleted 
                                 ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Successful</span>`
-                                : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">⏳ Pending</span>`;
+                                : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">⏳ Ready for Assessment</span>`;
                             
                             const tr = document.createElement('tr');
                             tr.className = 'hover:bg-slate-50/80';
@@ -630,7 +653,7 @@
                                 <td class="px-3 py-2 font-mono font-bold text-slate-800">${st.login_id || ''}</td>
                                 <td class="px-3 py-2 font-bold text-slate-900">${st.name || ''}</td>
                                 <td class="px-3 py-2">${statusBadge}</td>
-                                <td class="px-3 py-2 text-slate-600 text-[11px] font-medium">${st.stage_title || st.stage || 'Middle Stage'}</td>
+                                <td class="px-3 py-2 text-slate-600 text-[11px] font-medium">${st.grade || st.stage || 'Middle Stage'}</td>
                             `;
                             tbody.appendChild(tr);
                         });
@@ -644,8 +667,8 @@
             } catch (e) {
                 alert('Discovery error: ' + e.message);
             } finally {
-                btn.disabled = false;
-                spinner.classList.add('hidden');
+                if (btn) btn.disabled = false;
+                if (spinner) spinner.classList.add('hidden');
             }
         }
 
@@ -957,7 +980,7 @@
     <script>
         window.__HPC_CONFIG = {
             server_url: "{{ rtrim(config('app.url'), '/') }}",
-            school_id: {{ $activeSchool['id'] ?? ($school?->id ?? 'null') }},
+            school_id: {{ json_encode($schoolId) }},
             school_name: "{{ addslashes($activeSchool['name'] ?? ($school?->name ?? '')) }}",
             teacher_id: "{{ $activeTeacher['id'] ?? '' }}",
             teacher_name: "{{ addslashes($activeTeacher['name'] ?? '') }}",

@@ -1960,20 +1960,23 @@
         let candidates = [raw, raw.toLowerCase(), raw.toUpperCase()];
         if (isBalvatika) {
             const bNum = cleanNum || '1';
-            candidates.push(`Grade ${cleanNum}`, `grade ${cleanNum}`, `Class ${cleanNum}`, `class ${cleanNum}`, `Grade ${roman}`, `Class ${roman}`, roman, cleanNum);
+            candidates.push('Balvatika ' + bNum, 'balvatika ' + bNum, 'Balvatika-' + bNum, 'PP-' + bNum, 'pp-' + bNum, 'Pre-Primary ' + bNum, 'Balvatika');
+        } else if (cleanNum) {
+            const roman = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][parseInt(cleanNum, 10)] || cleanNum;
+            candidates.push('Grade ' + cleanNum, 'grade ' + cleanNum, 'Class ' + cleanNum, 'class ' + cleanNum, 'Grade ' + roman, 'Class ' + roman, roman, cleanNum);
         }
         return candidates;
     }
 
     function getSectionCandidates(sectionStr) {
         const sec = String(sectionStr || 'A').toUpperCase().trim().replace(/[^A-Z]/g, '') || 'A';
-        return [`Section ${sec}`, `section ${sec}`, sec, sec.toLowerCase(), `SECTION ${sec}`, `Section - ${sec}`, `Section-${sec}`];
+        return ['Section ' + sec, 'section ' + sec, sec, sec.toLowerCase(), 'SECTION ' + sec, 'Section - ' + sec, 'Section-' + sec];
     }
 
     for (let i = 0; i < students.length; i++) {
         const s = students[i];
         const stName = s.name || ((s.first_name || '') + ' ' + (s.last_name || '')).trim() || 'Student';
-        console.log(`[${i+1}/${students.length}] Filling ${stName}...`);
+        console.log('[' + (i + 1) + '/' + students.length + '] Filling ' + stName + '...');
 
         const writeInputs = Array.from(document.querySelectorAll('input[placeholder*="Write here" i], input[placeholder*="write here" i], input[placeholder*="लिखें" i]'));
         const allTextInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([maxlength="1"])')).filter(inp => !inp.disabled);

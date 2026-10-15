@@ -1186,6 +1186,38 @@
         function workflowApp(initialStep) {
             return {
                 currentStep: initialStep,
+                isUploadingAssessment: false,
+                async submitTeacherAssessmentUpload(event) {
+                    const form = event.target;
+                    const fileInput = form.querySelector('input[type="file"]');
+                    if (!fileInput || !fileInput.files.length) {
+                        alert('Please choose an assessment spreadsheet first.');
+                        return;
+                    }
+                    this.isUploadingAssessment = true;
+                    const fd = new FormData(form);
+                    try {
+                        const res = await fetch("{{ route('hpc.teacher.upload') }}", {
+                            method: 'POST',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': CSRF
+                            },
+                            body: fd
+                        });
+                        const data = await res.json();
+                        if (data.ok) {
+                            window.location.href = "{{ route('dashboard') }}?step=4";
+                        } else {
+                            alert(data.error || 'Failed to upload assessment.');
+                            this.isUploadingAssessment = false;
+                        }
+                    } catch(err) {
+                        alert('Upload failed: ' + err.message);
+                        this.isUploadingAssessment = false;
+                    }
+                },
                 setStep(s) {
                     this.currentStep = s;
                     const url = new URL(window.location);
@@ -1286,40 +1318,6 @@
                         this.isUploadingExcel = false;
                     }
                 },
-
-                isUploadingAssessment: false,
-                async submitTeacherAssessmentUpload(event) {
-                    const form = event.target;
-                    const fileInput = form.querySelector('input[type="file"]');
-                    if (!fileInput || !fileInput.files.length) {
-                        alert('Please choose an assessment spreadsheet first.');
-                        return;
-                    }
-                    this.isUploadingAssessment = true;
-                    const fd = new FormData(form);
-                    try {
-                        const res = await fetch("{{ route('hpc.teacher.upload') }}", {
-                            method: 'POST',
-                            headers: {
-                                'X-Requested-With': 'XMLHttpRequest',
-                                'Accept': 'application/json',
-                                'X-CSRF-TOKEN': CSRF
-                            },
-                            body: fd
-                        });
-                        const data = await res.json();
-                        if (data.ok) {
-                            window.location.href = "{{ route('dashboard') }}?step=4";
-                        } else {
-                            alert(data.error || 'Failed to upload assessment.');
-                            this.isUploadingAssessment = false;
-                        }
-                    } catch(err) {
-                        alert('Upload failed: ' + err.message);
-                        this.isUploadingAssessment = false;
-                    }
-                },
-
                 init() {},
 
                 async linkExistingRoster() {

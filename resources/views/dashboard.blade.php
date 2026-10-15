@@ -853,6 +853,9 @@
                                 You can also click <strong>Open Portal &amp; Fetch List</strong> above to import students already on the portal.
                             </div>
                         </div>
+                    @endif
+                </div>
+
                 <!-- 3E. Teacher Credentials & Assessment Handover (Final School Admin Step) ── -->
                 <div id="teacher-management-card" class="bg-white rounded-2xl shadow-xs border border-indigo-200 overflow-hidden space-y-0">
                     <!-- Header Banner -->

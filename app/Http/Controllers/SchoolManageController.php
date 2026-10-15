@@ -321,7 +321,7 @@ class SchoolManageController extends Controller
         $totalStudents = count($students);
         $totalApaar    = count(array_filter($students, fn($s) => !empty($s['apaarId']) && ctype_digit((string)$s['apaarId']) && strlen((string)$s['apaarId']) === 12));
 
-        // 3. Populate preview and students.xlsx for this school
+        // 3. Generate downloadable Excel template from UDISE data (no DB writes — user must upload for HPC)
         $hpcController = app(\App\Http\Controllers\HpcController::class);
         $hpcController->preloadUdise(null, $school, $students);
 

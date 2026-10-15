@@ -277,7 +277,7 @@ class UdiseController extends Controller
         $totalStudents = count($students);
         $totalApaar    = count(array_filter($students, fn($s) => ! empty($s['apaarId']) && ctype_digit((string) $s['apaarId']) && strlen((string) $s['apaarId']) === 12));
 
-        // Build preview.json + students.xlsx + MySQL database persistence
+        // Build downloadable Excel template from UDISE data (no DB writes — user must upload the Excel for HPC)
         $hpc = app(HpcController::class);
         $hpc->preloadUdise(null, $school, $students);
 

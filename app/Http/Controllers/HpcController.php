@@ -56,7 +56,7 @@ class HpcController extends Controller
             ? trim(file_get_contents(storage_path('app/hpc/current_form.txt')))
             : config('hpc.add_student_url');
 
-        $udiseStudents   = $this->getUdiseStudents($school);
+
         $udiseCount      = count($preview);
         $udiseApaarCount = count(array_filter($preview, fn($s) => !empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12));
 
@@ -346,7 +346,7 @@ class HpcController extends Controller
         $writer = new Xlsx($spreadsheet);
         $writer->save($fullPath);
 
-        // 2. Generate preview from normalised UDISE rows
+        // 2. Generate preview summary from normalised UDISE rows (for response only — NOT written to Step 2)
         $preview = [];
 
         foreach ($udiseStudents as $idx => $st) {
@@ -370,30 +370,14 @@ class HpcController extends Controller
             ];
         }
 
-        $this->writePreviewFile($this->getPreviewFile($school), $preview);
-
-        if ($school) {
-            $syncedIds = [];
-            foreach ($preview as $pRow) {
-                $dbStudent = $this->upsertStudentToDatabase($school, $pRow, 'udise_sync');
-                $syncedIds[] = $dbStudent->id;
-            }
-
-            // Remove any stale udise_sync records for this school that do not belong to this newly synced roster
-            Student::where('school_id', $school->id)
-                ->where('source', 'udise_sync')
-                ->whereNotIn('id', $syncedIds)
-                ->delete();
-
-            $school->update([
-                'udise_students_count' => count($syncedIds),
-                'udise_apaar_count'    => Student::where('school_id', $school->id)->whereNotNull('apaar_id')->where('apaar_id', '!=', '')->count(),
-            ]);
-        }
+        // NOTE: We intentionally do NOT write to preview.json or upsert into the students
+        // DB table here. UDISE data is stored as raw JSON and as a downloadable Excel
+        // template only. The user must download the template, review/edit it, and upload
+        // it via Step 2 for it to enter the HPC processing queue.
 
         return response()->json([
             'ok'      => true,
-            'message' => 'Successfully loaded ' . count($preview) . ' students from UDISE with unmasked APAAR IDs into Step 2!',
+            'message' => 'Successfully synced ' . count($preview) . ' students from UDISE. Download the template to review and upload for HPC processing.',
             'total'   => count($preview),
             'valid'   => count($preview),
             'invalid' => 0,
@@ -1313,7 +1297,7 @@ class HpcController extends Controller
         }
 
         if (empty($allStudents)) {
-            return response()->json(['ok' => false, 'error' => 'No student data found. Please upload an Excel file or sync from UDISE first.']);
+            return response()->json(['ok' => false, 'error' => 'No student data found. Please upload an Excel file first (download the UDISE template if needed).']);
         }
 
         $validStudents = array_values(array_filter($allStudents, fn($s) => empty($s['errors'])));

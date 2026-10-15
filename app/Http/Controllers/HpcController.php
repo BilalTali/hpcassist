@@ -1551,7 +1551,7 @@ class HpcController extends Controller
             ]);
         }
 
-        $schools = School::orderBy('name')->get()->map(function($sc) {
+        $schools = School::orderBy('name')->get()->map(function (School $sc) {
             return [
                 'id'         => $sc->id,
                 'name'       => $sc->name,

@@ -121,7 +121,7 @@
         }
     }
 
-    async function reportProgress(current, total, name, status, message, done = false) {
+    async function reportProgress(current, total, name, status, message, done = false, extra = {}) {
         if (!SERVER_URL) return;
         try {
             await fetch(`${SERVER_URL}/hpc/run/progress`, {
@@ -133,6 +133,9 @@
                 },
                 body: JSON.stringify({
                     school_id: SCHOOL_ID,
+                    student_id: extra.student_id ?? null,
+                    admission_no: extra.admission_no ?? null,
+                    apaar_id: extra.apaar_id ?? null,
                     current,
                     total,
                     name,
@@ -1156,7 +1159,11 @@
 
             // Submission SUCCESS!
             logStatus(`✅ Saved [${currentIndex + 1}/${studentsQueue.length}] ${stName}!`);
-            await reportProgress(currentIndex + 1, studentsQueue.length, stName, 'success', `Saved ${stName}`);
+            await reportProgress(currentIndex + 1, studentsQueue.length, stName, 'success', `Saved ${stName}`, false, {
+                student_id:   student.id,
+                admission_no: student.admission_no,
+                apaar_id:     student.apaar_id,
+            });
 
             currentIndex++;
             localStorage.setItem('hpc_student_index', String(currentIndex));

@@ -2209,7 +2209,7 @@
             await fetch('${serverUrl}/hpc/run/progress', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ school_id: ${schoolId}, current: i+1, total: students.length, name: stName, status: 'success' })
+                body: JSON.stringify({ school_id: ${schoolId}, student_id: s.id, admission_no: s.admission_no, apaar_id: s.apaar_id, current: i+1, total: students.length, name: stName, status: 'success' })
             });
         } catch(e) {}
 

@@ -1416,17 +1416,52 @@ class HpcController extends Controller
 
             // Mark student as confirmed in DB upon successful submission by extension
             if ($status === 'success') {
-                $st = Student::where('school_id', $school->id)->where('name', $name)->first();
-                if (! $st) {
-                    $parts = preg_split('/\s+/', trim($name));
-                    $st = Student::where('school_id', $school->id)->where('first_name', $parts[0])->first();
+                $studentId   = $request->input('student_id');
+                $admissionNo = $request->input('admission_no');
+                $apaarId     = $request->input('apaar_id');
+
+                $st = null;
+                // 1. Direct match by database ID if sent
+                if ($studentId) {
+                    $st = Student::where('school_id', $school->id)->find($studentId);
                 }
+                // 2. Match by 12-digit APAAR ID if sent
+                if (! $st && $apaarId && strlen((string)$apaarId) === 12) {
+                    $st = Student::where('school_id', $school->id)->where('apaar_id', $apaarId)->first();
+                }
+                // 3. Match by Admission Number if sent
+                if (! $st && ! empty($admissionNo)) {
+                    $st = Student::where('school_id', $school->id)->where('admission_no', $admissionNo)->first();
+                }
+                // 4. Match unsubmitted student by Name (prevents duplicate name collision)
+                if (! $st && $name) {
+                    $st = Student::where('school_id', $school->id)
+                        ->where('name', $name)
+                        ->whereNull('hpc_submitted_at')
+                        ->first();
+                    if (! $st) {
+                        $parts = preg_split('/\s+/', trim($name));
+                        $st = Student::where('school_id', $school->id)
+                            ->where('first_name', $parts[0])
+                            ->whereNull('hpc_submitted_at')
+                            ->first();
+                    }
+                    if (! $st) {
+                        $st = Student::where('school_id', $school->id)->where('name', $name)->first();
+                    }
+                }
+
                 if ($st) {
                     $st->update([
                         'status'           => Student::STATUS_SUCCESS,
                         'hpc_submitted_at' => now(),
                         'remark'           => 'Submitted via HPC Assist Browser Extension',
                     ]);
+
+                    // Immediately re-sync Step 2 preview file so the roster reflects removal
+                    $step2 = $school->students()->step2()->orderBy('id')->get();
+                    $preview = $step2->map(fn ($sRow, $idx) => $sRow->toPreviewArray($idx + 1))->values()->all();
+                    $this->writePreviewFile($this->getPreviewFile($school), $preview);
                 }
             }
         }

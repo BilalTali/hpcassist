@@ -986,16 +986,38 @@
                                 Download the specialized template formatted for Monthly Attendance, Credit Marks, Co-Curricular activities, and holistic teacher remarks.
                             </p>
                             @if(!empty($hasTeacherProfile))
-                                <div class="space-y-2 pt-1">
+                                <div class="space-y-3 pt-1">
                                     <div class="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
                                         ✓ Teacher Session Active • Exact HPC Roster Ready
                                     </div>
+
                                     <div>
-                                        <a href="{{ route('hpc.teacher.template.download') }}"
+                                        <label for="template-grade-select" class="block text-[11px] font-bold text-slate-700 mb-1">
+                                            Select Class / Grade for this Teacher:
+                                        </label>
+                                        <select id="template-grade-select" onchange="updateTemplateDownloadUrl()"
+                                                class="w-full text-xs font-semibold bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 cursor-pointer">
+                                            <option value="all">All School Classes ({{ count($step3Students) }} Total Students)</option>
+                                            @foreach($hpcGrades ?? [] as $g)
+                                                <option value="{{ $g->grade }}">
+                                                    {{ $g->grade }} ({{ $g->count }} {{ Str::plural('Student', $g->count) }})
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <a id="btn-download-teacher-template"
+                                           href="{{ route('hpc.teacher.template.download') }}"
                                            class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
                                             📥 Download Teacher Template (.xlsx)
                                         </a>
+                                        <button type="button" onclick="copyTeacherSyncScript()"
+                                                class="inline-flex items-center gap-1.5 px-3 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs shadow-xs transition active:scale-95"
+                                                title="Sync only the exact students shown in your open PARAKH teacher stage tab">
+                                            📋 1-Click Sync from Portal Tab
+                                        </button>
                                     </div>
                                 </div>
                             @else
@@ -2297,6 +2319,63 @@
                 }).join('');
             } catch(e) {
                 tbody.innerHTML = `<tr><td colspan="8" class="px-3 py-6 text-center text-red-400 text-xs">Error: ${e.message}</td></tr>`;
+            }
+        }
+
+        // ── Step 4: Teacher Template & Portal Sync Helpers ──
+        function updateTemplateDownloadUrl() {
+            const select = document.getElementById('template-grade-select');
+            const btn = document.getElementById('btn-download-teacher-template');
+            if (!select || !btn) return;
+            const grade = select.value;
+            const baseUrl = "{{ route('hpc.teacher.template.download') }}";
+            btn.href = (grade === 'all') ? baseUrl : baseUrl + '?grade=' + encodeURIComponent(grade);
+        }
+
+        async function copyTeacherSyncScript() {
+            const serverUrl = "{{ rtrim(config('app.url'), '/') }}";
+            const schoolId = {{ $school?->id ?? 'null' }};
+            const script = `(async () => {
+    console.log('[HPC Assist] Syncing teacher student roster from open portal tab...');
+    const rows = Array.from(document.querySelectorAll('tbody tr')).map((tr, idx) => {
+        const cells = Array.from(tr.querySelectorAll('td')).map(td => td.innerText.trim());
+        if (cells.length < 3 || cells[0].toLowerCase().includes('no rows')) return null;
+        return {
+            apaar_id: cells[0] || '',
+            login_id: cells[1] || '',
+            name:     cells[2] || '',
+            status:   cells[3] || 'HPC Pending',
+            stage:    location.pathname.split('/').pop() || ''
+        };
+    }).filter(Boolean);
+
+    if (rows.length === 0) {
+        alert('⚠️ No student rows found on this page.\\n\\nPlease open your assigned stage page (e.g. /en/hpc/middle-stage or preparatory-stage) and try again.');
+        return;
+    }
+
+    console.log('[HPC Assist] Found ' + rows.length + ' student(s) on portal table. Sending to HPC Assist...');
+    try {
+        const res = await fetch('${serverUrl}/hpc/teacher/sync-roster', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ school_id: ${schoolId}, students: rows })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            alert('🎉 ' + data.message + '\\n\\nYour assessment template and teacher dashboard on HPC Assist will now reflect only these exact student(s)!');
+        } else {
+            alert('❌ Sync failed: ' + (data.error || 'Unknown error'));
+        }
+    } catch(err) {
+        alert('❌ Could not sync to HPC Assist: ' + err.message);
+    }
+})();`;
+            try {
+                await navigator.clipboard.writeText(script);
+                alert('📋 1-Click Teacher Roster Sync Script Copied!\\n\\n1. Switch to your PARAKH Portal teacher dashboard tab\\n2. Press F12 (or Cmd+Option+J) -> Console\\n3. Paste (Cmd+V) and press Enter\\n\\nIt will grab the exact student(s) displayed on your teacher screen and sync them to HPC Assist!');
+            } catch(e) {
+                alert('Could not copy script: ' + e.message);
             }
         }
     </script>

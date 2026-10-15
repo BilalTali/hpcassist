@@ -96,14 +96,77 @@ class HpcTeacherController extends Controller
             file_exists($teacherProfileDir . '/session_active.txt') || (count(scandir($teacherProfileDir)) > 2)
         );
 
-        $students = $this->getTeacherTemplateStudents();
+        $grade    = $request?->input('grade');
+        $students = $this->getTeacherTemplateStudents($grade);
 
         if (empty($students)) {
-            $msg = 'Please connect your Teacher Session on PARAKH HPC first so your exact student roster is loaded before downloading.';
+            $msg = 'No students found' . ($grade && $grade !== 'all' ? " for {$grade}" : '') . '. Please connect your Teacher Session on PARAKH HPC or select your assigned class.';
             return redirect()->to(route('dashboard') . '?step=4')->with('error', $msg);
         }
 
         return $this->generateSpreadsheetResponse($students);
+    }
+
+    public function syncRoster(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        if (! $school && $request->filled('school_id')) {
+            $school = \App\Models\School::find($request->input('school_id'));
+        }
+        if (! $school) {
+            return response()->json(['ok' => false, 'error' => 'School not found.'], 404);
+        }
+
+        $incoming = $request->input('students', []);
+        if (! is_array($incoming) || empty($incoming)) {
+            return response()->json(['ok' => false, 'error' => 'No student rows provided to sync.'], 422);
+        }
+
+        $schoolDir = $this->getSchoolStorageDir($school);
+        $dbStudents = $school->students()->get();
+
+        $synced = [];
+        foreach ($incoming as $idx => $st) {
+            $name    = trim($st['name'] ?? '');
+            $loginId = trim($st['login_id'] ?? '');
+            $apaarId = trim($st['apaar_id'] ?? '');
+            $status  = trim($st['status'] ?? 'HPC In Progress');
+            $stage   = trim($st['stage'] ?? '');
+
+            // Match with DB record
+            $match = $dbStudents->first(function($dbSt) use ($apaarId, $loginId, $name) {
+                if (! empty($apaarId) && $dbSt->apaar_id === $apaarId) return true;
+                if (! empty($loginId) && ($dbSt->pen_code === $loginId || $dbSt->apaar_id === $loginId)) return true;
+                if (! empty($name) && strcasecmp(trim($dbSt->name), trim($name)) === 0) return true;
+                return false;
+            });
+
+            $synced[] = [
+                'row'          => $idx + 1,
+                'name'         => $name ?: ($match?->name ?? 'Student ' . ($idx + 1)),
+                'admission_no' => $match?->admission_no ? (string)$match->admission_no : '',
+                'grade'        => $match?->grade ?: 'Grade 1',
+                'section'      => $match?->section ?: 'A',
+                'apaar_id'     => $apaarId ?: ($match?->apaar_id ?? ''),
+                'login_id'     => $loginId ?: ($match?->pen_code ?? ''),
+                'status'       => $status,
+                'stage'        => $stage,
+            ];
+        }
+
+        file_put_contents($schoolDir . '/teacher_students.json', json_encode($synced, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+        // Mark teacher profile as active
+        $teacherProfileDir = $this->getActiveTeacherProfileDir($school);
+        @mkdir($teacherProfileDir, 0777, true);
+        @file_put_contents($teacherProfileDir . '/session_active.txt', now()->toIso8601String());
+
+        return response()->json([
+            'ok'       => true,
+            'count'    => count($synced),
+            'students' => $synced,
+            'message'  => 'Successfully synced ' . count($synced) . ' student(s) from PARAKH portal!',
+        ]);
     }
 
     private function generateSpreadsheetResponse(array $students): \Symfony\Component\HttpFoundation\StreamedResponse
@@ -127,12 +190,19 @@ class HpcTeacherController extends Controller
         ]);
     }
 
-    private function getTeacherTemplateStudents(): array
+    private function getTeacherTemplateStudents(?string $grade = null): array
     {
         $school       = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         $schoolDir    = $this->getSchoolStorageDir($school);
         $studentsFile = $schoolDir . '/teacher_students.json';
         $students     = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
+
+        // If teacher_students.json exists and grade filter is specified, filter by grade:
+        if (! empty($students) && ! empty($grade) && $grade !== 'all') {
+            $students = array_values(array_filter($students, function($s) use ($grade) {
+                return ! empty($s['grade']) && strcasecmp(trim($s['grade']), trim($grade)) === 0;
+            }));
+        }
 
         // If no teacher_students.json exists for this school, pull from database:
         // Prioritize Step 3 students (already submitted / confirmed on PARAKH HPC)
@@ -141,6 +211,10 @@ class HpcTeacherController extends Controller
             if ($query->count() === 0) {
                 // If no step 3 students yet, fallback to all school students
                 $query = $school->students();
+            }
+
+            if (! empty($grade) && $grade !== 'all') {
+                $query->where('grade', $grade);
             }
 
             $students = $query->orderBy('id')->get()->map(function($st) {

@@ -996,7 +996,9 @@
                                         <label for="template-grade-select" class="block text-[11px] font-bold text-slate-700 mb-1">
                                             Select Class / Grade for this Teacher:
                                         </label>
-                                        <select id="template-grade-select" onchange="updateTemplateDownloadUrl()"
+                                        <select id="template-grade-select"
+                                                onchange="updateTemplateDownloadUrl()"
+                                                oninput="updateTemplateDownloadUrl()"
                                                 class="w-full text-xs font-semibold bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-800 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 cursor-pointer">
                                             <option value="all">All School Classes ({{ count($step3Students) }} Total Students)</option>
                                             @foreach($hpcGrades ?? [] as $g)
@@ -1004,7 +1006,7 @@
                                                     $gGrade = (string) data_get($g, 'grade', '');
                                                     $gCount = (int) data_get($g, 'count', 0);
                                                 @endphp
-                                                <option value="{{ $gGrade }}">
+                                                <option value="{{ $gGrade }}" {{ request('grade') === $gGrade ? 'selected' : '' }}>
                                                     {{ $gGrade }} ({{ $gCount }} {{ \Illuminate\Support\Str::plural('Student', $gCount) }})
                                                 </option>
                                             @endforeach
@@ -1014,8 +1016,10 @@
                                     <div class="flex items-center gap-2 flex-wrap">
                                         <a id="btn-download-teacher-template"
                                            href="{{ route('hpc.teacher.template.download') }}"
+                                           onclick="downloadTeacherTemplate(event)"
                                            class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
-                                            📥 Download Teacher Template (.xlsx)
+                                            <span>📥</span>
+                                            <span id="btn-download-text">Download Teacher Template (.xlsx)</span>
                                         </a>
                                         <button type="button" onclick="copyTeacherSyncScript()"
                                                 class="inline-flex items-center gap-1.5 px-3 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs shadow-xs transition active:scale-95"
@@ -2330,11 +2334,40 @@
         function updateTemplateDownloadUrl() {
             const select = document.getElementById('template-grade-select');
             const btn = document.getElementById('btn-download-teacher-template');
-            if (!select || !btn) return;
+            const btnText = document.getElementById('btn-download-text');
+            if (!select) return;
             const grade = select.value;
             const baseUrl = "{{ route('hpc.teacher.template.download') }}";
-            btn.href = (grade === 'all') ? baseUrl : baseUrl + '?grade=' + encodeURIComponent(grade);
+            const targetUrl = (grade && grade !== 'all')
+                ? (baseUrl + '?grade=' + encodeURIComponent(grade))
+                : baseUrl;
+            if (btn) btn.href = targetUrl;
+
+            if (btnText) {
+                if (grade && grade !== 'all') {
+                    btnText.textContent = 'Download ' + grade + ' Template (.xlsx)';
+                } else {
+                    btnText.textContent = 'Download Teacher Template (.xlsx)';
+                }
+            }
         }
+
+        function downloadTeacherTemplate(event) {
+            if (event) {
+                event.preventDefault();
+            }
+            const select = document.getElementById('template-grade-select');
+            const grade = (select && select.value && select.value !== 'all') ? select.value : null;
+            const baseUrl = "{{ route('hpc.teacher.template.download') }}";
+            const targetUrl = grade ? (baseUrl + '?grade=' + encodeURIComponent(grade)) : baseUrl;
+
+            const btn = document.getElementById('btn-download-teacher-template');
+            if (btn) btn.href = targetUrl;
+            window.location.href = targetUrl;
+        }
+
+        document.addEventListener('DOMContentLoaded', updateTemplateDownloadUrl);
+        window.addEventListener('load', updateTemplateDownloadUrl);
 
         async function copyTeacherSyncScript() {
             const serverUrl = "{{ rtrim(config('app.url'), '/') }}";

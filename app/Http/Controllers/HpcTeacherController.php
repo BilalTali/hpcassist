@@ -88,7 +88,7 @@ class HpcTeacherController extends Controller
      * @param Request|null $request
      * @return \Symfony\Component\HttpFoundation\StreamedResponse|\Illuminate\Http\RedirectResponse
      */
-    public function downloadTemplate(?Request $request = null): \Symfony\Component\HttpFoundation\Response
+    public function downloadTemplate(Request $request): \Symfony\Component\HttpFoundation\Response
     {
         $school            = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         $teacherProfileDir = $this->getActiveTeacherProfileDir($school);
@@ -96,15 +96,19 @@ class HpcTeacherController extends Controller
             file_exists($teacherProfileDir . '/session_active.txt') || (count(scandir($teacherProfileDir)) > 2)
         );
 
-        $grade    = $request?->input('grade');
+        $grade = $request->input('grade', request('grade'));
+        if ($grade === 'all' || trim((string)$grade) === '') {
+            $grade = null;
+        }
+
         $students = $this->getTeacherTemplateStudents($grade);
 
         if (empty($students)) {
-            $msg = 'No students found' . ($grade && $grade !== 'all' ? " for {$grade}" : '') . '. Please connect your Teacher Session on PARAKH HPC or select your assigned class.';
-            return redirect()->to(route('dashboard') . '?step=4')->with('error', $msg);
+            $msg = 'No students found' . ($grade ? " for {$grade}" : '') . '. Please connect your Teacher Session on PARAKH HPC or select your assigned class.';
+            return redirect()->to(route('dashboard') . '?step=4' . ($grade ? '&grade=' . urlencode($grade) : ''))->with('error', $msg);
         }
 
-        return $this->generateSpreadsheetResponse($students);
+        return $this->generateSpreadsheetResponse($students, $grade);
     }
 
     public function syncRoster(Request $request): \Illuminate\Http\JsonResponse
@@ -169,7 +173,7 @@ class HpcTeacherController extends Controller
         ]);
     }
 
-    private function generateSpreadsheetResponse(array $students): \Symfony\Component\HttpFoundation\StreamedResponse
+    private function generateSpreadsheetResponse(array $students, ?string $grade = null): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         /** @var Spreadsheet $spreadsheet */
         $spreadsheet = new Spreadsheet();
@@ -177,9 +181,10 @@ class HpcTeacherController extends Controller
         $this->buildInstructionsSheet($spreadsheet);
         $this->buildEvaluationsSheet($spreadsheet, $students);
 
-        $filename = 'hpc_teacher_assessment_template.xlsx';
+        $gradeSuffix = ($grade && $grade !== 'all') ? '_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $grade) : '';
+        $filename    = "hpc_teacher_assessment_template{$gradeSuffix}.xlsx";
         /** @var Xlsx $writer */
-        $writer   = new Xlsx($spreadsheet);
+        $writer      = new Xlsx($spreadsheet);
 
         return response()->stream(function () use ($writer): void {
             $writer->save('php://output');
@@ -197,24 +202,52 @@ class HpcTeacherController extends Controller
         $studentsFile = $schoolDir . '/teacher_students.json';
         $students     = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
 
-        // If teacher_students.json exists and grade filter is specified, filter by grade:
-        if (! empty($students) && ! empty($grade) && $grade !== 'all') {
-            $students = array_values(array_filter($students, function($s) use ($grade) {
-                return ! empty($s['grade']) && strcasecmp(trim($s['grade']), trim($grade)) === 0;
-            }));
+        // 1. If students were loaded from teacher_students.json, FIRST enrich them with real DB values (admission_no, grade, section)
+        if (! empty($students) && $school) {
+            $dbStudents = $school->students()->get();
+            foreach ($students as &$s) {
+                $match = $dbStudents->first(function($dbSt) use ($s) {
+                    if (! empty($s['apaar_id']) && $dbSt->apaar_id === $s['apaar_id']) return true;
+                    if (! empty($s['login_id']) && ($dbSt->pen_code === $s['login_id'] || $dbSt->apaar_id === $s['login_id'])) return true;
+                    if (! empty($s['name']) && strcasecmp(trim($dbSt->name), trim($s['name'])) === 0) return true;
+                    return false;
+                });
+                if ($match) {
+                    $s['admission_no'] = $match->admission_no ? (string)$match->admission_no : ($s['admission_no'] ?? '');
+                    if (empty($s['grade']) && ! empty($match->grade)) $s['grade'] = $match->grade;
+                    if (empty($s['section']) && ! empty($match->section)) $s['section'] = $match->section;
+                } else {
+                    $s['admission_no'] = $s['admission_no'] ?? '';
+                }
+            }
+            unset($s);
+
+            // Filter teacher_students.json by grade if specified:
+            if (! empty($grade) && $grade !== 'all') {
+                $normGrade = strtolower(trim(str_ireplace('grade', '', $grade)));
+                $students = array_values(array_filter($students, function($s) use ($grade, $normGrade) {
+                    $stGrade = trim((string)($s['grade'] ?? ''));
+                    if (empty($stGrade)) return false;
+                    if (strcasecmp($stGrade, trim($grade)) === 0) return true;
+                    return strtolower(trim(str_ireplace('grade', '', $stGrade))) === $normGrade;
+                }));
+            }
         }
 
-        // If no teacher_students.json exists for this school, pull from database:
+        // 2. If no teacher_students.json exists for this school, pull from database:
         // Prioritize Step 3 students (already submitted / confirmed on PARAKH HPC)
         if (empty($students) && $school && $school->students()->exists()) {
-            $query = $school->students()->step3();
-            if ($query->count() === 0) {
-                // If no step 3 students yet, fallback to all school students
-                $query = $school->students();
-            }
+            $hasStep3 = $school->students()->step3()->exists();
+            $query = $hasStep3 ? $school->students()->step3() : $school->students();
 
             if (! empty($grade) && $grade !== 'all') {
-                $query->where('grade', $grade);
+                $rawGrade = trim($grade);
+                $numGrade = trim(str_ireplace('grade', '', $rawGrade));
+                $query->where(function($q) use ($rawGrade, $numGrade) {
+                    $q->where('grade', $rawGrade)
+                      ->orWhere('grade', 'Grade ' . $numGrade)
+                      ->orWhere('grade', $numGrade);
+                });
             }
 
             $students = $query->orderBy('id')->get()->map(function($st) {
@@ -229,29 +262,6 @@ class HpcTeacherController extends Controller
                     'status'       => $st->hpc_submitted_at ? 'HPC Completed' : 'HPC Pending',
                 ];
             })->all();
-        }
-
-        // If students were loaded from teacher_students.json, enrich them with real admission numbers from DB
-        if (! empty($students) && $school) {
-            $dbStudents = $school->students()->get();
-            foreach ($students as &$s) {
-                if (empty($s['admission_no'])) {
-                    $match = $dbStudents->first(function($dbSt) use ($s) {
-                        if (! empty($s['apaar_id']) && $dbSt->apaar_id === $s['apaar_id']) return true;
-                        if (! empty($s['login_id']) && ($dbSt->pen_code === $s['login_id'] || $dbSt->apaar_id === $s['login_id'])) return true;
-                        if (! empty($s['name']) && strcasecmp(trim($dbSt->name), trim($s['name'])) === 0) return true;
-                        return false;
-                    });
-                    if ($match) {
-                        $s['admission_no'] = $match->admission_no ? (string)$match->admission_no : '';
-                        if (empty($s['grade']) && ! empty($match->grade)) $s['grade'] = $match->grade;
-                        if (empty($s['section']) && ! empty($match->section)) $s['section'] = $match->section;
-                    } else {
-                        $s['admission_no'] = '';
-                    }
-                }
-            }
-            unset($s);
         }
 
         // Return only real students — never any dummy mock records

@@ -985,10 +985,33 @@
                             <p class="text-xs text-slate-600 leading-relaxed">
                                 Download the specialized template formatted for Monthly Attendance, Credit Marks, Co-Curricular activities, and holistic teacher remarks.
                             </p>
-                            <a href="{{ route('hpc.teacher.template.download') }}"
-                               class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
-                                📥 Download Teacher Template (.xlsx)
-                            </a>
+                            @if(!empty($hasTeacherProfile))
+                                <div class="space-y-2 pt-1">
+                                    <div class="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                                        ✓ Teacher Session Active • Exact HPC Roster Ready
+                                    </div>
+                                    <div>
+                                        <a href="{{ route('hpc.teacher.template.download') }}"
+                                           class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
+                                            📥 Download Teacher Template (.xlsx)
+                                        </a>
+                                    </div>
+                                </div>
+                            @else
+                                <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+                                    <div class="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                                        <span>🔒</span> Teacher Session Required Before Download
+                                    </div>
+                                    <p class="text-[11px] text-amber-800 leading-snug">
+                                        To ensure this template reflects the exact enrolled students from your PARAKH teacher portal (with no dummy data), please start and connect your Teacher session above first.
+                                    </p>
+                                    <button type="button" onclick="startHpcTeacherSession()"
+                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[11px] shadow-xs transition">
+                                        ⚡ Connect Teacher Session to Unlock
+                                    </button>
+                                </div>
+                            @endif
                         </div>
 
                         <!-- Teacher Template Upload -->

@@ -88,9 +88,20 @@ class HpcTeacherController extends Controller
      * @param Request|null $request
      * @return \Symfony\Component\HttpFoundation\StreamedResponse
      */
-    public function downloadTemplate(?Request $request = null): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function downloadTemplate(?Request $request = null)
     {
+        $school            = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $teacherProfileDir = $this->getActiveTeacherProfileDir($school);
+        $hasTeacherProfile = is_dir($teacherProfileDir) && (
+            file_exists($teacherProfileDir . '/session_active.txt') || (count(scandir($teacherProfileDir)) > 2)
+        );
+
         $students = $this->getTeacherTemplateStudents();
+
+        if (empty($students)) {
+            $msg = 'Please connect your Teacher Session on PARAKH HPC first so your exact student roster is loaded before downloading.';
+            return redirect()->to(route('dashboard') . '?step=4')->with('error', $msg);
+        }
 
         return $this->generateSpreadsheetResponse($students);
     }
@@ -169,16 +180,7 @@ class HpcTeacherController extends Controller
             unset($s);
         }
 
-        if (empty($students)) {
-            $students = [
-                ['name' => 'Faizan Ahmad',     'admission_no' => '', 'login_id' => 'S1CA3C8009', 'status' => 'HPC Pending'],
-                ['name' => 'Zehra Batool',     'admission_no' => '', 'login_id' => 'S49C309C52', 'status' => 'HPC Pending'],
-                ['name' => 'Mohammad Yousuf',  'admission_no' => '', 'login_id' => 'S2C7236921', 'status' => 'HPC Pending'],
-                ['name' => 'Insha Jan',        'admission_no' => '', 'login_id' => 'S9CD420A51', 'status' => 'HPC Pending'],
-                ['name' => 'Sahil Bashir',     'admission_no' => '', 'login_id' => 'SD3675F62B', 'status' => 'HPC Pending'],
-            ];
-        }
-
+        // Return only real students — never any dummy mock records
         return $students;
     }
 

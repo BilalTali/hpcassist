@@ -700,6 +700,102 @@ class HpcTeacherController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    public function evaluationsQueue(Request $request)
+    {
+        $schoolId = $request->input('school_id');
+        $school = $schoolId ? \App\Models\School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        
+        $schoolDir = $this->getSchoolStorageDir($school);
+        $previewFile = $schoolDir . '/teacher_preview.json';
+        
+        if (! file_exists($previewFile)) {
+            $basePreview = storage_path('app/hpc/teacher_preview.json');
+            if (file_exists($basePreview)) {
+                $previewFile = $basePreview;
+            }
+        }
+        
+        if (! file_exists($previewFile)) {
+            return response()->json([
+                'ok' => false,
+                'error' => 'No student evaluations uploaded yet. Please upload the filled Excel template first.',
+                'students' => []
+            ]);
+        }
+        
+        $all = json_decode(file_get_contents($previewFile), true) ?: [];
+        $validStudents = array_values(array_filter($all, function($s) {
+            return empty($s['errors']) && 
+                   empty($s['is_demo']) && 
+                   ($s['login_id'] ?? '') !== 'DEMO_SAMPLE' &&
+                   stripos($s['name'] ?? '', 'SAMPLE') === false &&
+                   stripos($s['name'] ?? '', 'DEMO') === false;
+        }));
+        
+        return response()->json([
+            'ok' => true,
+            'school_id' => $school?->id,
+            'school_name' => $school?->name ?? 'My School',
+            'total' => count($validStudents),
+            'students' => $validStudents,
+        ]);
+    }
+
+    public function evaluationsProgress(Request $request)
+    {
+        $schoolId = $request->input('school_id');
+        $school = $schoolId ? \App\Models\School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $schoolDir = $this->getSchoolStorageDir($school);
+        $resultsFile = $schoolDir . '/teacher_run_results.json';
+        
+        $current = (int) $request->input('current', 1);
+        $total = (int) $request->input('total', 1);
+        $name = (string) $request->input('name', '');
+        $loginId = (string) $request->input('login_id', '');
+        $status = (string) $request->input('status', 'completed');
+        $message = (string) $request->input('message', '');
+        $done = (bool) $request->input('done', false);
+        
+        $existing = file_exists($resultsFile) ? (json_decode(file_get_contents($resultsFile), true) ?: []) : [];
+        $results = $existing['results'] ?? [];
+        
+        if ($loginId || $name) {
+            $found = false;
+            foreach ($results as &$r) {
+                if ((!empty($r['login_id']) && $r['login_id'] === $loginId) || 
+                    (!empty($r['name']) && strcasecmp(trim($r['name']), trim($name)) === 0)) {
+                    $r['status'] = $status;
+                    $r['message'] = $message;
+                    $found = true;
+                    break;
+                }
+            }
+            unset($r);
+            if (! $found) {
+                $results[] = [
+                    'row' => count($results) + 1,
+                    'name' => $name,
+                    'login_id' => $loginId,
+                    'status' => $status,
+                    'message' => $message,
+                ];
+            }
+        }
+        
+        $payload = [
+            'started' => true,
+            'done' => $done || ($current >= $total && $status === 'completed'),
+            'login_wait' => false,
+            'total' => $total,
+            'processed' => $current,
+            'results' => $results,
+            'updated_at' => now()->toIso8601String(),
+        ];
+        file_put_contents($resultsFile, json_encode($payload, JSON_PRETTY_PRINT));
+        
+        return response()->json(['ok' => true]);
+    }
+
     // ─── Discovery Trigger ────────────────────────────────────────────────────
 
     public function discover(Request $request)

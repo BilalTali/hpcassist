@@ -12,13 +12,37 @@
     let HPC_TOKEN  = (window.__HPC_CONFIG && (window.__HPC_CONFIG.progress_token || window.__HPC_CONFIG.token))
         ? (window.__HPC_CONFIG.progress_token || window.__HPC_CONFIG.token)
         : '';
-    let currentSchoolName = (window.__HPC_CONFIG && window.__HPC_CONFIG.school_name) || '';
-    let availableSchools = [];
+    let currentSchoolName  = (window.__HPC_CONFIG && window.__HPC_CONFIG.school_name) || '';
+    let currentTeacherName = (window.__HPC_CONFIG && window.__HPC_CONFIG.teacher_name) || '';
+    let currentTeacherId   = (window.__HPC_CONFIG && window.__HPC_CONFIG.teacher_id) || '';
+    let availableSchools   = [];
 
+    let CURRENT_MODE = 'school'; // 'school' | 'teacher'
+
+    // School Student Submitter state
     let studentsQueue = [];
     let isRunning = false;
     let currentIndex = 0;
+
+    // Teacher Assessment Evaluation state
+    let teacherQueue = [];
+    let isTeacherRunning = false;
+    let teacherCurrentIndex = 0;
+
     let lastLogMessage = '';
+
+    function detectCurrentMode() {
+        const url = location.href.toLowerCase();
+        if (url.includes('/en/hpc/') || url.includes('/part-') || url.includes('-stage') || url.includes('hpc-credit')) {
+            return 'teacher';
+        }
+        if (url.includes('/en/students/')) {
+            return 'school';
+        }
+        const saved = localStorage.getItem('hpc_active_mode');
+        if (saved === 'teacher' || saved === 'school') return saved;
+        return (window.__HPC_CONFIG && window.__HPC_CONFIG.role) || 'school';
+    }
 
     function logStatus(msg) {
         lastLogMessage = msg;
@@ -102,9 +126,12 @@
                     const st = stored.hpc_active_school;
                     SCHOOL_ID = st.school_id;
                     currentSchoolName = st.school_name || currentSchoolName;
+                    if (st.teacher_id) currentTeacherId = st.teacher_id;
+                    if (st.teacher_name) currentTeacherName = st.teacher_name;
+                    if (st.role) CURRENT_MODE = st.role;
                     if (st.server_url) SERVER_URL = st.server_url.replace(/\/$/, '');
                     if (st.progress_token) HPC_TOKEN = st.progress_token;
-                    console.log('[HPC Assist] Loaded active school from extension storage:', currentSchoolName, 'ID:', SCHOOL_ID);
+                    console.log('[HPC Assist] Loaded active context from extension storage:', currentSchoolName, 'Role:', CURRENT_MODE, 'ID:', SCHOOL_ID);
                 }
             } catch(e) {}
         }
@@ -208,6 +235,78 @@
                     current,
                     total,
                     name,
+                    status,
+                    message,
+                    done
+                })
+            });
+        } catch(e) {}
+    }
+
+    // Load Teacher Evaluation queue from localStorage or Server API
+    async function loadTeacherQueue(forceServer = false) {
+        if (!forceServer) {
+            try {
+                const raw = localStorage.getItem('hpc_teacher_queue');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed.school_id === SCHOOL_ID && Array.isArray(parsed.students) && parsed.students.length > 0) {
+                        teacherQueue = parsed.students;
+                        return true;
+                    }
+                }
+            } catch(e) {}
+        }
+
+        if (!SERVER_URL) {
+            console.warn('[HPC Assist] SERVER_URL not configured — cannot fetch teacher evaluation queue.');
+            return false;
+        }
+
+        try {
+            const url = `${SERVER_URL}/hpc/teacher/evaluations/queue${SCHOOL_ID ? '?school_id=' + SCHOOL_ID : ''}`;
+            const res = await fetch(url, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-HPC-Token': HPC_TOKEN,
+                }
+            });
+            const data = await res.json();
+            if (data.ok && Array.isArray(data.students)) {
+                teacherQueue = data.students;
+                localStorage.setItem('hpc_teacher_queue', JSON.stringify({
+                    school_id: data.school_id || SCHOOL_ID,
+                    school_name: data.school_name || currentSchoolName,
+                    students: data.students
+                }));
+                return true;
+            } else {
+                console.warn('[HPC Assist] Teacher evaluations queue returned no students or error:', data);
+                teacherQueue = [];
+                return false;
+            }
+        } catch(err) {
+            console.warn('[HPC Assist] Could not fetch teacher evaluation queue:', err);
+            return false;
+        }
+    }
+
+    async function reportTeacherProgress(current, total, name, loginId, status, message, done = false) {
+        if (!SERVER_URL) return;
+        try {
+            await fetch(`${SERVER_URL}/hpc/teacher/evaluations/progress`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-HPC-Token': HPC_TOKEN,
+                },
+                body: JSON.stringify({
+                    school_id: SCHOOL_ID,
+                    current,
+                    total,
+                    name,
+                    login_id: loginId,
                     status,
                     message,
                     done
@@ -582,6 +681,64 @@
                 await fetchHpcPortalStudents();
                 return;
             }
+
+            // Mode Toggle Handler
+            const toggleModeBtn = e.target.closest('#hpc-mode-toggle-btn');
+            if (toggleModeBtn) {
+                CURRENT_MODE = (CURRENT_MODE === 'teacher') ? 'school' : 'teacher';
+                localStorage.setItem('hpc_active_mode', CURRENT_MODE);
+                logStatus(`Switched to ${CURRENT_MODE === 'teacher' ? 'Teacher Evaluation' : 'School Submitter'} Mode.`);
+                if (CURRENT_MODE === 'teacher') {
+                    await loadTeacherQueue(true);
+                } else {
+                    await loadQueue(true);
+                }
+                updateWidgetContent();
+                return;
+            }
+
+            // Teacher Mode Action Buttons
+            const tStartBtn = e.target.closest('#hpc-teacher-start-btn');
+            if (tStartBtn) {
+                console.log('[HPC Assist] User clicked Start Teacher Evaluation');
+                await startTeacherEvaluation();
+                return;
+            }
+            const tPauseBtn = e.target.closest('#hpc-teacher-pause-btn');
+            if (tPauseBtn) {
+                console.log('[HPC Assist] User clicked Pause Teacher Evaluation');
+                pauseTeacherEvaluation();
+                return;
+            }
+            const tSyncBtn = e.target.closest('#hpc-teacher-sync-btn');
+            if (tSyncBtn) {
+                console.log('[HPC Assist] User clicked Sync Evaluations');
+                logStatus('🔄 Syncing evaluations queue from HPC Assist...');
+                const success = await loadTeacherQueue(true);
+                teacherCurrentIndex = 0;
+                localStorage.setItem('hpc_teacher_index', '0');
+                updateWidgetContent();
+                if (teacherQueue.length > 0) {
+                    logStatus(`✅ Synced ${teacherQueue.length} student evaluation(s)!`);
+                } else if (!success) {
+                    logStatus('⚠️ Could not connect or no evaluations uploaded.');
+                } else {
+                    logStatus('ℹ️ No evaluations queued. Upload spreadsheet on dashboard.');
+                }
+                return;
+            }
+            const tResetBtn = e.target.closest('#hpc-teacher-reset-btn');
+            if (tResetBtn) {
+                console.log('[HPC Assist] User clicked Reset Teacher Evaluation');
+                teacherCurrentIndex = 0;
+                localStorage.setItem('hpc_teacher_index', '0');
+                localStorage.setItem('hpc_teacher_running', 'false');
+                isTeacherRunning = false;
+                localStorage.removeItem('hpc_teacher_active_student');
+                logStatus('Evaluation progress reset to Student #1.');
+                updateWidgetContent();
+                return;
+            }
         });
 
         // School switcher dropdown handler
@@ -612,6 +769,90 @@
         if (!widget) widget = document.getElementById('hpc-parakh-widget');
         if (!widget) return;
 
+        // ─── TEACHER EVALUATION MODE WIDGET ─────────────────────────────────
+        if (CURRENT_MODE === 'teacher') {
+            const tTotal = teacherQueue.length;
+            const tPct = tTotal > 0 ? Math.round((teacherCurrentIndex / tTotal) * 100) : 0;
+
+            let schoolSelectHtml = '';
+            if (availableSchools.length > 0) {
+                schoolSelectHtml = `
+                    <div style="background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 6px 10px; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase;">🏫 Active School</span>
+                            <span style="font-size: 10px; color: #38bdf8; font-weight: 700; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${currentSchoolName || 'Select'}</span>
+                        </div>
+                        <select id="hpc-school-switcher" style="width: 100%; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 4px 6px; font-size: 11px; font-weight: 600; cursor: pointer; outline: none;">
+                            ${availableSchools.map(s => `
+                                <option value="${s.id}" ${s.id === SCHOOL_ID ? 'selected' : ''}>
+                                    ${s.name}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                `;
+            }
+
+            widget.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 16px;">👩‍🏫</span>
+                        <strong style="font-weight: 700; font-size: 13px; letter-spacing: -0.2px;">Teacher Evaluation</strong>
+                    </div>
+                    <span style="font-size: 10px; background: ${isTeacherRunning ? 'rgba(99, 102, 241, 0.25)' : 'rgba(16, 185, 129, 0.2)'}; color: ${isTeacherRunning ? '#818cf8' : '#34d399'}; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
+                        ${isTeacherRunning ? '⚡ EVALUATING' : 'READY'}
+                    </span>
+                </div>
+
+                ${schoolSelectHtml}
+
+                <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px; line-height: 1.4;">
+                    ${tTotal > 0 ? `<strong>${tTotal}</strong> student evaluations loaded across 15 parts.` : 'No evaluation data loaded. Click Sync or upload spreadsheet in Step 4.'}
+                </div>
+
+                ${tTotal > 0 ? `
+                    <div style="background: rgba(255, 255, 255, 0.08); border-radius: 8px; height: 6px; overflow: hidden; margin-bottom: 10px;">
+                        <div style="background: #6366f1; height: 100%; width: ${tPct}%; transition: width 0.3s ease;"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; color: #cbd5e1; margin-bottom: 12px;">
+                        <span id="hpc-widget-status">${lastLogMessage || (isTeacherRunning ? `Evaluating ${teacherCurrentIndex + 1} of ${tTotal}...` : `${teacherCurrentIndex}/${tTotal} completed`)}</span>
+                        <span>${tPct}%</span>
+                    </div>
+                ` : ''}
+
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    ${isTeacherRunning ? `
+                        <button id="hpc-teacher-pause-btn" style="flex: 1; min-width: 100px; padding: 8px 12px; background: #e11d48; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer;">
+                            ⏸ Pause
+                        </button>
+                    ` : `
+                        <button id="hpc-teacher-start-btn" ${tTotal === 0 ? 'disabled' : ''} style="flex: 1; min-width: 120px; padding: 8px 12px; background: #6366f1; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; opacity: ${tTotal === 0 ? '0.5' : '1'};">
+                            🚀 ${teacherCurrentIndex >= tTotal ? 'Restart from #1' : (teacherCurrentIndex > 0 ? 'Resume (' + (teacherCurrentIndex + 1) + '/' + tTotal + ')' : 'Start Auto-Evaluation')}
+                        </button>
+                    `}
+                    <button id="hpc-teacher-sync-btn" style="padding: 8px 12px; background: rgba(255, 255, 255, 0.1); color: #e2e8f0; border: none; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer;" title="Refresh evaluations queue from HPC Assist server">
+                        🔄 Sync
+                    </button>
+                    ${teacherCurrentIndex > 0 && !isTeacherRunning ? `
+                        <button id="hpc-teacher-reset-btn" style="padding: 8px 10px; background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: none; border-radius: 8px; font-weight: 600; font-size: 11px; cursor: pointer;" title="Reset progress to student 1">
+                            ⏮ Reset
+                        </button>
+                    ` : ''}
+                </div>
+
+                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                    <button id="hpc-mode-toggle-btn" style="background: none; border: none; color: #94a3b8; font-size: 11px; cursor: pointer; padding: 2px 4px; text-decoration: underline;">
+                        🏫 Switch to School Submitter
+                    </button>
+                    <a href="https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage" style="color: #818cf8; font-size: 11px; text-decoration: none;">
+                        Stages ↗
+                    </a>
+                </div>
+            `;
+            return;
+        }
+
+        // ─── SCHOOL SUBMISSION MODE WIDGET (DEFAULT) ────────────────────────
         const total = studentsQueue.length;
         const progressPct = total > 0 ? Math.round((currentIndex / total) * 100) : 0;
 
@@ -691,6 +932,12 @@
                     <div style="font-size: 10px; color: #64748b; margin-top: 5px; text-align: center;">Removes already-submitted students from your queue</div>
                 </div>
             ` : ''}
+
+            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                <button id="hpc-mode-toggle-btn" style="background: none; border: none; color: #94a3b8; font-size: 11px; cursor: pointer; padding: 2px 4px; text-decoration: underline;">
+                    👩‍🏫 Switch to Teacher Evaluation Mode
+                </button>
+            </div>
         `;
     }
 
@@ -1333,33 +1580,726 @@
         }
     }
 
-    // Auto-resume if running flag is present
+    // ═════════════════════════════════════════════════════════════════════════
+    // TEACHER EVALUATION 15-PART ASSESSMENT RUNNER & FORM FILLERS
+    // ═════════════════════════════════════════════════════════════════════════
+
+    function getStageUrlForGrade(grade) {
+        const gStr = String(grade || '').toLowerCase();
+        const gNum = parseInt(gStr.replace(/[^0-9]/g, ''), 10);
+        if (gNum >= 1 && gNum <= 2) {
+            return 'https://hpc.parakh.ncert.gov.in/en/hpc/foundational-stage';
+        }
+        if (gNum >= 3 && gNum <= 5) {
+            return 'https://hpc.parakh.ncert.gov.in/en/hpc/preparatory-stage';
+        }
+        if (gNum >= 6 && gNum <= 8) {
+            return 'https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage';
+        }
+        if (gNum >= 9 && gNum <= 10) {
+            return 'https://hpc.parakh.ncert.gov.in/en/hpc/secondary-stage';
+        }
+        return 'https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage';
+    }
+
+    async function clickContinueBtn() {
+        await sleep(600);
+        const btns = Array.from(document.querySelectorAll('button'));
+        const continueBtn = btns.find(b => {
+            const t = (b.innerText || '').trim().toLowerCase();
+            return t === 'continue' || t === 'next' || t.includes('save as draft');
+        });
+        if (continueBtn) {
+            continueBtn.click();
+            await sleep(2500);
+            return true;
+        }
+        return false;
+    }
+
+    async function fillPartA1(s) {
+        logStatus(`[Part-A1] Filling Basic Profile & Attendance for ${s.name}...`);
+        // 1. Admission Number
+        const admContainer = Array.from(document.querySelectorAll('label')).find(l => l.innerText.includes('School Admission Number'))?.closest('div');
+        const admInp = admContainer?.querySelector('input');
+        if (admInp && s.admission_no) setNativeValue(admInp, s.admission_no);
+
+        // 2. Mother tongue
+        const mtContainer = Array.from(document.querySelectorAll('label')).find(l => l.innerText.includes('Mother Tongue'))?.closest('div');
+        const mtInp = mtContainer?.querySelector('input');
+        if (mtInp) setNativeValue(mtInp, s.mother_tongue || 'Kashmiri');
+
+        // 3. Parent Name
+        const pInp = document.querySelector('input[placeholder="Enter Father Name"], input[placeholder*="Father"]');
+        if (pInp) setNativeValue(pInp, s.parent_name || 'Parent');
+
+        // 4. Monthly Working Days (12 months: Apr - Mar)
+        const monthKeys = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
+        const defaultWork = [20, 22, 10, 20, 22, 21, 19, 20, 15, 15, 20, 18];
+        const defaultPres = [19, 21, 10, 18, 20, 20, 18, 17, 14, 13, 19, 17];
+
+        const r1Inputs = Array.from(document.querySelectorAll('tbody tr:nth-child(1) td input'));
+        monthKeys.forEach((mKey, i) => {
+            const val = (s['work_' + mKey] !== undefined && s['work_' + mKey] !== '') ? s['work_' + mKey] : defaultWork[i];
+            if (r1Inputs[i]) setNativeValue(r1Inputs[i], val);
+        });
+
+        // 5. Monthly Present Days (12 months: Apr - Mar)
+        const r2Inputs = Array.from(document.querySelectorAll('tbody tr:nth-child(2) td input'));
+        monthKeys.forEach((mKey, i) => {
+            const val = (s['pres_' + mKey] !== undefined && s['pres_' + mKey] !== '') ? s['pres_' + mKey] : defaultPres[i];
+            if (r2Inputs[i]) setNativeValue(r2Inputs[i], val);
+        });
+
+        // 6. Absent times count
+        const absTimesInp = Array.from(document.querySelectorAll('label')).find(l => l.innerText.includes('absent'))?.closest('div')?.querySelector('input');
+        if (absTimesInp) setNativeValue(absTimesInp, s.absent_count || '16');
+
+        // 7. Absence frequency / reason
+        const absInp = document.querySelector('input[placeholder="Write here"]:last-of-type, textarea');
+        if (absInp) setNativeValue(absInp, s.absence_reason || 'Brief seasonal viral illness');
+
+        // 8. Interests checkbox
+        const interestTarget = (s.interest || 'reading').toLowerCase();
+        const cbs = Array.from(document.querySelectorAll('input[type="checkbox"]'));
+        const matchingCb = cbs.find(c => {
+            const label = (c.closest('label')?.innerText || '').toLowerCase();
+            return label.includes(interestTarget);
+        }) || cbs[0];
+        if (matchingCb && !matchingCb.checked) matchingCb.click();
+
+        await sleep(800);
+    }
+
+    async function fillPartA2(s) {
+        logStatus(`[Part-A2] Filling All About Me for ${s.name}...`);
+        const orderedA2 = [
+            s.live_with     || 'Family',
+            s.stay_at       || 'Sugin, Budgam',
+            s.free_time     || 'Reading books and drawing',
+            s.do_well       || 'Learning new skills and actively participating',
+            s.responsible   || 'most times',
+            s.do_better     || s.could_improve || 'Time management in exams',
+            s.care_others   || s.care_about || 'Helping peers with notes',
+            s.feel_proud    || 'Solving challenging problems independently',
+            s.friend_name   || s.student_name || 'Ayaan Ahmad',
+            s.friend_age    || s.student_age || '12',
+            s.acad_goal     || s.academic_goal || 'Score above 90% in Mathematics and Science',
+            s.acad_goal_why || s.goal_importance || 'Builds solid foundation for pursuing higher studies in Engineering',
+            s.acad_step1    || s.goal_step1 || 'Dedicate 45 minutes daily to numerical problem solving and formula revision',
+            s.acad_step2    || s.goal_step2 || 'Clarify doubts with subject teachers immediately and practice weekly mock tests',
+            s.pers_goal_why || 'Keeps mind alert, improves stamina, and enhances daily concentration',
+            s.pers_step1    || 'Wake up at 6:00 AM every morning and do 30 minutes of yoga and jogging',
+            s.pers_step2    || 'Read at least 15 pages of non-academic literature before bedtime',
+            s.pers_goal     || s.personal_goal || 'Develop regular physical exercise and disciplined reading routine',
+            s.sch_learn1    || s.learnt_school || 'Laws of reflection and refraction in science laboratory',
+            s.sch_learn2    || 'Formulating and solving linear equations in single variable',
+            s.sch_learn3    || 'Constitutional preamble and fundamental rights in Social Science',
+            s.out_learn1    || s.learnt_outside || 'Organic kitchen gardening, composting, and soil preparation',
+            s.out_learn2    || 'Bicycle maintenance, tire inflation, and chain lubrication',
+            s.out_learn3    || 'Basic household budgeting and grocery calculation',
+            s.help_with     || s.teacher_help || 'Hands-on science experiments and advanced mathematical puzzles',
+            s.teacher_know  || 'I am enthusiastic about collaborative group projects and active discussions'
+        ];
+
+        const elements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]), textarea, select'));
+        orderedA2.forEach((val, idx) => {
+            if (elements[idx + 1]) {
+                setNativeValue(elements[idx + 1], val);
+            } else if (elements[idx]) {
+                setNativeValue(elements[idx], val);
+            }
+        });
+
+        await sleep(800);
+    }
+
+    async function fillPartA3(s) {
+        logStatus(`[Part-A3] Filling Ambition Card for ${s.name}...`);
+        const orderedA3 = [
+            s.ambition          || 'Doctor / Astrophysicist',
+            s.achieve_how       || 'Conceptual understanding in Maths & Science and dedicated daily practice',
+            s.skills_needed     || 'Critical Thinking, Problem Solving, Communication, Coding, Curiosity',
+            s.focus_subjects    || 'Mathematics, Science, English, Computing',
+            s.habits_i_will     || s.habits_build || s.i_will || 'Disciplined daily study, 30 min morning exercise, and curious questioning',
+            s.mentor            || 'Bilal Ahmad Tali',
+            s.mentor_help       || 'Recommending Olympiad reference books and laboratory guidance',
+            s.learn_new         || 'Scientific problem solving and experimental techniques',
+            s.feel_when_achieve || 'Proud, fulfilled, and motivated to help others',
+            s.parents_feel      || 'Immensely joyful, honored, and proud'
+        ];
+
+        const elements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]), textarea, select'));
+        orderedA3.forEach((val, idx) => {
+            if (elements[idx + 1]) {
+                setNativeValue(elements[idx + 1], val);
+            } else if (elements[idx]) {
+                setNativeValue(elements[idx], val);
+            }
+        });
+
+        await sleep(800);
+    }
+
+    async function fillPartA4(s) {
+        logStatus(`[Part-A4] Filling Home Resources & Support for ${s.name}...`);
+        const parentFeedback = s.parent_feedback || 'Provide quiet study space, supervise 1.5 hours of evening revision, monitor screen time, and discuss daily learnings';
+        const ratings = [
+            s.p_motivated || 'Yes',
+            s.p_schedule || 'Yes',
+            s.p_curriculum_diff || 'No',
+            s.p_progress || 'Yes'
+        ];
+
+        const homeResMap = {
+            'books':     String(s.res_books || '').toLowerCase() === 'yes',
+            'news':      String(s.res_news || '').toLowerCase() === 'yes',
+            'toy':       String(s.res_toys || '').toLowerCase() === 'yes',
+            'phone':     String(s.res_phone || '').toLowerCase() === 'yes',
+            'internet':  String(s.res_internet || '').toLowerCase() === 'yes',
+            'radio':     String(s.res_radio || '').toLowerCase() === 'yes',
+            'broadcast': String(s.res_broadcast || '').toLowerCase() === 'yes',
+            't.v':       String(s.res_tv || '').toLowerCase() === 'yes',
+            'cwd':       String(s.res_cwd || '').toLowerCase() === 'yes'
+        };
+        if (s.res_books === undefined && s.home_resources) {
+            const hr = s.home_resources.toLowerCase();
+            for (const k in homeResMap) homeResMap[k] = hr.includes(k);
+        }
+
+        const suppMap = {
+            'language':   String(s.supp_lang || '').toLowerCase() === 'yes',
+            'mathemat':   String(s.supp_math || '').toLowerCase() === 'yes',
+            'science':    String(s.supp_sci || '').toLowerCase() === 'yes',
+            'social':     String(s.supp_soc || '').toLowerCase() === 'yes',
+            'self-belief':String(s.supp_self_belief || '').toLowerCase() === 'yes',
+            'social skil':String(s.supp_social_skills || '').toLowerCase() === 'yes',
+            'emotion':    String(s.supp_emotions || '').toLowerCase() === 'yes',
+            'study skil': String(s.supp_study_skills || '').toLowerCase() === 'yes',
+            'digital':    String(s.supp_skill_guidance || '').toLowerCase() === 'yes',
+            'any other':  String(s.supp_other || '').toLowerCase() === 'yes'
+        };
+        if (s.supp_math === undefined && s.child_needs_support) {
+            const cs = s.child_needs_support.toLowerCase();
+            for (const k in suppMap) suppMap[k] = cs.includes(k.slice(0, 4));
+        }
+
+        // 1. Tick Home Resources Checkboxes
+        document.querySelectorAll('.childrens-resources li').forEach(li => {
+            const lbl = (li.querySelector('label')?.innerText || '').toLowerCase();
+            const cb = li.querySelector('input[type="checkbox"]');
+            if (cb && lbl) {
+                let shouldCheck = false;
+                for (const key in homeResMap) {
+                    if (lbl.includes(key)) { shouldCheck = homeResMap[key]; break; }
+                }
+                if (shouldCheck !== cb.checked) {
+                    cb.click();
+                    cb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+        });
+
+        // Other home resources text
+        const otherHomeInput = document.querySelector('.children-specific-box input');
+        if (otherHomeInput && s.res_other) setNativeValue(otherHomeInput, s.res_other);
+
+        // 2. Select radio smileys for 'Understanding of my Child' (Q1 - Q4)
+        const table = document.querySelector('.hpc-table-part-b table, table');
+        if (table) {
+            const rows = Array.from(table.querySelectorAll('tbody tr')).filter(r => r.querySelectorAll('.appropriate-option-select li').length > 0);
+            rows.forEach((r, idx) => {
+                const targetRating = (ratings[idx] || 'Yes').toLowerCase();
+                const lis = Array.from(r.querySelectorAll('.appropriate-option-select li'));
+                const targetLi = lis.find(li => (li.innerText || '').trim().toLowerCase() === targetRating)
+                              || lis.find(li => (li.innerText || '').trim().toLowerCase() === 'yes')
+                              || lis[0];
+                if (targetLi) targetLi.click();
+            });
+        }
+
+        // 3. Child Support Needs Checkboxes
+        document.querySelectorAll('.need-children-support-check input[type="checkbox"]').forEach(cb => {
+            const p = cb.closest('label')?.querySelector('p') || cb.closest('li')?.querySelector('p');
+            const txt = (p?.innerText || '').toLowerCase();
+            if (txt) {
+                let shouldCheck = false;
+                for (const key in suppMap) {
+                    if (txt.includes(key)) { shouldCheck = suppMap[key]; break; }
+                }
+                if (shouldCheck !== cb.checked) {
+                    cb.click();
+                    cb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+        });
+
+        // 4. Fill textareas
+        document.querySelectorAll('textarea').forEach(ta => {
+            setNativeValue(ta, parentFeedback);
+        });
+
+        await sleep(800);
+    }
+
+    async function fillPartB(s) {
+        logStatus(`[Part-B] Filling Holistic Activities for ${s.name}...`);
+        const actSubject = s.act_subject || 'Science';
+        const actTitle = s.act_title || `${actSubject} Practical Project`;
+        const actLevel = (s.act_level || 'proficient').toLowerCase();
+        const actAwr = (s.act_rubric_awareness || actLevel).toLowerCase();
+        const actSen = (s.act_rubric_sensitivity || actLevel).toLowerCase();
+        const actCre = (s.act_rubric_creativity || actLevel).toLowerCase();
+        const actDesc = s.act_desc || 'Constructed scale models of planetary orbits, computed relative ratios, and demonstrated to class';
+        const actLearnt = s.act_learnt || 'Learned celestial orbital distances, 3D scale geometry, and public presentation skills';
+        const actInteresting = s.act_interesting || 'Fabricating rotating planetary models using recycled materials and LED lighting';
+        const actPractice = s.act_practice || 'Time management during hands-on model assembly and fine scale calibrations';
+        const actPeerName = s.act_peer_name || 'Ayaan Ahmad';
+        const actPeerFeedback = s.act_peer_feedback || 'Very supportive and collaborative teammate; explained difficult astronomical concepts clearly';
+        const actSupportPlan = s.act_support_plan || 'Encourage participation in inter-school science competitions, provide advanced telescope observation sessions, and recommend for student mentorship roles';
+
+        // 1. If activity cards already exist on student card, click matching button
+        const actButtons = Array.from(document.querySelectorAll('.hpc-forms button')).filter(b => /^\d+\s*\n/.test(b.innerText.trim()));
+        if (actButtons.length > 0) {
+            const target = actButtons.find(b => b.innerText.toLowerCase().includes(actSubject.slice(0, 5).toLowerCase())) || actButtons[0];
+            if (target) target.click();
+            await sleep(500);
+        }
+
+        // 2. Click "Add Activity" if present
+        const addBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Add Activity'));
+        if (addBtn) {
+            addBtn.click();
+            await sleep(600);
+            const modal = document.querySelector('.quick-add-activity, .modal');
+            if (modal) {
+                const contBtn = Array.from(modal.querySelectorAll('button')).find(b => b.innerText.trim() === 'Continue');
+                if (contBtn) contBtn.click();
+                await sleep(800);
+            }
+        }
+
+        // Tab 1: Activity Name
+        const nameInp = document.querySelector('.acivity-name-updates input');
+        if (nameInp) setNativeValue(nameInp, actTitle);
+        document.querySelectorAll('input[name^="activity_"]').forEach((cb, i) => {
+            if (i < 2 && !cb.checked) cb.click();
+        });
+
+        // Tab 2: Subject & Competency
+        const tab2 = document.querySelectorAll('.activate-tab-pills div[role="button"]')[1];
+        if (tab2) {
+            tab2.click();
+            await sleep(500);
+        }
+        const wrapper = document.querySelector('.scroller-cg-domain .custom-dropdown-wrapper');
+        if (wrapper) wrapper.querySelector('.custom-dropdown-header')?.click();
+        await sleep(400);
+
+        const items = Array.from(document.querySelectorAll('.scroller-cg-domain .custom-dropdown-item, .custom-dropdown-item'));
+        const targetDomain = items.find(el => el.innerText.trim().toLowerCase().startsWith(actSubject.slice(0, 5).toLowerCase()));
+        if (targetDomain) targetDomain.click();
+        await sleep(600);
+
+        // Check first competency
+        const cpts = document.querySelectorAll('.scroller-container input[name="cpt"]');
+        if (cpts.length > 0 && !cpts[0].checked) {
+            cpts[0].click();
+            cpts[0].dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        // React Fiber state update for instant complete activity payload
+        const btn = document.querySelector('.hpc-finish-activity-btn');
+        if (btn) {
+            let f = btn[Object.keys(btn).find(k => k.startsWith('__reactFiber'))];
+            while (f && f.type?.name !== 'S') f = f.return;
+            let cur = f ? f.memoizedState : null;
+            while (cur) {
+                if (cur.memoizedState && typeof cur.memoizedState === 'object' && cur.memoizedState.cpt) {
+                    const prev = cur.memoizedState;
+                    const next = {
+                        ...prev,
+                        activity: prev.activity && prev.activity.length ? prev.activity : [1, 2],
+                        any_other: ['', '', ''],
+                        ast: [1, 2, 3],
+                        bar: [9],
+                        awr: ['Demonstrates good awareness', 'Demonstrates strong awareness', 'Demonstrates exceptional awareness', actAwr],
+                        sen: ['Shows sensitivity', 'Shows great sensitivity', 'Shows excellent sensitivity', actSen],
+                        cre: ['Displays creative thinking', 'Displays innovative creativity', 'Displays high creativity', actCre],
+                        desc: [actDesc, 'Achieved all learning objectives successfully.'],
+                        ml: [actLearnt, 'Developed practical confidence.', 'Collaborated actively.', actInteresting],
+                        slr: ['Student actively engaged throughout.', actPractice, 'Completed assignments joyfully.'],
+                        spt: [actSupportPlan, 'Continue encouragement.'],
+                        tf: ['2', '2', '2'],
+                        mpa: [0, 1],
+                        mps: [0, 1],
+                        mpc: [0, 1],
+                        ppa: [0],
+                        pps: [0],
+                        ppc: [0],
+                        pf: [actPeerName, '8', 'A', actPeerFeedback, 'Cooperative and helpful', 'Positive']
+                    };
+                    if (cur.queue && typeof cur.queue.dispatch === 'function') {
+                        cur.queue.dispatch(next);
+                    }
+                    break;
+                }
+                cur = cur.next;
+            }
+        }
+
+        await sleep(800);
+
+        // Finish Activity
+        const finishBtn = document.querySelector('.hpc-finish-activity-btn');
+        if (finishBtn && !finishBtn.disabled) {
+            finishBtn.click();
+            await sleep(1000);
+            const modal = document.querySelector('.modal, .fade.show, [role="dialog"]');
+            if (modal) {
+                const mFinishBtn = Array.from(modal.querySelectorAll('button')).find(b => b.innerText.trim() === 'Finish');
+                if (mFinishBtn) mFinishBtn.click();
+            }
+        }
+
+        await sleep(1000);
+    }
+
+    async function fillPartC(s) {
+        logStatus(`[Part-C] Filling Curricular Progress Levels for ${s.name}...`);
+        const radioGroups = {};
+        document.querySelectorAll('input[type="radio"]').forEach(r => {
+            const name = r.name || 'group';
+            if (!radioGroups[name]) radioGroups[name] = [];
+            radioGroups[name].push(r);
+        });
+        Object.values(radioGroups).forEach(group => {
+            if (group.length > 0 && !group.some(r => r.checked)) {
+                const prof = group.find(r => r.value === 'proficient' || r.value === '2' || r.value === 'yes') || group[0];
+                prof.click();
+                prof.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+
+        await sleep(800);
+    }
+
+    async function fillHpcCredit(s) {
+        logStatus(`[HPC-Credit] Filling Credit Marks and Submitting for ${s.name}...`);
+        const marksList = [];
+        const m = s.marks || {};
+        const keys = ['l1', 'l2', 'l3', 'm', 'sci', 'soc', 'art', 'pe'];
+        keys.forEach(k => {
+            marksList.push(String((m[k] && m[k].max) || s[k + '_max'] || '50'));
+            marksList.push(String((m[k] && m[k].obt) || s[k + '_obt'] || '42'));
+        });
+
+        const teacherRemarks = s.remarks || 'Consistent performer with excellent curiosity and strong analytical reasoning';
+
+        const table = document.querySelectorAll('table')[1] || document.querySelector('table');
+        if (table) {
+            const marksInputs = Array.from(table.querySelectorAll('input[type="text"], input[type="number"]'));
+            marksInputs.forEach((inp, i) => {
+                const val = marksList[i] || (i % 2 === 0 ? '50' : '42');
+                setNativeValue(inp, val);
+            });
+        }
+
+        // Check declaration checkbox
+        const decCb = document.querySelector('input[type="checkbox"]');
+        if (decCb && !decCb.checked) {
+            decCb.click();
+            decCb.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        // Teacher Remarks
+        const remTa = document.querySelector('textarea');
+        if (remTa) setNativeValue(remTa, teacherRemarks);
+
+        await sleep(800);
+
+        // Click Mark as Complete
+        const markCompleteBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Mark as Complete');
+        if (markCompleteBtn && !markCompleteBtn.disabled) {
+            markCompleteBtn.click();
+            await sleep(1500);
+
+            // Confirm modal
+            const modal = document.querySelector('.modal, .swal2-popup, [role="dialog"], .fade.show');
+            if (modal) {
+                const cb = Array.from(modal.querySelectorAll('button')).find(b => /yes|confirm|proceed|ok|complete/i.test(b.innerText.trim()));
+                if (cb) cb.click();
+                await sleep(2000);
+            }
+        }
+    }
+
+    async function handleFormPartStep(s) {
+        if (!s) {
+            try {
+                const raw = localStorage.getItem('hpc_teacher_active_student');
+                if (raw) s = JSON.parse(raw);
+            } catch(e) {}
+        }
+        if (!s) return false;
+
+        const url = location.href.toLowerCase();
+
+        if (url.includes('/part-a1') || (!url.includes('/part-') && document.querySelector('tbody tr:nth-child(1) td input'))) {
+            await fillPartA1(s);
+            await clickContinueBtn();
+            return true;
+        }
+        if (url.includes('/part-a2')) {
+            await fillPartA2(s);
+            await clickContinueBtn();
+            return true;
+        }
+        if (url.includes('/part-a3')) {
+            await fillPartA3(s);
+            await clickContinueBtn();
+            return true;
+        }
+        if (url.includes('/part-a4')) {
+            await fillPartA4(s);
+            await clickContinueBtn();
+            return true;
+        }
+        if (url.includes('/part-b')) {
+            await fillPartB(s);
+            await clickContinueBtn();
+            return true;
+        }
+        if (url.includes('/part-c')) {
+            await fillPartC(s);
+            await clickContinueBtn();
+            return true;
+        }
+        if (url.includes('/hpc-credit')) {
+            await fillHpcCredit(s);
+            logStatus(`🎉 Evaluated & submitted ${s.name} successfully!`);
+            await reportTeacherProgress(teacherCurrentIndex + 1, teacherQueue.length, s.name, s.login_id, 'completed', 'HPC assessment and credit marks submitted successfully');
+
+            // Advance index
+            teacherCurrentIndex++;
+            localStorage.setItem('hpc_teacher_index', String(teacherCurrentIndex));
+            localStorage.removeItem('hpc_teacher_active_student');
+
+            if (teacherCurrentIndex >= teacherQueue.length) {
+                isTeacherRunning = false;
+                localStorage.setItem('hpc_teacher_running', 'false');
+                alert(`🎉 All ${teacherQueue.length} student evaluations completed successfully!`);
+                updateWidgetContent();
+                return false;
+            }
+
+            // Navigate back to stage list for next student
+            const nextStudent = teacherQueue[teacherCurrentIndex];
+            const stageUrl = getStageUrlForGrade(nextStudent.grade);
+            logStatus(`Navigating to ${stageUrl} for next student: ${nextStudent.name}...`);
+            await sleep(1500);
+            window.location.href = stageUrl;
+            return false;
+        }
+
+        return false;
+    }
+
+    async function processNextTeacherStudent() {
+        if (!isTeacherRunning) return;
+        if (teacherCurrentIndex >= teacherQueue.length) {
+            isTeacherRunning = false;
+            localStorage.setItem('hpc_teacher_running', 'false');
+            logStatus('🎉 All student evaluations completed!');
+            updateWidgetContent();
+            return;
+        }
+
+        const s = teacherQueue[teacherCurrentIndex];
+        logStatus(`[${teacherCurrentIndex + 1}/${teacherQueue.length}] Locating ${s.name} (${s.login_id})...`);
+
+        // Ensure we are on the right stage page for this student
+        const expectedStageUrl = getStageUrlForGrade(s.grade);
+        const currPath = location.pathname.toLowerCase();
+        const expectedSlug = expectedStageUrl.split('/').pop().toLowerCase();
+
+        if (!currPath.includes(expectedSlug)) {
+            logStatus(`Switching stage to ${expectedStageUrl}...`);
+            await sleep(1000);
+            window.location.href = expectedStageUrl;
+            return;
+        }
+
+        // Wait up to 5 seconds for table to render
+        let rows = [];
+        for (let i = 0; i < 10; i++) {
+            rows = Array.from(document.querySelectorAll('tbody tr'));
+            if (rows.length > 0) break;
+            await sleep(500);
+        }
+
+        if (rows.length === 0) {
+            logStatus('⚠️ No student table rows found. Waiting...');
+            await sleep(2000);
+            return;
+        }
+
+        const loginId = (s.login_id || '').trim();
+        const name = (s.name || '').trim().toLowerCase();
+
+        const targetRow = rows.find(tr => {
+            const cells = Array.from(tr.querySelectorAll('td'));
+            const idCell = (cells[1] ? cells[1].innerText : '').trim();
+            const trText = tr.innerText.toLowerCase();
+            if (loginId && (idCell === loginId || trText.includes(loginId.toLowerCase()))) return true;
+            if (name && trText.includes(name)) return true;
+            return false;
+        });
+
+        if (!targetRow) {
+            logStatus(`⚠️ Student ${s.name} (${loginId}) not found on current page table.`);
+            const nextPgBtn = document.querySelector('.pagination .next, button[aria-label="Next"], .page-item:not(.disabled) .page-link[aria-label*="Next"]');
+            if (nextPgBtn) {
+                logStatus('Checking next table page...');
+                nextPgBtn.click();
+                await sleep(2000);
+                processNextTeacherStudent();
+                return;
+            }
+
+            logStatus(`⚠️ Could not locate ${s.name}. Skipping to next student...`);
+            await reportTeacherProgress(teacherCurrentIndex + 1, teacherQueue.length, s.name, s.login_id, 'error', 'Student not found in stage table');
+            teacherCurrentIndex++;
+            localStorage.setItem('hpc_teacher_index', String(teacherCurrentIndex));
+            updateWidgetContent();
+            await sleep(2000);
+            processNextTeacherStudent();
+            return;
+        }
+
+        // Check status in table
+        const cells = Array.from(targetRow.querySelectorAll('td'));
+        const statusText = (cells[3] ? cells[3].innerText : targetRow.innerText).trim();
+        if (statusText.toLowerCase().includes('completed')) {
+            logStatus(`Student ${s.name} already Completed on portal. Skipping.`);
+            await reportTeacherProgress(teacherCurrentIndex + 1, teacherQueue.length, s.name, s.login_id, 'skipped', 'Status is ' + statusText + ' on portal (left untouched)');
+            teacherCurrentIndex++;
+            localStorage.setItem('hpc_teacher_index', String(teacherCurrentIndex));
+            updateWidgetContent();
+            await sleep(1000);
+            processNextTeacherStudent();
+            return;
+        }
+
+        // Open Action Dropdown
+        const dropdownHeader = targetRow.querySelector('.custom-dropdown-header');
+        if (dropdownHeader) {
+            dropdownHeader.click();
+            await sleep(500);
+
+            const items = Array.from(document.querySelectorAll('.custom-dropdown-item'));
+            const actionItem = items.find(it => /open|edit/i.test(it.innerText.trim()));
+            if (actionItem) {
+                logStatus(`Opening evaluation form for ${s.name}...`);
+                localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
+                actionItem.click();
+                await sleep(3000);
+                return;
+            }
+        }
+
+        logStatus(`⚠️ Could not click Open/Edit for ${s.name}. Please open manually.`);
+    }
+
+    async function startTeacherEvaluation() {
+        if (!teacherQueue.length) {
+            await loadTeacherQueue(true);
+            if (!teacherQueue.length) {
+                alert('No student evaluations loaded. Please upload the filled Excel template in Step 4 on your dashboard.');
+                return;
+            }
+        }
+
+        if (teacherCurrentIndex >= teacherQueue.length) {
+            teacherCurrentIndex = 0;
+            localStorage.setItem('hpc_teacher_index', '0');
+        }
+
+        isTeacherRunning = true;
+        localStorage.setItem('hpc_teacher_running', 'true');
+        logStatus(`Starting teacher evaluation (${teacherCurrentIndex + 1}/${teacherQueue.length})...`);
+        updateWidgetContent();
+
+        const url = location.href.toLowerCase();
+        if (url.includes('/part-') || url.includes('/hpc-credit')) {
+            await handleFormPartStep();
+        } else if (url.includes('-stage')) {
+            await processNextTeacherStudent();
+        } else {
+            const nextStudent = teacherQueue[teacherCurrentIndex];
+            const stageUrl = getStageUrlForGrade(nextStudent.grade);
+            logStatus(`Navigating to ${stageUrl}...`);
+            window.location.href = stageUrl;
+        }
+    }
+
+    function pauseTeacherEvaluation() {
+        isTeacherRunning = false;
+        localStorage.setItem('hpc_teacher_running', 'false');
+        logStatus('Teacher evaluation paused.');
+        updateWidgetContent();
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // INITIALIZATION & DUAL-MODE AUTO-RESUME
+    // ═════════════════════════════════════════════════════════════════════════
+
     async function init() {
         await autoDetectActiveSchool();
-        await loadQueue();
+        CURRENT_MODE = detectCurrentMode();
+
+        if (CURRENT_MODE === 'teacher') {
+            await loadTeacherQueue();
+            const savedTeacherIdx = localStorage.getItem('hpc_teacher_index');
+            if (savedTeacherIdx) teacherCurrentIndex = parseInt(savedTeacherIdx, 10) || 0;
+            isTeacherRunning = localStorage.getItem('hpc_teacher_running') === 'true';
+        } else {
+            await loadQueue();
+            const savedIdx = localStorage.getItem('hpc_student_index');
+            if (savedIdx) currentIndex = parseInt(savedIdx, 10) || 0;
+        }
+
         injectWidget();
 
-        const savedIdx = localStorage.getItem('hpc_student_index');
-        if (savedIdx) currentIndex = parseInt(savedIdx, 10) || 0;
-
-        const wasRunning = localStorage.getItem('hpc_submission_running') === 'true';
-        if (wasRunning && location.pathname.includes('/students/add') && currentIndex > 0) {
-            // Fix 4.1: ask the user before auto-resuming to prevent accidental double-submission
-            const resume = confirm(
-                `HPC Assist was running and has processed ${currentIndex} student(s).\n` +
-                `Resume from student ${currentIndex + 1}?\n\n` +
-                `Click Cancel to reset the counter to Student 1.`
-            );
-            if (resume) {
-                isRunning = true;
-                updateWidgetContent();
+        // Mode-specific auto-resume
+        if (CURRENT_MODE === 'teacher' && isTeacherRunning) {
+            const url = location.href.toLowerCase();
+            if (url.includes('/part-') || url.includes('/hpc-credit')) {
                 await sleep(1500);
-                runAutomationLoop();
-            } else {
-                currentIndex = 0;
-                localStorage.setItem('hpc_student_index', '0');
-                localStorage.setItem('hpc_submission_running', 'false');
-                updateWidgetContent();
+                await handleFormPartStep();
+            } else if (url.includes('-stage')) {
+                await sleep(1500);
+                await processNextTeacherStudent();
+            }
+        } else if (CURRENT_MODE === 'school') {
+            const wasRunning = localStorage.getItem('hpc_submission_running') === 'true';
+            if (wasRunning && location.pathname.includes('/students/add') && currentIndex > 0) {
+                const resume = confirm(
+                    `HPC Assist was running and has processed ${currentIndex} student(s).\n` +
+                    `Resume from student ${currentIndex + 1}?\n\n` +
+                    `Click Cancel to reset the counter to Student 1.`
+                );
+                if (resume) {
+                    isRunning = true;
+                    updateWidgetContent();
+                    await sleep(1500);
+                    runAutomationLoop();
+                } else {
+                    currentIndex = 0;
+                    localStorage.setItem('hpc_student_index', '0');
+                    localStorage.setItem('hpc_submission_running', 'false');
+                    updateWidgetContent();
+                }
             }
         }
     }

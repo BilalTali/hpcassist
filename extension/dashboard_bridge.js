@@ -9,11 +9,14 @@
                     school_id: config.school_id,
                     school_name: config.school_name || '',
                     udise_code: config.udise_code || '',
+                    teacher_id: config.teacher_id || '',
+                    teacher_name: config.teacher_name || '',
+                    role: config.role || (config.teacher_id ? 'teacher' : 'school'),
                     progress_token: config.progress_token || config.token || '',
                     server_url: config.server_url || ''
                 }
             }, () => {
-                console.log('[HPC Assist Extension] Synced active school to extension storage:', config.school_name, '(ID: ' + config.school_id + ')');
+                console.log('[HPC Assist Extension] Synced active context to extension storage:', config.school_name, '(ID: ' + config.school_id + ') Role:', config.role || 'school');
             });
         }
     } catch(e) {

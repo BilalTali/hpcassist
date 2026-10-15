@@ -950,4 +950,17 @@
             }
         }
     </script>
+
+    {{-- HPC Extension Bridge Configuration for Teacher Role --}}
+    <script>
+        window.__HPC_CONFIG = {
+            server_url: "{{ rtrim(config('app.url'), '/') }}",
+            school_id: {{ $activeSchool['id'] ?? ($school?->id ?? 'null') }},
+            school_name: "{{ addslashes($activeSchool['name'] ?? ($school?->name ?? '')) }}",
+            teacher_id: "{{ $activeTeacher['id'] ?? '' }}",
+            teacher_name: "{{ addslashes($activeTeacher['name'] ?? '') }}",
+            role: "teacher",
+            progress_token: "{{ config('hpc.progress_token') }}"
+        };
+    </script>
 </x-app-layout>

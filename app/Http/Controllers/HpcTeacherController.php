@@ -235,6 +235,10 @@ class HpcTeacherController extends Controller
             'count'    => count($synced),
             'students' => $synced,
             'message'  => 'Successfully synced ' . count($synced) . ' student(s) from PARAKH portal!',
+        ], 200, [
+            'Access-Control-Allow-Origin'  => '*',
+            'Access-Control-Allow-Methods' => 'POST, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token, X-CSRF-TOKEN',
         ]);
     }
 
@@ -795,6 +799,10 @@ class HpcTeacherController extends Controller
             'school_name' => $school?->name ?? 'My School',
             'total' => count($validStudents),
             'students' => $validStudents,
+        ], 200, [
+            'Access-Control-Allow-Origin'  => '*',
+            'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
         ]);
     }
 
@@ -850,7 +858,11 @@ class HpcTeacherController extends Controller
         ];
         file_put_contents($resultsFile, json_encode($payload, JSON_PRETTY_PRINT));
         
-        return response()->json(['ok' => true]);
+        return response()->json(['ok' => true], 200, [
+            'Access-Control-Allow-Origin'  => '*',
+            'Access-Control-Allow-Methods' => 'POST, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
+        ]);
     }
 
     // ─── Discovery Trigger ────────────────────────────────────────────────────

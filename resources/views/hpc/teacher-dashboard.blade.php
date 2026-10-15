@@ -361,7 +361,7 @@
                         <div class="flex items-center gap-2">
                             <span class="text-xs font-bold text-slate-900">Enrolled Students Roster</span>
                             <span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                                <span id="students-count">0</span> Students
+                                <span id="students-count">{{ count($students) }}</span> Students
                             </span>
                         </div>
 
@@ -397,15 +397,38 @@
                                 </tr>
                             </thead>
                             <tbody id="students-table-body" class="divide-y divide-slate-100 bg-white">
-                                <tr>
-                                    <td colspan="5" class="px-4 py-8 text-center text-slate-400">
-                                        <div class="flex flex-col items-center justify-center gap-1">
-                                            <span class="text-xl">📋</span>
-                                            <span class="text-xs font-bold text-slate-600">No records loaded yet</span>
-                                            <span class="text-[11px] text-slate-400">Select stage above and click <strong>"📥 Fetch Data"</strong> to retrieve students from the PARAKH portal.</span>
-                                        </div>
-                                    </td>
-                                </tr>
+                                @if(!empty($students))
+                                    @foreach($students as $idx => $st)
+                                        @php
+                                            $stStatus = $st['status'] ?? 'pending';
+                                            $isCompleted = str_contains(strtolower($stStatus), 'complete') || str_contains(strtolower($stStatus), 'success');
+                                            $loginId = $st['login_id'] ?? ($st['apaar_id'] ?? ($st['admission_no'] ?? '—'));
+                                        @endphp
+                                        <tr class="hover:bg-slate-50/80 transition">
+                                            <td class="px-3 py-2 font-mono text-slate-400">{{ $idx + 1 }}</td>
+                                            <td class="px-3 py-2 font-mono font-bold text-slate-800">{{ $loginId }}</td>
+                                            <td class="px-3 py-2 font-bold text-slate-900">{{ $st['name'] ?? '' }}</td>
+                                            <td class="px-3 py-2">
+                                                @if($isCompleted)
+                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Successful</span>
+                                                @else
+                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">⏳ Ready for Assessment</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-3 py-2 text-slate-600 text-[11px] font-medium">{{ $st['grade'] ?? ($st['stage'] ?? 'Middle Stage') }}</td>
+                                        </tr>
+                                    @endforeach
+                                @else
+                                    <tr>
+                                        <td colspan="5" class="px-4 py-8 text-center text-slate-400">
+                                            <div class="flex flex-col items-center justify-center gap-1">
+                                                <span class="text-xl">📋</span>
+                                                <span class="text-xs font-bold text-slate-600">No records loaded yet</span>
+                                                <span class="text-[11px] text-slate-400">Select stage above and click <strong>"📥 Fetch Data"</strong> to retrieve students from the PARAKH portal.</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endif
                             </tbody>
                         </table>
                     </div>
@@ -420,7 +443,12 @@
                                 {{ !empty($preview) ? count($preview) . ' loaded' : '0 evaluated' }}
                             </span>
                         </div>
-                        <span class="text-[10px] text-slate-400 font-medium">Auto-refreshes during run</span>
+                        <div class="flex items-center gap-3">
+                            <button type="button" onclick="resetTeacherEvaluations()" class="text-[10px] text-slate-400 hover:text-rose-600 transition underline font-semibold">
+                                🔄 Reset
+                            </button>
+                            <span class="text-[10px] text-slate-400 font-medium">Auto-refreshes during run</span>
+                        </div>
                     </div>
 
                     <!-- 5 Rows Visible Height & Scrollable -->
@@ -904,6 +932,22 @@
             el.className = 'mt-3 text-xs font-semibold ' + classes;
             el.innerText = msg;
             el.classList.remove('hidden');
+        }
+
+        async function resetTeacherEvaluations() {
+            if (!confirm('Are you sure you want to clear evaluation results and preview?')) return;
+            try {
+                const res = await fetch('{{ route('hpc.teacher.run.reset') }}', {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }
+                });
+                const d = await res.json();
+                if (d.ok) {
+                    window.location.reload();
+                }
+            } catch(e) {
+                alert('Reset error: ' + e.message);
+            }
         }
     </script>
 </x-app-layout>

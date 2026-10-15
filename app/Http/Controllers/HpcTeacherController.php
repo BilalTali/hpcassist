@@ -61,6 +61,14 @@ class HpcTeacherController extends Controller
 
         $previewFile = $schoolDir . '/teacher_preview.json';
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
+        if (! empty($preview)) {
+            $preview = array_values(array_filter($preview, function($p) {
+                return empty($p['is_demo']) &&
+                       ($p['login_id'] ?? '') !== 'DEMO_SAMPLE' &&
+                       stripos($p['name'] ?? '', 'SAMPLE') === false &&
+                       stripos($p['name'] ?? '', 'DEMO') === false;
+            }));
+        }
 
         $resultsFile = $schoolDir . '/teacher_run_results.json';
         $lastRun = file_exists($resultsFile) ? json_decode(file_get_contents($resultsFile), true) : null;
@@ -415,38 +423,13 @@ class HpcTeacherController extends Controller
         $evalSheet->getRowDimension(2)->setRowHeight(26);
         $evalSheet->getRowDimension(3)->setRowHeight(20);
 
-        // Row 4: Complete Demo Student
-        $demoRow = $this->getDemoStudentRow();
-        foreach ($columns as $cIdx => $col) {
-            $colLetter = $this->indexToColumnLetter($cIdx);
-            $val = $demoRow[$cIdx] ?? '';
-            $evalSheet->setCellValue("{$colLetter}4", $val);
-
-            if ($col['type'] === 'list') {
-                $validation = $evalSheet->getCell("{$colLetter}4")->getDataValidation();
-                $validation->setType(DataValidation::TYPE_LIST);
-                $validation->setErrorStyle(DataValidation::STYLE_INFORMATION);
-                $validation->setAllowBlank(false);
-                $validation->setShowDropDown(true);
-                $validation->setFormula1($col['options']);
-            }
-
-            $evalSheet->getStyle("{$colLetter}4")->applyFromArray([
-                'font'      => ['bold' => true, 'italic' => true, 'color' => ['argb' => 'FF854D0E']],
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFEF9C3']],
-                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFFDE047']]],
-                'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
-            ]);
-        }
-        $evalSheet->getRowDimension(4)->setRowHeight(24);
-
-        // Rows 5 onwards: Enrolled Students
+        // Rows 4 onwards: Real Enrolled Students (No dummy demo row)
         $defaultWd = SchoolWorkingDay::getDefault();
         $defaultWorkMap = $defaultWd->toMonthMap();
         $defaultMax = SchoolMaxMark::getDefault()->toSubjectMap();
 
         foreach ($students as $sIdx => $st) {
-            $rowNum = $sIdx + 5;
+            $rowNum = $sIdx + 4;
             $starterRow = $this->getStudentStarterProfile($sIdx, $st, $defaultWorkMap, $defaultMax, $rowNum);
 
             foreach ($columns as $cIdx => $col) {
@@ -581,6 +564,9 @@ class HpcTeacherController extends Controller
                 }
 
                 $isDemo      = ($loginId === 'DEMO_SAMPLE' || stripos($name, 'SAMPLE') !== false || stripos($name, 'DEMO') !== false);
+                if ($isDemo) {
+                    continue; // Skip guide / demo student so only real enrolled students are processed
+                }
                 $isCompleted = (strcasecmp($status, 'HPC Completed') === 0 || stripos($status, 'completed') !== false);
 
                 $rowErrors = [];
@@ -704,8 +690,13 @@ class HpcTeacherController extends Controller
 
     public function runReset()
     {
-        $file = $this->getSchoolStorageDir() . '/teacher_run_results.json';
-        if (file_exists($file)) @unlink($file);
+        $schoolDir = $this->getSchoolStorageDir();
+        $resultsFile = $schoolDir . '/teacher_run_results.json';
+        if (file_exists($resultsFile)) @unlink($resultsFile);
+        $previewFile = $schoolDir . '/teacher_preview.json';
+        if (file_exists($previewFile)) @unlink($previewFile);
+        $uploadedXlsx = $schoolDir . '/teacher_assessment_uploaded.xlsx';
+        if (file_exists($uploadedXlsx)) @unlink($uploadedXlsx);
         return response()->json(['ok' => true]);
     }
 

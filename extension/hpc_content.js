@@ -385,8 +385,7 @@
             for (const tgt of candidates) {
                 found = options.find(el => {
                     const txt = el.textContent.trim().toLowerCase();
-                    return new RegExp('\\b' + tgt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(txt)
-                        || txt.includes(tgt);
+                    return txt.split(/[\s-]+/).includes(tgt) || txt.includes(tgt);
                 });
                 if (found) break;
             }

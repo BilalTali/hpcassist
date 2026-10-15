@@ -42,7 +42,14 @@ class HpcTeacherController extends Controller
         $activeTeacher = $this->getActiveTeacher();
         $teacherProfileDir = $this->getActiveTeacherProfileDir();
 
-        $hasSession = is_dir($teacherProfileDir) && count(scandir($teacherProfileDir)) > 2;
+        $sessionActiveFile = $teacherProfileDir . '/session_active.txt';
+        $hasSession = false;
+        if (file_exists($sessionActiveFile)) {
+            $ts = strtotime(trim(file_get_contents($sessionActiveFile)));
+            if ($ts && (time() - $ts < 10800)) {
+                $hasSession = true;
+            }
+        }
 
         $stagesFile = $storagePath . '/stages.json';
         $stages = file_exists($stagesFile) ? (json_decode(file_get_contents($stagesFile), true) ?? []) : [
@@ -98,11 +105,16 @@ class HpcTeacherController extends Controller
      */
     public function downloadTemplate(Request $request): \Symfony\Component\HttpFoundation\Response
     {
-        $school            = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
-        $teacherProfileDir = $this->getActiveTeacherProfileDir($school);
-        $hasTeacherProfile = is_dir($teacherProfileDir) && (
-            file_exists($teacherProfileDir . '/session_active.txt') || (count(scandir($teacherProfileDir)) > 2)
-        );
+        $school             = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $teacherProfileDir  = $this->getActiveTeacherProfileDir($school);
+        $teacherSessionFile = $teacherProfileDir . '/session_active.txt';
+        $hasTeacherProfile  = false;
+        if (file_exists($teacherSessionFile)) {
+            $ts = strtotime(trim(file_get_contents($teacherSessionFile)));
+            if ($ts && (time() - $ts < 10800)) {
+                $hasTeacherProfile = true;
+            }
+        }
 
         $grade = $request->input('grade', request('grade'));
         if ($grade === 'all' || trim((string)$grade) === '') {
@@ -517,7 +529,8 @@ class HpcTeacherController extends Controller
             return response()->json(['ok' => false, 'error' => 'Please upload a valid Excel (.xlsx, .xls) file.']);
         }
 
-        $dir = storage_path('app/hpc');
+        $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $dir    = $this->getSchoolStorageDir($school);
         if (! is_dir($dir)) @mkdir($dir, 0777, true);
 
         $fullPath = $dir . '/teacher_assessment_uploaded.xlsx';
@@ -534,7 +547,7 @@ class HpcTeacherController extends Controller
             $columns = $this->getEvaluationColumns();
 
             $portalStudents = [];
-            $tStudentsFile = storage_path('app/hpc/teacher_students.json');
+            $tStudentsFile  = $dir . '/teacher_students.json';
             if (file_exists($tStudentsFile)) {
                 $tsData = json_decode(file_get_contents($tStudentsFile), true) ?: [];
                 foreach ($tsData as $tSt) {
@@ -800,25 +813,40 @@ class HpcTeacherController extends Controller
 
     public function discover(Request $request)
     {
-        $stage = trim((string) $request->input('stage'));
-        $artisan = base_path('artisan');
-        $php = PHP_BINARY;
-        $cmd = escapeshellcmd("{$php} {$artisan} hpc:teacher-discover --skip-login " . ($stage ? "--stage=" . escapeshellarg($stage) : ""));
+        $stage     = trim((string) $request->input('stage'));
+        $school    = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $schoolDir = $this->getSchoolStorageDir($school);
 
-        $output = [];
-        $exitCode = 0;
-        if (function_exists('exec')) {
-            exec($cmd . ' 2>&1', $output, $exitCode);
+        $studentsFile = $schoolDir . '/teacher_students.json';
+        $students     = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?: []) : [];
+
+        // If no teacher_students.json exists yet for this school, pull real students from database
+        if (empty($students)) {
+            $students = $this->getTeacherTemplateStudents();
         }
 
-        $studentsFile = storage_path('app/hpc/teacher_students.json');
-        $students = file_exists($studentsFile) ? json_decode(file_get_contents($studentsFile), true) : [];
+        // Filter by stage if specified
+        if (! empty($stage) && $stage !== 'all' && ! empty($students)) {
+            $stageGrades = match ($stage) {
+                'middle-stage'       => ['Grade 6', 'Grade 7', 'Grade 8'],
+                'preparatory-stage'  => ['Grade 3', 'Grade 4', 'Grade 5'],
+                'foundational-stage' => ['Balvatika 1', 'Balvatika 2', 'Balvatika 3', 'Grade 1', 'Grade 2'],
+                default              => []
+            };
+
+            if (! empty($stageGrades)) {
+                $students = array_values(array_filter($students, function($s) use ($stageGrades) {
+                    $stGrade = trim((string)($s['grade'] ?? ''));
+                    return in_array($stGrade, $stageGrades, true);
+                }));
+            }
+        }
 
         return response()->json([
             'ok'       => true,
             'total'    => count($students),
             'students' => $students,
-            'output'   => implode("\n", $output)
+            'message'  => count($students) . ' student(s) loaded for this school.'
         ]);
     }
 
@@ -1148,33 +1176,20 @@ class HpcTeacherController extends Controller
         @mkdir($profileDir, 0777, true);
         @file_put_contents($profileDir . '/session_active.txt', now()->toIso8601String());
 
-        if (function_exists('exec')) {
-            $macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-            if (file_exists($macChrome)) {
-                @exec("nohup '{$macChrome}' --user-data-dir=" . escapeshellarg($profileDir) . " " . escapeshellarg($loginUrl) . " > /dev/null 2>&1 &");
-            }
-        }
-
         $teacher = $this->getActiveTeacher();
         return response()->json([
             'ok'      => true,
             'url'     => $loginUrl,
-            'message' => "Teacher session connected for {$teacher['name']}. Please sign in to the PARAKH portal."
+            'message' => "Session activated for {$teacher['name']}. Opening PARAKH portal login page…"
         ]);
     }
 
     public function endSession()
     {
         $profileDir = $this->getActiveTeacherProfileDir();
-        if (function_exists('exec')) {
-            @exec("pkill -f " . escapeshellarg($profileDir) . " 2>/dev/null");
-        }
-        if (is_dir($profileDir)) {
-            $files = glob($profileDir . '/*');
-            foreach ($files as $file) {
-                if (is_file($file)) @unlink($file);
-            }
-            @rmdir($profileDir);
+        $sessionFile = $profileDir . '/session_active.txt';
+        if (file_exists($sessionFile)) {
+            @unlink($sessionFile);
         }
         return response()->json(['ok' => true, 'message' => "Session ended for active teacher profile."]);
     }

@@ -577,8 +577,10 @@
                 headers: { 'X-CSRF-TOKEN': csrfToken }
             });
             const d = await res.json();
-            alert(d.message || 'Chrome opened');
-            setTimeout(() => window.location.reload(), 2000);
+            if (d.ok && d.url) {
+                window.open(d.url, '_blank');
+            }
+            setTimeout(() => window.location.reload(), 1500);
         }
 
         async function endTeacherSession() {

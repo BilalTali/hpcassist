@@ -1034,44 +1034,81 @@ class HpcController extends Controller
 
         $student = null;
 
-        // 1. Match by Name + DOB first (ensures students with different names never overwrite each other)
-        if (! empty($name) && ! empty($dob)) {
-            $student = Student::where('school_id', $school->id)
-                ->where('name', $name)
-                ->where('dob', $dob)
-                ->first();
+        // 1. Match by explicit database ID if provided (e.g., student edit / manual modal)
+        if (! empty($data['id'])) {
+            $student = Student::where('school_id', $school->id)->find($data['id']);
         }
 
-        // 2. Match by 12-digit APAAR ID if present (only if name is actually similar >= 70%)
+        // 2. Match by 12-digit APAAR ID if present (Primary national identifier)
         if (! $student && $apaar && strlen($apaar) === 12) {
             $existing = Student::where('school_id', $school->id)->where('apaar_id', $apaar)->first();
             if ($existing) {
                 similar_text(strtolower($existing->name), strtolower($name), $simPct);
-                if (empty($name) || soundex($existing->first_name) === soundex($firstName) || $simPct >= 70) {
+                if (empty($name) || soundex($existing->first_name) === soundex($firstName) || $simPct >= 50) {
                     $student = $existing;
                 }
             }
         }
 
-        // 3. Match by PEN code if APAAR did not match (only if name is actually similar >= 70%)
+        // 3. Match by National PEN code if APAAR did not match (Secondary national identifier)
         if (! $student && ! empty($pen)) {
             $existing = Student::where('school_id', $school->id)->where('pen_code', $pen)->first();
             if ($existing) {
                 similar_text(strtolower($existing->name), strtolower($name), $simPct);
-                if (empty($name) || soundex($existing->first_name) === soundex($firstName) || $simPct >= 70) {
+                if (empty($name) || soundex($existing->first_name) === soundex($firstName) || $simPct >= 50) {
                     $student = $existing;
                 }
             }
         }
 
-        // 4. Match by Admission Number if present
+        // 4. Match by Admission Number if APAAR/PEN did not match (School-level identifier)
         if (! $student && ! empty($admissionNo)) {
             $existing = Student::where('school_id', $school->id)->where('admission_no', $admissionNo)->first();
             if ($existing) {
                 similar_text(strtolower($existing->name), strtolower($name), $simPct);
-                if (empty($name) || soundex($existing->first_name) === soundex($firstName) || $simPct >= 70) {
+                if (empty($name) || soundex($existing->first_name) === soundex($firstName) || $simPct >= 50) {
                     $student = $existing;
                 }
+            }
+        }
+
+        // 5. Match by UDISE internal student ID if present
+        $udiseStId = $data['udise_student_id'] ?? ($data['studentId'] ?? null);
+        if (! $student && ! empty($udiseStId)) {
+            $student = Student::where('school_id', $school->id)->where('udise_student_id', $udiseStId)->first();
+        }
+
+        // 6. Fallback: Match by Name + DOB only if no unique IDs matched AND no conflicting identifiers exist
+        if (! $student && ! empty($name) && ! empty($dob)) {
+            $candidates = Student::where('school_id', $school->id)
+                ->where('name', $name)
+                ->where('dob', $dob)
+                ->get();
+
+            foreach ($candidates as $cand) {
+                // Must not conflict with APAAR ID
+                if ($apaar && ! empty($cand->apaar_id) && $cand->apaar_id !== $apaar) {
+                    continue;
+                }
+                // Must not conflict with PEN
+                if (! empty($pen) && ! empty($cand->pen_code) && $cand->pen_code !== $pen) {
+                    continue;
+                }
+                // Must not conflict with Admission Number
+                if (! empty($admissionNo) && ! empty($cand->admission_no) && $cand->admission_no !== $admissionNo) {
+                    continue;
+                }
+                // Must not conflict with Gender if both are provided
+                if (! empty($gender) && ! empty($cand->gender) && strtolower($cand->gender) !== strtolower($gender)) {
+                    continue;
+                }
+                // Must not conflict with Grade if both are provided
+                if (! empty($grade) && ! empty($cand->grade) && strtolower($cand->grade) !== strtolower($grade)) {
+                    continue;
+                }
+
+                $student = $cand;
+                break;
             }
         }
 
@@ -1122,6 +1159,20 @@ class HpcController extends Controller
         }
 
         if ($student) {
+            // Preserve existing unique IDs if incoming row left them empty
+            if (empty($payload['apaar_id']) && ! empty($student->apaar_id)) {
+                $payload['apaar_id'] = $student->apaar_id;
+            }
+            if (empty($payload['pen_code']) && ! empty($student->pen_code)) {
+                $payload['pen_code'] = $student->pen_code;
+            }
+            if (empty($payload['admission_no']) && ! empty($student->admission_no)) {
+                $payload['admission_no'] = $student->admission_no;
+            }
+            if (empty($payload['gender']) && ! empty($student->gender)) {
+                $payload['gender'] = $student->gender;
+            }
+
             // When we find an existing UDISE/Excel student and discover it's
             // already on the HPC portal, mark it as submitted without changing
             // its original source (so it still appears in Step 3 history).

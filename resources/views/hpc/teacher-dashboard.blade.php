@@ -281,6 +281,7 @@
                     </div>
 
                     <a id="btn-download-template" href="{{ route('hpc.teacher.template.download') }}{{ !empty($selectedGrade) ? '?grade=' . urlencode($selectedGrade) : (!empty($selectedStage) && $selectedStage !== 'all' ? '?stage=' . urlencode($selectedStage) : '') }}"
+                       @if(empty($students)) onclick="if(!confirm('⚠️ No students have been fetched from PARAKH portal yet.\n\nTo ensure your evaluations match PARAKH portal, please login and click \'📥 Fetch Students from This Page\' in the extension widget first.\n\nDo you still want to proceed?')) return false;" @endif
                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow">
                         📥 Download Template (.xlsx)
                     </a>
@@ -427,11 +428,41 @@
                                     @endforeach
                                 @else
                                     <tr>
-                                        <td colspan="5" class="px-4 py-8 text-center text-slate-400">
-                                            <div class="flex flex-col items-center justify-center gap-1">
-                                                <span class="text-xl">📋</span>
-                                                <span class="text-xs font-bold text-slate-600">No records loaded yet</span>
-                                                <span class="text-[11px] text-slate-400">Select stage above and click <strong>"📥 Fetch Data"</strong> to retrieve students from the PARAKH portal.</span>
+                                        <td colspan="5" class="p-4">
+                                            <div class="bg-indigo-50/70 border border-indigo-200 rounded-xl p-4 text-slate-700">
+                                                <div class="flex items-center gap-2 mb-2">
+                                                    <span class="text-base">🔒</span>
+                                                    <h4 class="text-xs font-bold text-indigo-900">Step 1: Fetch Live Student Roster from PARAKH Portal</h4>
+                                                </div>
+                                                <p class="text-[11px] text-slate-600 mb-3 leading-relaxed">
+                                                    To prevent mismatched evaluations, your Excel template is populated <strong>strictly from your logged-in PARAKH portal stage roster</strong> (not from the local database).
+                                                </p>
+                                                <div class="space-y-1.5 text-[11px] mb-3">
+                                                    <div class="flex items-start gap-1.5">
+                                                        <span class="font-bold text-indigo-600">1.</span>
+                                                        <span>Click <strong class="text-slate-900">"🚀 Log In as Teacher"</strong> (top right) or open PARAKH portal in Chrome.</span>
+                                                    </div>
+                                                    <div class="flex items-start gap-1.5">
+                                                        <span class="font-bold text-indigo-600">2.</span>
+                                                        <span>Navigate to your stage page (e.g. <a href="https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage" target="_blank" class="text-indigo-600 underline font-semibold">Middle Stage</a>).</span>
+                                                    </div>
+                                                    <div class="flex items-start gap-1.5">
+                                                        <span class="font-bold text-indigo-600">3.</span>
+                                                        <span>Click <strong class="text-orange-600">"📥 Fetch Students from This Page"</strong> in the floating HPC Assist widget.</span>
+                                                    </div>
+                                                    <div class="flex items-start gap-1.5">
+                                                        <span class="font-bold text-indigo-600">4.</span>
+                                                        <span>Refresh this page — your exact portal students will appear here, and Step 1 Excel template will be unlocked!</span>
+                                                    </div>
+                                                </div>
+                                                <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-indigo-100">
+                                                    <button onclick="startTeacherSession()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-sm transition">
+                                                        🚀 Open PARAKH Login
+                                                    </button>
+                                                    <button onclick="copyTeacherSyncScript()" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-300 rounded-lg font-semibold text-xs transition" title="Copy 1-line sync script to paste into Chrome DevTools console if extension is not installed">
+                                                        📋 Copy Console Sync Script
+                                                    </button>
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>
@@ -600,6 +631,43 @@
             window.location.reload();
         }
 
+        function copyTeacherSyncScript() {
+            const serverUrl = window.location.origin;
+            const schoolId = (window.__HPC_CONFIG && window.__HPC_CONFIG.school_id) ? window.__HPC_CONFIG.school_id : {{ json_encode($schoolId) }};
+            const script = `(async () => {
+    const rows = Array.from(document.querySelectorAll('table tbody tr'));
+    const stage = location.pathname.split('/').filter(Boolean).pop() || 'middle-stage';
+    const students = [];
+    rows.forEach((tr, idx) => {
+        const cells = Array.from(tr.querySelectorAll('td')).map(td => td.innerText.trim());
+        if (cells.length >= 3) {
+            students.push({
+                row: idx + 1,
+                login_id: cells[1] || ('ST_' + (idx + 1)),
+                name: cells[2] || ('Student ' + (idx + 1)),
+                status: cells[3] || 'HPC In Progress',
+                stage: stage,
+                grade: stage.includes('middle') ? 'Grade 6' : (stage.includes('prep') ? 'Grade 4' : 'Grade 1')
+            });
+        }
+    });
+    if (!students.length) { alert('No students found in the stage table on this page!'); return; }
+    const res = await fetch('${serverUrl}/hpc/teacher/sync-roster', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ school_id: ${schoolId}, stage: stage, students: students })
+    });
+    const d = await res.json();
+    if (d.ok) alert('✅ Successfully synced ' + (d.count || students.length) + ' student(s) to HPC Assist! Refresh your teacher dashboard.');
+    else alert('❌ Sync failed: ' + (d.error || 'Server error'));
+})();`;
+            navigator.clipboard.writeText(script).then(() => {
+                alert('✅ Console sync script copied to clipboard!\n\nOpen your PARAKH portal stage page (e.g. Middle Stage), press F12 (or Cmd+Option+I), paste into Console, and press Enter to instantly sync your stage roster.');
+            }).catch(() => {
+                prompt('Copy this sync script:', script);
+            });
+        }
+
         // ── Stage Student Discovery ───────────────────────────────────────────
         async function discoverStageStudents() {
             const stageVal = document.getElementById('stage-select').value;
@@ -637,7 +705,16 @@
                 if (d.ok && d.students) {
                     tbody.innerHTML = '';
                     if (d.students.length === 0) {
-                        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400 italic">No enrolled students found for selected filter.</td></tr>`;
+                        tbody.innerHTML = `<tr><td colspan="5" class="p-4">
+                            <div class="bg-indigo-50/70 border border-indigo-200 rounded-xl p-4 text-center text-slate-700">
+                                <span class="text-xl">📋</span>
+                                <div class="text-xs font-bold text-indigo-900 mt-1">No portal students synced yet for this stage.</div>
+                                <div class="text-[11px] text-slate-500 mt-1 mb-3">Open PARAKH portal stage page and click <strong>"📥 Fetch Students from This Page"</strong> in the HPC Assist extension widget.</div>
+                                <button onclick="startTeacherSession()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-sm transition">
+                                    🚀 Open PARAKH Login
+                                </button>
+                            </div>
+                        </td></tr>`;
                         countBadge.innerText = '0';
                     } else {
                         d.students.forEach((st, idx) => {
@@ -662,7 +739,13 @@
                         if (metricBadge) metricBadge.innerText = d.students.length;
                     }
                 } else {
-                    alert(d.error || 'Discovery failed');
+                    tbody.innerHTML = `<tr><td colspan="5" class="p-4">
+                        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center text-slate-700">
+                            <div class="text-xs font-bold text-amber-900">⚠️ ${d.error || 'No students loaded'}</div>
+                            <div class="text-[11px] text-slate-600 mt-1 mb-2">Please login to PARAKH portal and click "📥 Fetch Students" in the extension widget.</div>
+                            <button onclick="copyTeacherSyncScript()" class="px-3 py-1 bg-white border border-amber-300 text-amber-800 rounded-lg text-xs font-semibold">📋 Copy Console Sync Script</button>
+                        </div>
+                    </td></tr>`;
                 }
             } catch (e) {
                 alert('Discovery error: ' + e.message);

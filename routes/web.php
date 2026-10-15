@@ -30,6 +30,7 @@ Route::match(['post', 'options'], '/hpc/students/sync-from-portal',  [HpcControl
 // Extension-facing: Teacher 15-part evaluation queue & progress
 Route::match(['get', 'options'],  '/hpc/teacher/evaluations/queue',    [HpcTeacherController::class, 'evaluationsQueue'])->name('hpc.teacher.evaluations.queue');
 Route::match(['post', 'options'], '/hpc/teacher/evaluations/progress', [HpcTeacherController::class, 'evaluationsProgress'])->name('hpc.teacher.evaluations.progress');
+Route::match(['post', 'options'], '/hpc/teacher/sync-roster',          [HpcTeacherController::class, 'syncRoster'])->name('hpc.teacher.sync_roster');
 
 Route::middleware('auth')->group(function () {
     // ── School Central Dashboard ──────────────────────────────────────────────

@@ -873,6 +873,12 @@
                 updateWidgetContent();
                 return;
             }
+            const tFetchBtn = e.target.closest('#hpc-teacher-fetch-portal-btn');
+            if (tFetchBtn) {
+                console.log('[HPC Assist] User clicked Fetch Students from Portal');
+                await fetchTeacherStudentsFromPortal();
+                return;
+            }
         });
 
         // School switcher dropdown handler
@@ -1005,6 +1011,13 @@
                                 ⏮ Reset
                             </button>
                         ` : ''}
+                    </div>
+
+                    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+                        <button id="hpc-teacher-fetch-portal-btn" style="width: 100%; padding: 9px 12px; background: linear-gradient(135deg, #FF671F, #ea580c); color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.25);" title="Scrape students from this stage table and sync to HPC Assist teacher portal">
+                            📥 Fetch Students from This Page
+                        </button>
+                        <div style="font-size: 10px; color: #64748b; margin-top: 4px; text-align: center;">Syncs live portal roster to your Excel template</div>
                     </div>
 
                     <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
@@ -1254,6 +1267,163 @@
             logStatus(`⚠️ Error syncing: ${err.message}`);
             console.error('[HPC Assist] fetchHpcPortalStudents error:', err);
             alert(`⚠️ Network error syncing with HPC Assist:\n${err.message}`);
+        }
+    }
+
+    /**
+     * Scrapes student rows from PARAKH portal stage table (e.g. /en/hpc/middle-stage)
+     * and sends them to HPC Assist /hpc/teacher/sync-roster so that the teacher
+     * template is populated exclusively with the teacher's locked live portal students.
+     */
+    async function fetchTeacherStudentsFromPortal() {
+        if (!SERVER_URL) {
+            alert('⚠️ HPC Assist server URL not configured. Please open your teacher dashboard on HPC Assist first to establish connection.');
+            return;
+        }
+
+        const currPath = location.pathname.toLowerCase();
+        if (!currPath.includes('-stage') && !currPath.includes('/hpc/')) {
+            const goToStage = confirm('⚠️ To fetch students, you must be on an HPC Stage page (e.g. Middle Stage).\n\nWould you like to open Middle Stage now?');
+            if (goToStage) {
+                window.location.href = 'https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage';
+            }
+            return;
+        }
+
+        logStatus('📥 Scanning PARAKH portal stage student roster...');
+        const allStudents = [];
+        let pageNum = 0;
+        let keepGoing = true;
+
+        // Determine current stage slug from URL (e.g. 'middle-stage')
+        const stageSlug = location.pathname.split('/').filter(Boolean).pop() || 'middle-stage';
+
+        while (keepGoing) {
+            pageNum++;
+            await sleep(1000); // wait for table to settle
+
+            // Find rows in table tbody
+            const rows = Array.from(document.querySelectorAll('table tbody tr, tbody tr, .table tr'));
+            let pageFound = 0;
+
+            for (const row of rows) {
+                const cells = Array.from(row.querySelectorAll('td'));
+                if (cells.length < 2) continue; // skip header or empty row
+
+                const texts = cells.map(c => c.textContent.trim());
+
+                // Common stage page layout:
+                // [0] = S.No
+                // [1] = HPC Login ID / PEN / APAAR
+                // [2] = Student Name
+                // [3] = Status (e.g. "HPC In Progress", "HPC Pending", "HPC Completed")
+                let sNo = texts[0] || '';
+                let loginId = '';
+                let name = '';
+                let status = 'HPC In Progress';
+                let apaarId = '';
+
+                if (texts.length >= 3) {
+                    loginId = texts[1];
+                    name = texts[2];
+                    if (texts[3]) {
+                        status = texts[3];
+                    }
+                }
+
+                // If not matched by index, search cells for patterns
+                if (!name || /^\d+$/.test(name)) {
+                    for (let i = 0; i < texts.length; i++) {
+                        const t = texts[i];
+                        if (!name && /^[A-Z][A-Za-z\s.'-]{2,}$/.test(t) && t.length > 2 && !/^\d+$/.test(t)) {
+                            const low = t.toLowerCase();
+                            if (!['action', 'actions', 'open', 'edit', 'view', 'status', 's.no', 'sr.no', 'select'].includes(low)) {
+                                name = t;
+                            }
+                        }
+                    }
+                }
+
+                // Check for 11-12 digit numbers (PEN / APAAR)
+                for (let i = 0; i < texts.length; i++) {
+                    const cleanNum = texts[i].replace(/\s+/g, '');
+                    if (/^\d{11,12}$/.test(cleanNum)) {
+                        if (!loginId || loginId === sNo) loginId = cleanNum;
+                        if (!apaarId && cleanNum.length === 12) apaarId = cleanNum;
+                    }
+                }
+
+                if (!name && !loginId) continue;
+
+                // Extract grade if mentioned or infer from stageSlug
+                let grade = '';
+                if (stageSlug.includes('middle')) grade = 'Grade 6';
+                else if (stageSlug.includes('preparatory')) grade = 'Grade 4';
+                else if (stageSlug.includes('foundational')) grade = 'Grade 1';
+                else if (stageSlug.includes('secondary')) grade = 'Grade 9';
+
+                allStudents.push({
+                    row: allStudents.length + 1,
+                    login_id: loginId || `HPC_${allStudents.length + 1}`,
+                    name: name || `Student ${allStudents.length + 1}`,
+                    apaar_id: apaarId,
+                    status: status,
+                    stage: stageSlug,
+                    grade: grade,
+                });
+                pageFound++;
+            }
+
+            logStatus(`📥 Scraped page ${pageNum}: ${pageFound} students (total ${allStudents.length})...`);
+
+            // Check for next pagination button
+            const nextBtn = document.querySelector(
+                'button[aria-label*="next" i], a[aria-label*="next" i], ' +
+                '.pagination .next:not(.disabled) a, .pagination .next:not(.disabled) button, ' +
+                'li.next:not(.disabled) a, li.next:not(.disabled) button, ' +
+                '.page-item:not(.disabled) .page-link[aria-label*="Next"]'
+            );
+            if (nextBtn && pageNum < 30) {
+                nextBtn.click();
+                await sleep(1500);
+            } else {
+                keepGoing = false;
+            }
+        }
+
+        if (allStudents.length === 0) {
+            logStatus('⚠️ No student rows found on this page.');
+            alert('⚠️ Could not find student rows on this stage page.\n\nPlease make sure the student table is visible on screen before clicking Fetch.');
+            return;
+        }
+
+        logStatus(`📤 Syncing ${allStudents.length} students to HPC Assist...`);
+
+        try {
+            const res = await fetch(`${SERVER_URL}/hpc/teacher/sync-roster`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-HPC-Token': HPC_TOKEN,
+                },
+                body: JSON.stringify({
+                    school_id: SCHOOL_ID,
+                    stage: stageSlug,
+                    students: allStudents,
+                }),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                logStatus(`✅ Synced ${data.count || allStudents.length} students from PARAKH portal!`);
+                alert(`✅ PARAKH Portal Student Sync Complete!\n\n• ${allStudents.length} student(s) fetched from this stage page.\n• Saved directly to your Teacher Profile.\n\nNow return to your HPC Assist dashboard: Step 1 Excel template will be filled strictly with these students!`);
+            } else {
+                logStatus(`⚠️ Sync error: ${data.error || 'Unknown error'}`);
+                alert('⚠️ Sync error: ' + (data.error || 'Server rejected sync'));
+            }
+        } catch (err) {
+            logStatus(`✕ Network error during sync: ${err.message}`);
+            alert('✕ Could not reach HPC Assist server: ' + err.message);
         }
     }
 

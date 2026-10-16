@@ -1428,8 +1428,10 @@
                     'Accept': 'application/json',
                     'X-HPC-Token': HPC_TOKEN,
                 },
+                credentials: 'include',
                 body: JSON.stringify({
                     school_id: SCHOOL_ID,
+                    udise_code: (availableSchools.find(s => s.id === SCHOOL_ID)?.udise_code) || (window.__HPC_CONFIG && window.__HPC_CONFIG.udise_code) || '',
                     stage: stageSlug,
                     students: allStudents,
                 }),

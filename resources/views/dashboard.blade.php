@@ -1598,10 +1598,10 @@
                         } else if (data.state === 'no_chrome') {
                             this.statusType = 'waiting';
                             this.statusTitle = 'Remote Web Server Mode';
-                            @if(!empty($udiseCount) && $udiseCount > 0 && ($school?->udise_code === '01041800702'))
-                                this.statusMessage = 'A remote server cannot control desktop Chrome tabs on your PC. Click "Link Server Student Roster" above to instantly link your records.';
+                            @if(!empty($udiseCount) && $udiseCount > 0)
+                                this.statusMessage = 'Your school has {{ $udiseCount }} students synced. You can proceed directly to Step 2 to review and submit.';
                             @else
-                                this.statusMessage = 'Browser automation requires local Chrome. You can import your school records using Option B (Excel template) or proceed directly to Step 2.';
+                                this.statusMessage = 'Browser automation requires local Chrome. Please use the HPC Assist Chrome extension on UDISE+ to sync, or import your school records using Option B (Excel template).';
                             @endif
                         } else if (data.message) {
                             this.statusMessage = data.message;

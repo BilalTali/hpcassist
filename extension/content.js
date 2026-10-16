@@ -71,9 +71,32 @@
         return true;
     }
 
+    function extractUdiseFromJwtPayload(payload) {
+        if (!payload) return '';
+        const fields = [
+            payload.udiseCode,
+            payload.schUdiseCode,
+            payload.udise_code,
+            payload.sub,
+            payload.userName,
+            payload.username,
+            payload.preferred_username
+        ];
+        for (const f of fields) {
+            if (f && typeof f === 'string') {
+                const clean = f.trim().replace(/[^0-9]/g, '');
+                if (clean.length === 11) return clean;
+            } else if (typeof f === 'number' && String(f).length === 11) {
+                return String(f);
+            }
+        }
+        return '';
+    }
+
     function getAllSchoolCandidates() {
         const candidates = [];
-        const targetUdise = (activeHpcConfig.udise_code || '').trim();
+        const domUdise = detectUdiseCodeFromDOM();
+        const targetUdise = (activeHpcConfig.udise_code || domUdise || '').trim();
 
         // Inspect sessionStorage first (active tab session), then localStorage
         for (const storage of [sessionStorage, localStorage]) {
@@ -117,23 +140,27 @@
                     if (payload) {
                         if (!isJwtValid(payload)) continue; // Skip expired tokens
                         const sid = payload.schoolId || payload.schId || payload.school_id || payload.sch_id || candidateSid;
-                        const ucode = payload.udiseCode || payload.schUdiseCode || payload.userName || payload.udise_code || candidateUdise;
+                        const ucode = extractUdiseFromJwtPayload(payload) || candidateUdise;
                         if (sid) {
+                            const isConflict = Boolean(targetUdise && ucode && ucode !== targetUdise);
                             candidates.push({
                                 schoolId: String(sid),
                                 udiseCode: ucode ? String(ucode) : '',
                                 jwt: jwtStr,
                                 isSession: storage === sessionStorage,
-                                matchesTarget: Boolean(targetUdise && ucode && String(ucode) === targetUdise)
+                                matchesTarget: Boolean(targetUdise && ucode && String(ucode) === targetUdise),
+                                isConflict: isConflict
                             });
                         }
                     } else if (candidateSid) {
+                        const isConflict = Boolean(targetUdise && candidateUdise && candidateUdise !== targetUdise);
                         candidates.push({
                             schoolId: candidateSid,
                             udiseCode: candidateUdise || '',
                             jwt: null,
                             isSession: storage === sessionStorage,
-                            matchesTarget: Boolean(targetUdise && candidateUdise && String(candidateUdise) === targetUdise)
+                            matchesTarget: Boolean(targetUdise && candidateUdise && String(candidateUdise) === targetUdise),
+                            isConflict: isConflict
                         });
                     }
                 }
@@ -165,8 +192,8 @@
             }
         }
 
-        // 2. Prefer token from active tab's sessionStorage
-        const sessionMatch = candidates.find(c => c.jwt && c.isSession);
+        // 2. Prefer token from active tab's sessionStorage (not in conflict with target)
+        const sessionMatch = candidates.find(c => c.jwt && c.isSession && !c.isConflict);
         if (sessionMatch && sessionMatch.jwt) {
             const formatted = formatAuthHeader(sessionMatch.jwt);
             if (formatted) {
@@ -175,10 +202,10 @@
             }
         }
 
-        // 3. Any valid unexpired token
-        const anyValid = candidates.find(c => c.jwt);
-        if (anyValid && anyValid.jwt) {
-            const formatted = formatAuthHeader(anyValid.jwt);
+        // 3. Any non-conflicting valid token
+        const nonConflicting = candidates.find(c => c.jwt && !c.isConflict);
+        if (nonConflicting && nonConflicting.jwt) {
+            const formatted = formatAuthHeader(nonConflicting.jwt);
             if (formatted) {
                 headers['Authorization'] = formatted;
                 return headers;
@@ -236,17 +263,23 @@
             }
         } catch(e) {}
 
-        // 4. Candidate matching target UDISE from active HPC Assist config
+        const targetUdise = (activeHpcConfig.udise_code || detectUdiseCodeFromDOM() || '').trim();
         const candidates = getAllSchoolCandidates();
+
+        // 4. Candidate matching target UDISE from active HPC Assist config
         const targetMatch = candidates.find(c => c.matchesTarget);
         if (targetMatch) return targetMatch.schoolId;
 
-        // 5. Candidate from current active sessionStorage
-        const sessionCandidate = candidates.find(c => c.isSession);
+        // 5. Candidate from current active sessionStorage (not conflicting)
+        const sessionCandidate = candidates.find(c => c.isSession && !c.isConflict);
         if (sessionCandidate) return sessionCandidate.schoolId;
 
-        // 6. First valid candidate
-        if (candidates.length > 0) return candidates[0].schoolId;
+        // 6. Safe non-conflicting candidate
+        const safeCandidate = candidates.find(c => !c.isConflict);
+        if (safeCandidate) return safeCandidate.schoolId;
+
+        // 7. Only return first candidate if targetUdise is empty
+        if (!targetUdise && candidates.length > 0) return candidates[0].schoolId;
 
         return null;
     }
@@ -271,13 +304,16 @@
         }
 
         // 4. Any candidate with valid UDISE code
-        const anyCandidate = candidates.find(c => c.udiseCode && /^\d{11}$/.test(c.udiseCode));
+        const anyCandidate = candidates.find(c => c.udiseCode && /^\d{11}$/.test(c.udiseCode) && !c.isConflict);
         if (anyCandidate) return anyCandidate.udiseCode;
 
-        // 5. Stored custom UDISE code in localStorage
+        // 5. Stored custom UDISE code in localStorage (only if non-conflicting)
         const manual = localStorage.getItem('hpc_assist_custom_udise');
         if (manual && /^\d{11}$/.test(manual)) {
-            return manual;
+            if ((!activeHpcConfig.udise_code || manual === activeHpcConfig.udise_code) &&
+                (!domCode || manual === domCode)) {
+                return manual;
+            }
         }
 
         return '';
@@ -361,30 +397,47 @@
                 return;
             }
 
-            // Ground-truth UDISE code from the actual student records returned
+            // Ground-truth UDISE code from multiple sources
             const rosterUdiseCode = students.find(s => s?.schUdiseCode)?.schUdiseCode || '';
+            const domUdiseCode = detectUdiseCodeFromDOM();
+            const candidates = getAllSchoolCandidates();
+            const candidateForSchool = candidates.find(c => c.schoolId === String(schoolId));
+            const candidateUdise = candidateForSchool?.udiseCode || '';
             const targetUdiseCode = (activeHpcConfig.udise_code || '').trim();
 
+            const detectedSchoolUdise = rosterUdiseCode || candidateUdise || domUdiseCode;
+
             // Guard against uploading wrong school's data if extension is active for a different school
-            if (targetUdiseCode && rosterUdiseCode && rosterUdiseCode !== targetUdiseCode) {
+            if (targetUdiseCode && detectedSchoolUdise && detectedSchoolUdise !== targetUdiseCode) {
                 renderWidget(
                     'error',
                     `⚠️ <strong>School Mismatch Detected:</strong><br><br>` +
-                    `Your current UDISE+ portal session belongs to school <code>${rosterUdiseCode}</code> (${students[0]?.schoolName || 'Other School'}).<br><br>` +
+                    `Your current UDISE+ portal session belongs to school <code>${detectedSchoolUdise}</code>.<br><br>` +
                     `However, your active HPC Assist school is <strong>${activeHpcConfig.school_name || 'HPC School'}</strong> (UDISE: <code>${targetUdiseCode}</code>).<br><br>` +
                     `Please log out of UDISE+ and log in with your school credentials (UDISE: <code>${targetUdiseCode}</code>) to sync student data for this school.`,
                     null,
-                    rosterUdiseCode
+                    detectedSchoolUdise
                 );
                 isSyncing = false;
                 return;
             }
 
             // Authoritative UDISE code for ingest
-            let finalUdiseCode = rosterUdiseCode || targetUdiseCode || activeUdise;
+            let finalUdiseCode = targetUdiseCode || rosterUdiseCode || candidateUdise || domUdiseCode || activeUdise;
             const schoolName = activeHpcConfig.school_name ||
                                students.find(s => s?.schoolName)?.schoolName ||
                                '';
+
+            // Filter strictly to ensure only students of this unique school UDISE are ingested
+            if (finalUdiseCode) {
+                const cleanUdise = String(finalUdiseCode).trim().replace(/[^0-9]/g, '');
+                students = students.filter(s => {
+                    const sCode = s?.schUdiseCode || s?.udiseCode || s?.udise_code;
+                    if (!sCode) return true; // UDISE+ snapshot API sets schUdiseCode to null on individual rows
+                    const cleanS = String(sCode).trim().replace(/[^0-9]/g, '');
+                    return cleanS === cleanUdise;
+                });
+            }
 
             renderWidget('syncing', `Uploading ${students.length} students to HPC Assist (${schoolName || finalUdiseCode})...`, null, finalUdiseCode);
 

@@ -44,7 +44,7 @@ class RegisteredUserController extends Controller
 
         $request->validate([
             'school_name'    => ['required', 'string', 'max:255'],
-            'udise_code'     => ['required', 'string', 'max:15'],
+            'udise_code'     => ['required', 'string', 'max:15', 'unique:schools,udise_code'],
             'principal_name' => ['required', 'string', 'max:255'],
             'phone'          => ['nullable', 'string', 'max:20'],
             'district'       => ['nullable', 'string', 'max:100'],

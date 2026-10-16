@@ -162,59 +162,78 @@ class UdiseController extends Controller
             'total_students'  => count($students),
         ]);
 
-        // Identify school — multi-tiered resolution
+        // Identify school — UDISE code is the primary canonical key
         $school = null;
+        $cleanUdise = preg_replace('/[^0-9]/', '', (string)$udiseCode);
 
-        // 1. Logged-in user in active web session
-        if (Auth::check()) {
-            $school = Auth::user()->getEffectiveSchool();
+        // 1. By explicit 11-digit UDISE code (Authoritative Primary Identifier)
+        if (! empty($cleanUdise)) {
+            $school = \App\Models\School::where('udise_code', $cleanUdise)->first()
+                   ?: \App\Models\School::where('udise_code', 'like', "%{$cleanUdise}%")->first();
         }
 
-        // 2. Token match
-        if (! $school && $token) {
-            foreach (\App\Models\School::all() as $candidate) {
-                $expectedToken = substr(hash('sha256', $candidate->id . '_' . $candidate->udise_code . '_' . config('app.key')), 0, 32);
-                if ($token === $expectedToken || $token === (string) $candidate->udise_code) {
-                    $school = $candidate;
-                    break;
+        // 2. By student records UDISE code if payload field was empty or didn't match
+        if (! $school && ! empty($students)) {
+            foreach ($students as $st) {
+                if (! empty($st['schUdiseCode'])) {
+                    $stUdise = preg_replace('/[^0-9]/', '', (string) $st['schUdiseCode']);
+                    if (! empty($stUdise)) {
+                        $school = \App\Models\School::where('udise_code', $stUdise)->first();
+                        if ($school) break;
+                    }
                 }
             }
         }
 
-        // 3. By UDISE code (Exact or partial match)
-        if (! $school && $udiseCode) {
-            $cleanCode = preg_replace('/[^0-9]/', '', $udiseCode);
-            if (! empty($cleanCode)) {
-                $school = \App\Models\School::where('udise_code', $cleanCode)->first()
-                       ?: \App\Models\School::where('udise_code', 'like', "%{$cleanCode}%")->first();
+        // 3. Logged-in user in active web session (ONLY if their school UDISE matches or no UDISE was provided)
+        if (! $school && Auth::check()) {
+            $userSchool = Auth::user()->getEffectiveSchool();
+            if ($userSchool) {
+                $userClean = preg_replace('/[^0-9]/', '', (string)$userSchool->udise_code);
+                if (empty($cleanUdise) || $userClean === $cleanUdise) {
+                    $school = $userSchool;
+                }
             }
         }
 
-        // 4. By UDISE internal ID (e.g. 1007872 or 1007846)
-        if (! $school && ($udiseSchoolId || $schoolId)) {
-            $targetUdiseId = (string) ($udiseSchoolId ?: $schoolId);
-            $school = \App\Models\School::where('udise_internal_id', $targetUdiseId)->first();
+        // 4. Token match (strictly scoped to non-conflicting UDISE)
+        if (! $school && $token) {
+            foreach (\App\Models\School::all() as $candidate) {
+                $expectedToken = substr(hash('sha256', $candidate->id . '_' . $candidate->udise_code . '_' . config('app.key')), 0, 32);
+                if ($token === $expectedToken || $token === (string) $candidate->udise_code) {
+                    if (empty($cleanUdise) || $candidate->udise_code === $cleanUdise) {
+                        $school = $candidate;
+                        break;
+                    }
+                }
+            }
         }
 
-        // 5. By HPC Assist School Primary Key
+        // 5. By HPC Assist School Primary Key (only if non-conflicting)
         if (! $school && $schoolId && is_numeric($schoolId)) {
             $candidate = \App\Models\School::find((int) $schoolId);
-            if ($candidate) {
+            if ($candidate && (empty($cleanUdise) || $candidate->udise_code === $cleanUdise)) {
                 $school = $candidate;
             }
         }
 
-        // 6. By School Name
+        // 6. By School Name (only if non-conflicting)
         if (! $school && $schoolName) {
             $cleanName = trim($schoolName);
             if (! empty($cleanName)) {
-                $school = \App\Models\School::where('name', 'like', "%{$cleanName}%")->first();
+                $candidate = \App\Models\School::where('name', 'like', "%{$cleanName}%")->first();
+                if ($candidate && (empty($cleanUdise) || $candidate->udise_code === $cleanUdise)) {
+                    $school = $candidate;
+                }
             }
         }
 
-        // 7. Fallback if single school exists in system
+        // 7. Fallback if single school exists in system (only if non-conflicting)
         if (! $school && \App\Models\School::count() === 1) {
-            $school = \App\Models\School::first();
+            $candidate = \App\Models\School::first();
+            if ($candidate && (empty($cleanUdise) || $candidate->udise_code === $cleanUdise)) {
+                $school = $candidate;
+            }
         }
 
         if (! $school) {
@@ -257,21 +276,15 @@ class UdiseController extends Controller
             }
         }
 
-        // Internal ID mismatch verification: verify payload's internal school ID matches this school
-        if ($school && $udiseSchoolId && ! empty($school->udise_internal_id)) {
-            if ((string)$school->udise_internal_id !== (string)$udiseSchoolId) {
-                $matchingInternalSchool = \App\Models\School::where('udise_internal_id', (string)$udiseSchoolId)->first();
-                if ($matchingInternalSchool) {
-                    \Illuminate\Support\Facades\Log::warning("UDISE ingest rerouted: payload internal ID {$udiseSchoolId} belongs to school {$matchingInternalSchool->id} ({$matchingInternalSchool->name}), not {$school->id} ({$school->name})");
-                    $school = $matchingInternalSchool;
-                }
-            }
-        }
+        // Discovered internal ID from payload
+        $discoveredInternalId = (string) ($udiseSchoolId ?: ($schoolId > 1000 ? $schoolId : ($students[0]['schoolId'] ?? '')));
 
-        // Save / update udise_internal_id if discovered
-        $discoveredInternalId = (string) ($udiseSchoolId ?: ($schoolId > 1000 ? $schoolId : ''));
+        // Save / update udise_internal_id if discovered and not claimed by another school
         if (! empty($discoveredInternalId) && $school->udise_internal_id !== $discoveredInternalId) {
-            $school->update(['udise_internal_id' => $discoveredInternalId]);
+            $alreadyClaimed = \App\Models\School::where('udise_internal_id', $discoveredInternalId)->where('id', '!=', $school->id)->exists();
+            if (! $alreadyClaimed) {
+                $school->update(['udise_internal_id' => $discoveredInternalId]);
+            }
         }
 
         // Persist raw students
@@ -283,8 +296,40 @@ class UdiseController extends Controller
         $totalStudents = count($students);
         $totalApaar    = count(array_filter($students, fn($s) => ! empty($s['apaarId']) && ctype_digit((string) $s['apaarId']) && strlen((string) $s['apaarId']) === 12));
 
-        // Build downloadable Excel template from UDISE data (no DB writes — user must upload the Excel for HPC)
         $hpc = app(HpcController::class);
+        $gradeMap = $hpc->getGradeMap();
+
+        // Upsert students into DB table so they appear on dashboard roster immediately
+        $preview = [];
+        foreach ($students as $idx => $st) {
+            $norm = $hpc->normalizeUdiseStudent($st, $idx, $gradeMap);
+            $dbRow = [
+                'udise_code'       => $school->udise_code,
+                'first_name'       => $norm['firstName'],
+                'last_name'        => $norm['lastName'],
+                'name'             => trim("{$norm['firstName']} {$norm['lastName']}"),
+                'dob'              => $norm['dob'],
+                'gender'           => $norm['gender'],
+                'email'            => $norm['email'],
+                'admission_no'     => $norm['admissionNo'],
+                'pen_code'         => $norm['cleanPen'],
+                'grade'            => $norm['grade'],
+                'section'          => $norm['section'],
+                'apaar_id'         => $norm['apaarId'],
+                'udise_student_id' => $st['studentId'] ?? null,
+            ];
+            $hpc->upsertStudentToDatabase($school, $dbRow, \App\Models\Student::SOURCE_UDISE);
+
+            $preview[] = array_merge($dbRow, [
+                'row'    => $idx + 3,
+                'errors' => [],
+            ]);
+        }
+
+        // Save preview.json for file-based fallback
+        file_put_contents($dir . '/preview.json', json_encode($preview, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+        // Build downloadable Excel template from UDISE data
         $hpc->preloadUdise(null, $school, $students);
 
         // Save to global legacy location (so older code paths still work)
@@ -358,19 +403,40 @@ class UdiseController extends Controller
     public function download()
     {
         $school = Auth::user()?->getEffectiveSchool();
-        $dir    = $school ? storage_path('app/hpc/schools/' . $school->id) : storage_path('app/hpc');
-        $file   = $dir . '/students.xlsx';
+        if (! $school) {
+            abort(404, 'School not found.');
+        }
+
+        $dir  = storage_path('app/hpc/schools/' . $school->id);
+        $file = $dir . '/students.xlsx';
 
         if (! file_exists($file)) {
-            $fallback = storage_path('app/hpc/01041800702_Students_Full_Details_with_Unmasked_APAAR.xlsx');
-            if (file_exists($fallback)) {
-                $file = $fallback;
+            $hpc = app(HpcController::class);
+            $students = $hpc->getUdiseStudents($school);
+            if (! empty($students)) {
+                $hpc->preloadUdise(null, $school, $students);
+            } elseif ($school->students()->forSchool($school)->exists()) {
+                $spreadsheet = $hpc->buildStudentSpreadsheet($school->students()->forSchool($school)->orderBy('id')->get()->map(fn($st) => [
+                    'first_name'   => $st->first_name,
+                    'last_name'    => $st->last_name,
+                    'dob'          => $st->dob,
+                    'gender'       => $st->getEffectiveGender(),
+                    'email'        => $st->email,
+                    'admission_no' => $st->admission_no ?? '',
+                    'pen_code'     => $st->pen_code ?? '',
+                    'grade'        => $st->grade,
+                    'section'      => $st->section,
+                    'apaar_id'     => $st->apaar_id,
+                ])->all());
+                @mkdir($dir, 0755, true);
+                $writer = new Xlsx($spreadsheet);
+                $writer->save($file);
             } else {
-                abort(404, 'Student export not found. Please sync from UDISE first.');
+                abort(404, "Student export not found for {$school->name} (UDISE: {$school->udise_code}). Please sync from UDISE+ first.");
             }
         }
 
-        $udise    = $school?->udise_code ?? '00000000000';
+        $udise    = $school->udise_code ?: '00000000000';
         $filename = "{$udise}_Students_APAAR.xlsx";
 
         return response()->download($file, $filename, [

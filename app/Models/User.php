@@ -82,11 +82,11 @@ class User extends Authenticatable
     {
         if ($this->isTeacher()) {
             return $this->teacher?->school 
-                ?: ($this->school_id ? School::find($this->school_id) : School::first());
+                ?: ($this->school_id ? School::find($this->school_id) : null);
         }
 
         return $this->school 
-            ?: ($this->school_id ? School::find($this->school_id) : School::first());
+            ?: ($this->school_id ? School::find($this->school_id) : null);
     }
 
     public function getEffectiveTeacher(): ?Teacher

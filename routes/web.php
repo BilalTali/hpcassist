@@ -65,15 +65,15 @@ Route::middleware('auth')->group(function () {
 
         if ($school) {
             if (\Illuminate\Support\Facades\Schema::hasTable('students')) {
-                // Step 2: UDISE + Excel students still pending
-                $step2Query = $school->students()->step2()->orderBy('id');
+                // Step 2: UDISE + Excel students still pending (strictly for this school's UDISE)
+                $step2Query = $school->students()->forSchool($school)->step2()->orderBy('id');
                 $step2Students = $step2Query->get();
                 if ($step2Students->isNotEmpty()) {
                     $preview = $step2Students->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
                 }
 
                 // Step 3: already on HPC (fetched or submitted)
-                $step3Students = $school->students()->step3()
+                $step3Students = $school->students()->forSchool($school)->step3()
                     ->orderByDesc('hpc_submitted_at')
                     ->orderByDesc('hpc_fetched_at')
                     ->get()
@@ -83,8 +83,34 @@ Route::middleware('auth')->group(function () {
                 $step3Count = count($step3Students);
             }
 
-            $udiseCount      = count($preview);
-            $udiseApaarCount = count(array_filter($preview, fn($s) => ! empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12));
+            // Fallback: If DB students table has no records for this school yet, but UDISE raw data exists
+            if (empty($preview)) {
+                $rawUdise = $hpcController->getUdiseStudents($school);
+                if (! empty($rawUdise)) {
+                    $gradeMap = $hpcController->getGradeMap();
+                    foreach ($rawUdise as $idx => $st) {
+                        $norm = $hpcController->normalizeUdiseStudent($st, $idx, $gradeMap);
+                        $preview[] = [
+                            'row'              => $idx + 1,
+                            'first_name'       => $norm['firstName'],
+                            'last_name'        => $norm['lastName'],
+                            'name'             => trim("{$norm['firstName']} {$norm['lastName']}"),
+                            'dob'              => $norm['dob'],
+                            'gender'           => $norm['gender'],
+                            'email'            => $norm['email'],
+                            'admission_no'     => $norm['admissionNo'],
+                            'pen_code'         => $norm['cleanPen'],
+                            'grade'            => $norm['grade'],
+                            'section'          => $norm['section'],
+                            'apaar_id'         => $norm['apaarId'],
+                            'errors'           => [],
+                        ];
+                    }
+                }
+            }
+
+            $udiseCount      = count($preview) ?: ($school->udise_students_count ?? 0);
+            $udiseApaarCount = count(array_filter($preview, fn($s) => ! empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12)) ?: ($school->udise_apaar_count ?? 0);
         }
 
         $udiseStudents = $school ? $hpcController->getUdiseStudents($school) : [];

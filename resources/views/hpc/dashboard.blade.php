@@ -1369,4 +1369,16 @@
                 .catch(() => {});
         });
     </script>
+
+    <script>
+        window.__HPC_CONFIG = {
+            server_url: "{{ rtrim(config('app.url'), '/') }}",
+            school_id: {{ $activeSchool['id'] ?? 'null' }},
+            school_name: @json($activeSchool['name'] ?? ''),
+            udise_code: @json($activeSchool['udise_code'] ?? ''),
+            token: @json($schoolToken ?? ''),
+            progress_token: "{{ config('hpc.progress_token') }}",
+            role: 'school'
+        };
+    </script>
 </x-app-layout>

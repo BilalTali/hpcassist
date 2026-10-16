@@ -15,8 +15,11 @@ class SchoolManageController extends Controller
     private function getCurrentSchool(): School
     {
         $user = Auth::user();
-        if ($user && $user->school) {
-            return $user->school;
+        if ($user) {
+            $school = $user->getEffectiveSchool();
+            if ($school) {
+                return $school;
+            }
         }
 
         // Fallback for first school or auto-create for user
@@ -25,7 +28,7 @@ class SchoolManageController extends Controller
             $school = School::create([
                 'user_id'        => $user->id,
                 'name'           => $user->name ?: 'My School',
-                'udise_code'     => '01041800702',
+                'udise_code'     => '01010100101',
                 'principal_name' => $user->name ?: 'Head Incharge',
                 'state'          => 'Jammu & Kashmir',
                 'is_active'      => true,
@@ -97,6 +100,7 @@ class SchoolManageController extends Controller
         }
 
         // Find or create Teacher record
+        /** @var \App\Models\Teacher|null $teacher */
         $teacher = $school->teachers()->where('email', $email)->first();
         if (! $teacher) {
             $teacher = $school->teachers()->create([

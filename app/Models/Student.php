@@ -24,6 +24,7 @@ class Student extends Model
 
     protected $fillable = [
         'school_id',
+        'udise_code',
         'first_name',
         'last_name',
         'name',
@@ -59,10 +60,26 @@ class Student extends Model
 
     // ─── Query Scopes ────────────────────────────────────────────────────────
 
-    /** Students belonging to a particular school. */
-    public function scopeForSchool($query, int $schoolId)
+    /** Students belonging strictly to a particular school / UDISE. */
+    public function scopeForSchool($query, $school)
     {
-        return $query->where('school_id', $schoolId);
+        if ($school instanceof School) {
+            return $query->where('school_id', $school->id)
+                         ->where(function ($q) use ($school) {
+                             if (! empty($school->udise_code)) {
+                                 $q->where('udise_code', $school->udise_code)
+                                   ->orWhereNull('udise_code');
+                             }
+                         });
+        }
+        return $query->where('school_id', $school);
+    }
+
+    /** Scope students strictly by UDISE number. */
+    public function scopeForUdise($query, string $udiseCode)
+    {
+        $clean = preg_replace('/[^0-9]/', '', $udiseCode);
+        return $query->where('udise_code', $clean);
     }
 
     /**
@@ -167,6 +184,7 @@ class Student extends Model
             'pen_code'     => $this->pen_code ?? '',
             'admission_no' => $this->admission_no ?? '',
             'hpc_student_id' => $this->hpc_student_id ?? '',
+            'udise_code'   => $this->udise_code ?? $this->school?->udise_code ?? '',
             'source'       => $this->source ?? self::SOURCE_UDISE,
             'status'       => $this->status ?? self::STATUS_PENDING,
             'remark'       => $this->remark ?? '',

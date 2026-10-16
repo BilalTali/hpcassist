@@ -72,13 +72,13 @@ class HpcTeacherController extends Controller
         $selectedStage = $request->query('stage', 'all');
         $selectedGrade = $request->query('grade', $teacherClass);
 
-        $studentsFile = null;
+        $students = [];
         if (file_exists($teacherProfileDir . '/teacher_students.json')) {
-            $studentsFile = $teacherProfileDir . '/teacher_students.json';
-        } elseif (file_exists($schoolDir . '/teacher_students.json')) {
-            $studentsFile = $schoolDir . '/teacher_students.json';
+            $students = json_decode(file_get_contents($teacherProfileDir . '/teacher_students.json'), true) ?? [];
         }
-        $students = $studentsFile ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
+        if (empty($students) && file_exists($schoolDir . '/teacher_students.json')) {
+            $students = json_decode(file_get_contents($schoolDir . '/teacher_students.json'), true) ?? [];
+        }
         if (empty($students)) {
             $students = $this->getTeacherTemplateStudents($selectedGrade, $selectedStage);
         }
@@ -167,7 +167,17 @@ class HpcTeacherController extends Controller
             ]);
         }
 
-        $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $school = null;
+        if ($request->filled('udise_code')) {
+            $cleanCode = preg_replace('/[^0-9]/', '', (string)$request->input('udise_code'));
+            if (! empty($cleanCode)) {
+                $school = \App\Models\School::where('udise_code', $cleanCode)->first()
+                       ?: \App\Models\School::where('udise_code', 'like', "%{$cleanCode}%")->first();
+            }
+        }
+        if (! $school) {
+            $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        }
         if (! $school && $request->filled('school_id')) {
             $school = \App\Models\School::find($request->input('school_id'));
         }
@@ -179,10 +189,7 @@ class HpcTeacherController extends Controller
             }
         }
         if (! $school) {
-            $school = \App\Models\School::first();
-        }
-        if (! $school) {
-            return response()->json(['ok' => false, 'error' => 'School not found.'], 404);
+            return response()->json(['ok' => false, 'error' => 'School not found for requested UDISE code.'], 404);
         }
 
         $incoming = $request->input('students', []);
@@ -310,14 +317,13 @@ class HpcTeacherController extends Controller
         $teacherProfileDir = $this->getActiveTeacherProfileDir($school);
 
         // Check teacher profile first, then school dir
-        $studentsFile = null;
+        $students = [];
         if (file_exists($teacherProfileDir . '/teacher_students.json')) {
-            $studentsFile = $teacherProfileDir . '/teacher_students.json';
-        } elseif (file_exists($schoolDir . '/teacher_students.json')) {
-            $studentsFile = $schoolDir . '/teacher_students.json';
+            $students = json_decode(file_get_contents($teacherProfileDir . '/teacher_students.json'), true) ?? [];
         }
-
-        $students = $studentsFile ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
+        if (empty($students) && file_exists($schoolDir . '/teacher_students.json')) {
+            $students = json_decode(file_get_contents($schoolDir . '/teacher_students.json'), true) ?? [];
+        }
 
         // Workflow requirement: Students MUST be fetched from PARAKH portal first.
         // DO NOT fall back to local database.

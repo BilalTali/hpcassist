@@ -89,8 +89,11 @@
                     let candidateSid = null;
                     let candidateUdise = null;
 
-                    if (typeof val === 'string' && val.startsWith('ey') && val.split('.').length === 3) {
-                        jwtStr = val;
+                    let rawVal = typeof val === 'string' ? val.trim() : '';
+                    if (rawVal.startsWith('Bearer ')) rawVal = rawVal.substring(7).trim();
+
+                    if (rawVal.startsWith('ey') && rawVal.split('.').length === 3) {
+                        jwtStr = rawVal;
                         payload = parseJwtPayload(jwtStr);
                     } else if (typeof val === 'string' && val.startsWith('{')) {
                         try {
@@ -99,10 +102,14 @@
                                 candidateSid = String(parsed.schoolId || parsed.schId || parsed.school_id);
                                 candidateUdise = String(parsed.udiseCode || parsed.schUdiseCode || parsed.udise_code || '');
                             }
-                            const tok = parsed.token || parsed.access_token || parsed.id_token || parsed.authToken || parsed.jwt;
-                            if (tok && typeof tok === 'string' && tok.startsWith('ey')) {
-                                jwtStr = tok;
-                                payload = parseJwtPayload(jwtStr);
+                            let tok = parsed.token || parsed.access_token || parsed.id_token || parsed.authToken || parsed.jwt;
+                            if (typeof tok === 'string') {
+                                tok = tok.trim();
+                                if (tok.startsWith('Bearer ')) tok = tok.substring(7).trim();
+                                if (tok.startsWith('ey') && tok.split('.').length === 3) {
+                                    jwtStr = tok;
+                                    payload = parseJwtPayload(jwtStr);
+                                }
                             }
                         } catch(e) {}
                     }
@@ -136,6 +143,12 @@
         return candidates;
     }
 
+    function formatAuthHeader(jwt) {
+        if (!jwt) return null;
+        const clean = jwt.replace(/^Bearer\s+/i, '').trim();
+        return clean ? 'Bearer ' + clean : null;
+    }
+
     function getAuthHeaders(targetUdise = '') {
         const headers = { 'Content-Type': 'application/json' };
         const candidates = getAllSchoolCandidates();
@@ -144,23 +157,32 @@
         if (targetUdise) {
             const match = candidates.find(c => c.jwt && c.udiseCode === targetUdise);
             if (match && match.jwt) {
-                headers['Authorization'] = 'Bearer ' + match.jwt;
-                return headers;
+                const formatted = formatAuthHeader(match.jwt);
+                if (formatted) {
+                    headers['Authorization'] = formatted;
+                    return headers;
+                }
             }
         }
 
         // 2. Prefer token from active tab's sessionStorage
         const sessionMatch = candidates.find(c => c.jwt && c.isSession);
         if (sessionMatch && sessionMatch.jwt) {
-            headers['Authorization'] = 'Bearer ' + sessionMatch.jwt;
-            return headers;
+            const formatted = formatAuthHeader(sessionMatch.jwt);
+            if (formatted) {
+                headers['Authorization'] = formatted;
+                return headers;
+            }
         }
 
         // 3. Any valid unexpired token
         const anyValid = candidates.find(c => c.jwt);
         if (anyValid && anyValid.jwt) {
-            headers['Authorization'] = 'Bearer ' + anyValid.jwt;
-            return headers;
+            const formatted = formatAuthHeader(anyValid.jwt);
+            if (formatted) {
+                headers['Authorization'] = formatted;
+                return headers;
+            }
         }
 
         return headers;
@@ -366,7 +388,7 @@
 
             renderWidget('syncing', `Uploading ${students.length} students to HPC Assist (${schoolName || finalUdiseCode})...`, null, finalUdiseCode);
 
-            const serverBase = activeHpcConfig.server_url || 'https://ctetmonktest.fun';
+            const serverBase = (activeHpcConfig.server_url || 'https://ctetmonktest.fun').replace(/\/+$/, '');
             const ingestUrl = window.location.hostname.includes('ctetmonktest.fun')
                 ? '/udise/ingest'
                 : serverBase + '/udise/ingest';
@@ -382,10 +404,22 @@
 
             const postRes = await fetch(ingestUrl, {
                 method: 'POST',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify(payload)
             });
+
+            if (!postRes.ok) {
+                let errorMsg = `Server error (${postRes.status})`;
+                try {
+                    const errData = await postRes.json();
+                    if (errData?.error) errorMsg = errData.error;
+                } catch(e) {}
+                renderWidget('error', errorMsg, null, finalUdiseCode);
+                return;
+            }
 
             const postData = await postRes.json();
 
@@ -397,7 +431,7 @@
             }
         } catch (err) {
             console.error('[HPC Assist] Sync error:', err);
-            renderWidget('error', 'Error: ' + err.message, null, activeUdise);
+            renderWidget('error', 'Sync failed: ' + (err.message || 'Network error'), null, activeUdise);
         } finally {
             isSyncing = false;
         }

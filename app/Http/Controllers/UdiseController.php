@@ -98,10 +98,13 @@ class UdiseController extends Controller
      */
     public function ingest(Request $request)
     {
+        $origin = $request->header('Origin');
+        $allowedOrigin = $origin ?: '*';
         $headers = [
-            'Access-Control-Allow-Origin'  => '*',
-            'Access-Control-Allow-Methods' => 'POST, GET, OPTIONS',
-            'Access-Control-Allow-Headers' => 'Content-Type, X-Requested-With, Authorization',
+            'Access-Control-Allow-Origin'      => $allowedOrigin,
+            'Access-Control-Allow-Methods'     => 'POST, GET, OPTIONS',
+            'Access-Control-Allow-Headers'     => 'Content-Type, X-Requested-With, Authorization, X-HPC-Token, X-CSRF-TOKEN, Accept',
+            'Access-Control-Allow-Credentials' => 'true',
         ];
 
         if ($request->isMethod('OPTIONS')) {

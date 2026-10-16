@@ -1192,8 +1192,13 @@
                         apaar = t.replace(/\s/g, '');
                         continue;
                     }
-                    // Admission No: short alphanumeric
-                    if (!admNo && /^[A-Z0-9]{2,12}$/i.test(t) && t !== apaar && !/^(grade|class|pp)/i.test(t)) {
+                    // HPC Login ID: e.g. S3F44CB1E4
+                    if (!hpcId && /^S[0-9A-Z]{6,16}$/i.test(t)) {
+                        hpcId = t;
+                        continue;
+                    }
+                    // Admission No: short alphanumeric (strictly exclude HPC Login ID pattern)
+                    if (!admNo && /^[A-Z0-9]{2,12}$/i.test(t) && t !== apaar && !/^S[0-9A-Z]{6,16}$/i.test(t) && !/^(grade|class|pp)/i.test(t)) {
                         admNo = t;
                     }
                 }
@@ -1203,6 +1208,7 @@
                 const nameParts = name.trim().split(/\s+/);
                 allStudents.push({
                     hpc_student_id: hpcId,
+                    login_id:       hpcId,
                     name:          name.trim(),
                     first_name:    nameParts[0] || '',
                     last_name:     nameParts.slice(1).join(' ') || '',
@@ -1659,6 +1665,12 @@
             ''
         ).trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
 
+        // INTEGRITY GUARD: School Admission Number must NEVER be the student's HPC Login ID or APAAR ID!
+        if (/^S[0-9A-Z]{6,16}$/i.test(admVal) || admVal === (student.login_id || '') || admVal === (student.apaar_id || '')) {
+            console.warn('[HPC Assist] Discarding invalid admission number matching HPC Login ID / APAAR ID:', admVal);
+            return;
+        }
+
         if (!admInput) {
             console.warn('[HPC Assist] Could not find School Admission Number input');
             return;
@@ -2081,9 +2093,13 @@
     async function fillPartA1(s) {
         logStatus(`[Part-A1] Filling Basic Profile & Attendance for ${s.name}...`);
         // 1. Admission Number
+        let admVal = String(s.admission_no || '').trim();
+        if (/^S[0-9A-Z]{6,16}$/i.test(admVal) || admVal === (s.login_id || '') || admVal === (s.apaar_id || '')) {
+            admVal = '';
+        }
         const admContainer = Array.from(document.querySelectorAll('label')).find(l => l.innerText.includes('School Admission Number'))?.closest('div');
         const admInp = admContainer?.querySelector('input');
-        if (admInp && s.admission_no) setNativeValue(admInp, s.admission_no);
+        if (admInp && admVal) setNativeValue(admInp, admVal);
 
         // 2. Mother tongue
         const mtContainer = Array.from(document.querySelectorAll('label')).find(l => l.innerText.includes('Mother Tongue'))?.closest('div');

@@ -1177,6 +1177,11 @@ class HpcController extends Controller
         // School Admission Number is local school number (admnNumber)
         $admissionNo = ! empty($data['admission_no']) ? trim((string) $data['admission_no']) : (! empty($data['admnNumber']) ? trim((string) $data['admnNumber']) : null);
         
+        // Guard: School admission number must NEVER be an HPC Login ID (e.g. S3F44CB1E4), PEN, or APAAR
+        if (! empty($admissionNo) && (preg_match('/^S[0-9A-Z]{6,16}$/i', $admissionNo) || $admissionNo === $pen || $admissionNo === $apaar)) {
+            $admissionNo = null;
+        }
+
         // Clean short dummy values that were accidentally placed in pen_code
         if (! empty($pen) && strlen($pen) < 8 && empty($admissionNo)) {
             $admissionNo = $pen;
@@ -2137,9 +2142,17 @@ class HpcController extends Controller
             $lastName  = trim($raw['last_name']  ?? ($nameParts[1] ?? ''));
 
             $apaar     = preg_replace('/[^0-9]/', '', (string)($raw['apaar_id'] ?? ''));
-            $hpcId     = trim((string)($raw['hpc_student_id'] ?? ($raw['id'] ?? '')));
+            $hpcId     = trim((string)($raw['hpc_student_id'] ?? ($raw['login_id'] ?? ($raw['id'] ?? ''))));
             $penCode   = trim($raw['pen_code'] ?? '');
             $admNo     = trim($raw['admission_no'] ?? '');
+
+            // Guard: School admission number must NEVER be an HPC Login ID (S...), PEN, or APAAR
+            if (preg_match('/^S[0-9A-Z]{6,16}$/i', $admNo) || $admNo === $hpcId || $admNo === $penCode || $admNo === $apaar) {
+                if (empty($hpcId)) {
+                    $hpcId = $admNo;
+                }
+                $admNo = '';
+            }
 
             // Deduplication Matcher: Find existing student in this school
             $existing = null;

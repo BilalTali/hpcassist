@@ -410,7 +410,7 @@
                                         @php
                                             $stStatus = $st['status'] ?? 'pending';
                                             $isCompleted = str_contains(strtolower($stStatus), 'complete') || str_contains(strtolower($stStatus), 'success');
-                                            $loginId = $st['login_id'] ?? ($st['apaar_id'] ?? ($st['admission_no'] ?? '—'));
+                                            $loginId = !empty($st['login_id']) ? $st['login_id'] : (!empty($st['apaar_id']) ? $st['apaar_id'] : '—');
                                         @endphp
                                         <tr class="hover:bg-slate-50/80 transition">
                                             <td class="px-3 py-2 font-mono text-slate-400">{{ $idx + 1 }}</td>

@@ -317,7 +317,10 @@ class HpcTeacherRun extends Command
         }
 
         // ── 2. Fill Part-A1 ───────────────────────────────────────────────────
-        $admissionNo   = ! empty($s['admission_no']) ? $s['admission_no'] : '';
+        $admissionNo   = ! empty($s['admission_no']) ? (string)$s['admission_no'] : '';
+        if (preg_match('/^S[0-9A-Z]{6,16}$/i', $admissionNo) || $admissionNo === ($s['login_id'] ?? '') || $admissionNo === ($s['apaar_id'] ?? '')) {
+            $admissionNo = '';
+        }
         $motherTongue  = $s['mother_tongue'] ?? 'Kashmiri';
         $parentName    = $s['parent_name'] ?? 'Parent';
         $absentCount   = $s['absent_count'] ?? '16';

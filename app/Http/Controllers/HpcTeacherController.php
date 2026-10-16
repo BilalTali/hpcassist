@@ -224,10 +224,16 @@ class HpcTeacherController extends Controller
                 };
             }
 
+            $admNo = $match?->admission_no ? (string)$match->admission_no : '';
+            // Guard: School admission number must NEVER be HPC Login ID, APAAR ID, or PEN
+            if (preg_match('/^S[0-9A-Z]{6,16}$/i', $admNo) || $admNo === $loginId || $admNo === $apaarId || $admNo === ($match?->pen_code ?? '')) {
+                $admNo = '';
+            }
+
             $synced[] = [
                 'row'          => $idx + 1,
                 'name'         => $name ?: ($match?->name ?? 'Student ' . ($idx + 1)),
-                'admission_no' => $match?->admission_no ? (string)$match->admission_no : '',
+                'admission_no' => $admNo,
                 'grade'        => $grade,
                 'section'      => $match?->section ?: 'A',
                 'apaar_id'     => $apaarId ?: ($match?->apaar_id ?? ''),
@@ -332,11 +338,21 @@ class HpcTeacherController extends Controller
                     return false;
                 });
                 if ($match) {
-                    $s['admission_no'] = $match->admission_no ? (string)$match->admission_no : ($s['admission_no'] ?? '');
+                    $dbAdm = $match->admission_no ? (string)$match->admission_no : '';
+                    if (preg_match('/^S[0-9A-Z]{6,16}$/i', $dbAdm) || $dbAdm === ($s['login_id'] ?? '') || $dbAdm === ($s['apaar_id'] ?? '') || $dbAdm === ($match->pen_code ?? '')) {
+                        $dbAdm = '';
+                    }
+                    $s['admission_no'] = $dbAdm ?: ($s['admission_no'] ?? '');
+                    if (preg_match('/^S[0-9A-Z]{6,16}$/i', (string)$s['admission_no']) || $s['admission_no'] === ($s['login_id'] ?? '')) {
+                        $s['admission_no'] = '';
+                    }
                     if (empty($s['grade']) && ! empty($match->grade)) $s['grade'] = $match->grade;
                     if (empty($s['section']) && ! empty($match->section)) $s['section'] = $match->section;
                 } else {
                     $s['admission_no'] = $s['admission_no'] ?? '';
+                    if (preg_match('/^S[0-9A-Z]{6,16}$/i', (string)$s['admission_no']) || $s['admission_no'] === ($s['login_id'] ?? '')) {
+                        $s['admission_no'] = '';
+                    }
                 }
             }
             unset($s);
@@ -1666,6 +1682,15 @@ class HpcTeacherController extends Controller
     public function getStudentStarterProfile(int $sIdx, array $st, array $defaultWorkMap, array $defaultMax, int $rowNum): array
     {
         $admNo   = ! empty($st['admission_no']) ? (string)$st['admission_no'] : '';
+        $loginId = ! empty($st['login_id']) ? (string)$st['login_id'] : '';
+        $apaarId = ! empty($st['apaar_id']) ? (string)$st['apaar_id'] : '';
+
+        // Absolute integrity guard: HPC Login ID and School Admission Number are completely different columns!
+        // School Admission Number must NEVER duplicate HPC Login ID, APAAR ID, or start with HPC Login prefix 'S...'
+        if ($admNo !== '' && ($admNo === $loginId || $admNo === $apaarId || preg_match('/^S[0-9A-Z]{6,16}$/i', $admNo))) {
+            $admNo = '';
+        }
+
         $stName  = $st['name'] ?? 'Student ' . ($sIdx + 1);
         $grade   = ! empty($st['grade']) ? $st['grade'] : 'Grade 1';
         $section = ! empty($st['section']) ? $st['section'] : 'A';

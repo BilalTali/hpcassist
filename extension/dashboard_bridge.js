@@ -13,10 +13,12 @@
                     teacher_name: config.teacher_name || '',
                     role: config.role || (config.teacher_id ? 'teacher' : 'school'),
                     progress_token: config.progress_token || config.token || '',
-                    server_url: config.server_url || ''
+                    token: config.token || '',
+                    server_url: config.server_url || '',
+                    synced_at: Date.now()
                 }
             }, () => {
-                console.log('[HPC Assist Extension] Synced active context to extension storage:', config.school_name, '(ID: ' + config.school_id + ') Role:', config.role || 'school');
+                console.log('[HPC Assist Extension] Synced active context to extension storage:', config.school_name, '(ID: ' + config.school_id + ', UDISE: ' + config.udise_code + ') Role:', config.role || 'school');
             });
         }
     } catch(e) {

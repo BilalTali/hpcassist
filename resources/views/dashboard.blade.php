@@ -402,8 +402,9 @@
                                 📥 Blank Template (.xlsx)
                             </a>
                             <a href="{{ route('hpc.template.download_udise') }}"
-                               class="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95">
-                                📥 Template with UDISE (.xlsx)
+                               class="inline-flex items-center gap-1.5 px-4 py-2 {{ ($udiseCount ?? 0) > 0 ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-700 hover:bg-slate-800' }} text-white rounded-xl font-bold text-xs shadow-xs transition active:scale-95"
+                               title="{{ ($udiseCount ?? 0) > 0 ? 'Download template pre-populated with ' . $udiseCount . ' synced students' : 'No students synced yet. Connect UDISE+ to sync.' }}">
+                                📥 Template with UDISE ({{ ($udiseCount ?? 0) > 0 ? ($udiseCount . ' Students') : '0 Synced' }})
                             </a>
                         </div>
                     </div>
@@ -2467,7 +2468,11 @@
         window.__HPC_CONFIG = {
             server_url: "{{ rtrim(config('app.url'), '/') }}",
             school_id: {{ $school?->id ?? 'null' }},
-            progress_token: "{{ config('hpc.progress_token') }}"
+            school_name: @json($school?->name ?? ''),
+            udise_code: @json($school?->udise_code ?? ''),
+            token: @json($schoolToken ?? ''),
+            progress_token: "{{ config('hpc.progress_token') }}",
+            role: 'school'
         };
 
         // ── Step 3: Refresh HPC-confirmed students table via AJAX ──────────────

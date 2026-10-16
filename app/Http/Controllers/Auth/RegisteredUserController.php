@@ -69,6 +69,8 @@ class RegisteredUserController extends Controller
             'is_active'      => true,
         ]);
 
+        $user->update(['school_id' => $school->id]);
+
         // Create initial default teacher (Principal / Head Incharge)
         Teacher::create([
             'school_id'    => $school->id,

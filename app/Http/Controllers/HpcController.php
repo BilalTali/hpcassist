@@ -59,10 +59,11 @@ class HpcController extends Controller
 
         $udiseCount      = count($preview);
         $udiseApaarCount = count(array_filter($preview, fn($s) => !empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12));
+        $schoolToken     = $school ? substr(hash('sha256', $school->id . '_' . $school->udise_code . '_' . config('app.key')), 0, 32) : '';
 
         return view('hpc.dashboard', compact(
             'hasFields', 'hasProfile', 'preview', 'lastRun', 'currentFormUrl',
-            'schoolsData', 'activeSchool', 'udiseCount', 'udiseApaarCount'
+            'schoolsData', 'activeSchool', 'udiseCount', 'udiseApaarCount', 'schoolToken'
         ));
     }
 
@@ -96,6 +97,12 @@ class HpcController extends Controller
                 ])->all();
             } else {
                 $udiseStudents = $this->getUdiseStudents($school);
+            }
+
+            if (empty($udiseStudents)) {
+                $schoolName = $school->name ?: 'your school';
+                $udiseCode = $school->udise_code ?: 'N/A';
+                return redirect()->to(route('dashboard') . '?step=2')->with('error', "⚠️ No UDISE+ students synced yet for {$schoolName} (UDISE: {$udiseCode}). Please open the UDISE+ portal and sync your students via the HPC Assist Chrome extension first, or download the Blank Template if filling manually.");
             }
         }
 

@@ -1585,17 +1585,17 @@
             return;
         }
 
+        const targetUrl = (SERVER_URL || 'https://ctetmonktest.fun').replace(/\/$/, '') + '/hpc/teacher/sync-roster';
         logStatus(`📤 Syncing ${allStudents.length} students to HPC Assist...`);
 
         try {
-            const res = await fetch(`${SERVER_URL}/hpc/teacher/sync-roster`, {
+            const res = await fetch(targetUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                     'X-HPC-Token': HPC_TOKEN,
                 },
-                credentials: 'include',
                 body: JSON.stringify({
                     school_id: SCHOOL_ID,
                     udise_code: (availableSchools.find(s => s.id === SCHOOL_ID)?.udise_code) || (window.__HPC_CONFIG && window.__HPC_CONFIG.udise_code) || '',
@@ -1612,8 +1612,9 @@
                 alert('⚠️ Sync error: ' + (data.error || 'Server rejected sync'));
             }
         } catch (err) {
+            console.error('[HPC Assist] Sync network error:', err, 'Target:', targetUrl);
             logStatus(`✕ Network error during sync: ${err.message}`);
-            alert('✕ Could not reach HPC Assist server: ' + err.message);
+            alert(`✕ Could not reach HPC Assist server:\n${err.message}\n\nEndpoint: ${targetUrl}`);
         }
     }
 

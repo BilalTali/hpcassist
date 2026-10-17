@@ -169,14 +169,31 @@ class HpcTeacherController extends Controller
         return $this->generateSpreadsheetResponse($students, $grade, $stage);
     }
 
+    public function getCorsHeaders(Request $request): array
+    {
+        $origin = $request->header('Origin');
+        if (! $origin || $origin === 'null') {
+            $origin = '*';
+        }
+
+        $headers = [
+            'Access-Control-Allow-Origin'  => $origin,
+            'Access-Control-Allow-Methods' => 'POST, GET, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token, X-CSRF-TOKEN, X-Requested-With',
+        ];
+
+        if ($origin !== '*') {
+            $headers['Access-Control-Allow-Credentials'] = 'true';
+        }
+
+        return $headers;
+    }
+
     public function syncRoster(Request $request): \Symfony\Component\HttpFoundation\Response
     {
+        $cors = $this->getCorsHeaders($request);
         if ($request->isMethod('OPTIONS')) {
-            return response('', 200, [
-                'Access-Control-Allow-Origin'  => '*',
-                'Access-Control-Allow-Methods' => 'POST, GET, OPTIONS',
-                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token, X-CSRF-TOKEN',
-            ]);
+            return response('', 200, $cors);
         }
 
         $school = null;
@@ -283,11 +300,7 @@ class HpcTeacherController extends Controller
             'count'    => count($synced),
             'students' => $synced,
             'message'  => 'Successfully synced ' . count($synced) . ' student(s) from PARAKH portal!',
-        ], 200, [
-            'Access-Control-Allow-Origin'  => '*',
-            'Access-Control-Allow-Methods' => 'POST, OPTIONS',
-            'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token, X-CSRF-TOKEN',
-        ]);
+        ], 200, $cors);
     }
 
     private function generateSpreadsheetResponse(array $students, ?string $grade = null, ?string $stage = null): \Symfony\Component\HttpFoundation\StreamedResponse
@@ -819,12 +832,9 @@ class HpcTeacherController extends Controller
 
     public function evaluationsQueue(Request $request)
     {
+        $cors = $this->getCorsHeaders($request);
         if ($request->isMethod('OPTIONS')) {
-            return response('', 200, [
-                'Access-Control-Allow-Origin'  => '*',
-                'Access-Control-Allow-Methods' => 'GET, OPTIONS',
-                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token, X-CSRF-TOKEN',
-            ]);
+            return response('', 200, $cors);
         }
 
         $schoolId = $request->input('school_id');
@@ -845,7 +855,7 @@ class HpcTeacherController extends Controller
                 'ok' => false,
                 'error' => 'No student evaluations uploaded yet. Please upload the filled Excel template first.',
                 'students' => []
-            ]);
+            ], 200, $cors);
         }
         
         $all = json_decode(file_get_contents($previewFile), true) ?: [];
@@ -863,21 +873,14 @@ class HpcTeacherController extends Controller
             'school_name' => $school?->name ?? 'My School',
             'total' => count($validStudents),
             'students' => $validStudents,
-        ], 200, [
-            'Access-Control-Allow-Origin'  => '*',
-            'Access-Control-Allow-Methods' => 'GET, OPTIONS',
-            'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
-        ]);
+        ], 200, $cors);
     }
 
     public function evaluationsProgress(Request $request)
     {
+        $cors = $this->getCorsHeaders($request);
         if ($request->isMethod('OPTIONS')) {
-            return response('', 200, [
-                'Access-Control-Allow-Origin'  => '*',
-                'Access-Control-Allow-Methods' => 'POST, OPTIONS',
-                'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token, X-CSRF-TOKEN',
-            ]);
+            return response('', 200, $cors);
         }
 
         $schoolId = $request->input('school_id');
@@ -930,11 +933,7 @@ class HpcTeacherController extends Controller
         ];
         file_put_contents($resultsFile, json_encode($payload, JSON_PRETTY_PRINT));
         
-        return response()->json(['ok' => true], 200, [
-            'Access-Control-Allow-Origin'  => '*',
-            'Access-Control-Allow-Methods' => 'POST, OPTIONS',
-            'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token',
-        ]);
+        return response()->json(['ok' => true], 200, $cors);
     }
 
     // ─── Discovery Trigger ────────────────────────────────────────────────────

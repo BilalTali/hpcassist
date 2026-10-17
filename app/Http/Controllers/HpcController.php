@@ -97,7 +97,7 @@ class HpcController extends Controller
         $schoolToken     = $school ? substr(hash('sha256', $school->id . '_' . $school->udise_code . '_' . config('app.key')), 0, 32) : '';
 
         return view('hpc.dashboard', compact(
-            'hasFields', 'hasProfile', 'preview', 'lastRun', 'currentFormUrl',
+            'school', 'hasFields', 'hasProfile', 'preview', 'lastRun', 'currentFormUrl',
             'schoolsData', 'activeSchool', 'udiseCount', 'udiseApaarCount', 'schoolToken'
         ));
     }

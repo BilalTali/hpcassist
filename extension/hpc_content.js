@@ -34,6 +34,27 @@
     let showSchoolSelector = false;
 
     function renderActiveSchoolCard(totalQueueCount) {
+        if (!SCHOOL_ID) {
+            return `
+                <div style="background: #fff7ed; border: 1px solid #fed7aa; border-left: 3.5px solid #ea580c; border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <div style="font-size: 11px; font-weight: 800; color: #9a3412; margin-bottom: 3px;">
+                        ⚠️ No School Selected
+                    </div>
+                    <div style="font-size: 10px; color: #7c2d12; margin-bottom: 6px; line-height: 1.3;">
+                        Please select your school to load its student roster safely:
+                    </div>
+                    <select id="hpc-school-switcher" style="width: 100%; background: #ffffff; color: #0f172a; border: 1.5px solid #ea580c; border-radius: 6px; padding: 5px 8px; font-size: 11px; font-weight: 700; cursor: pointer; outline: none;">
+                        <option value="">-- Choose School --</option>
+                        ${availableSchools.map(s => `
+                            <option value="${s.id}">
+                                ${s.name} ${s.udise_code ? `(${s.udise_code})` : ''} - ${s.pending ?? 0} queued
+                            </option>
+                        `).join('')}
+                    </select>
+                </div>
+            `;
+        }
+
         const activeSchool = availableSchools.find(s => s.id === SCHOOL_ID) || { id: SCHOOL_ID, name: currentSchoolName || 'Active School' };
         const schoolDisplayName = activeSchool.name || currentSchoolName || 'School Under Process';
 
@@ -42,7 +63,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
                     <div style="flex: 1; min-width: 0; padding-right: 6px;">
                         <div style="font-size: 9px; font-weight: 800; color: #ea580c; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px;">
-                            🏫 School Under Process
+                            🏫 Active School
                         </div>
                         <div style="font-size: 13px; font-weight: 700; color: #1e3a8a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${schoolDisplayName}">
                             ${schoolDisplayName}
@@ -57,7 +78,7 @@
                 <div style="display: flex; gap: 8px; font-size: 10px; color: #475569; align-items: center; margin-top: 4px; flex-wrap: wrap;">
                     ${activeSchool.udise_code ? `<span style="background: #e2e8f0; color: #1e293b; padding: 1px 6px; border-radius: 4px; font-family: monospace; font-weight: 600;">UDISE: ${activeSchool.udise_code}</span>` : ''}
                     <span style="color: ${(isRunning || isTeacherRunning) ? '#2563eb' : '#16a34a'}; font-weight: 700;">
-                        ● ${(isRunning || isTeacherRunning) ? 'Processing' : (totalQueueCount > 0 ? `${totalQueueCount} queued` : 'Idle')}
+                        ● ${(isRunning || isTeacherRunning) ? 'Processing' : (totalQueueCount > 0 ? `${totalQueueCount} queued` : '0 queued')}
                     </span>
                 </div>
 
@@ -164,66 +185,167 @@
     }
 
     async function autoDetectActiveSchool() {
-        // 1. Check chrome.storage.local (synced from ctetmonktest.fun dashboard)
+        // 1. Check URL hash parameters (passed by dashboard "Start Session" button)
+        if (location.hash && location.hash.includes('hpc_school_id=')) {
+            try {
+                const hashStr = location.hash.replace(/^#/, '');
+                const p = new URLSearchParams(hashStr);
+                const hashSchoolId = parseInt(p.get('hpc_school_id'), 10);
+                const hashUdise = p.get('hpc_udise');
+                const hashRole = p.get('hpc_role');
+                if (hashSchoolId) {
+                    SCHOOL_ID = hashSchoolId;
+                    if (hashRole) CURRENT_MODE = hashRole;
+                    console.log('[HPC Assist] Received active school directly from URL session start hash:', hashSchoolId, 'UDISE:', hashUdise);
+                    // Purge any stale cross-school queues immediately
+                    localStorage.removeItem('hpc_student_queue');
+                    localStorage.removeItem('hpc_teacher_queue');
+                    studentsQueue = [];
+                    teacherQueue = [];
+                    // Clean URL hash so the address bar remains tidy
+                    history.replaceState(null, '', location.pathname + location.search);
+                }
+            } catch(e) {}
+        }
+
+        // 2. Check chrome.storage.local (synced by dashboard_bridge.js from ctetmonktest.fun)
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             try {
                 const stored = await new Promise(r => chrome.storage.local.get(['hpc_active_school'], r));
                 if (stored && stored.hpc_active_school && stored.hpc_active_school.school_id) {
                     const st = stored.hpc_active_school;
-                    SCHOOL_ID = st.school_id;
-                    currentSchoolName = st.school_name || currentSchoolName;
+                    if (!SCHOOL_ID) {
+                        SCHOOL_ID = st.school_id;
+                        currentSchoolName = st.school_name || currentSchoolName;
+                    }
                     if (st.teacher_id) currentTeacherId = st.teacher_id;
                     if (st.teacher_name) currentTeacherName = st.teacher_name;
                     if (st.role) CURRENT_MODE = st.role;
                     if (st.server_url) SERVER_URL = st.server_url.replace(/\/$/, '');
                     if (st.progress_token) HPC_TOKEN = st.progress_token;
-                    console.log('[HPC Assist] Loaded active context from extension storage:', currentSchoolName, 'Role:', CURRENT_MODE, 'ID:', SCHOOL_ID);
+                    console.log('[HPC Assist] Loaded active school from extension storage:', currentSchoolName, '(ID: ' + SCHOOL_ID + ') Role:', CURRENT_MODE);
                 }
             } catch(e) {}
         }
 
-        // 2. Fetch available schools list from server
+        // 3. Fetch available schools list from server
         await fetchSchoolsList();
 
-        // 3. Scan PARAKH portal page text for school UDISE code or name
-        const pageText = (document.body ? (document.body.innerText || '') : '').toLowerCase();
-        for (const sc of availableSchools) {
-            const scUdise = (sc.udise_code || '').trim().toLowerCase();
-            const scName  = (sc.name || '').trim().toLowerCase();
-            if ((scUdise && scUdise.length >= 6 && pageText.includes(scUdise)) || 
-                (scName && scName.length >= 5 && pageText.includes(scName))) {
-                console.log('[HPC Assist] Auto-detected matching school from PARAKH portal text:', sc.name, 'ID:', sc.id);
-                SCHOOL_ID = sc.id;
-                currentSchoolName = sc.name;
-                break;
+        // 4. Detect logged-in HPC portal credentials from portal DOM and local/session storages
+        const portalSchool = detectPortalSchool();
+        if (portalSchool) {
+            console.log('[HPC Assist] Logged-in HPC portal school verified:', portalSchool.name, '(UDISE:', portalSchool.udise_code, 'ID:', portalSchool.id, ')');
+            if (SCHOOL_ID !== portalSchool.id) {
+                console.log(`[HPC Assist] Switching active school to logged-in portal school: ${portalSchool.name} (was: ${currentSchoolName || 'none'})`);
+                SCHOOL_ID = portalSchool.id;
+                currentSchoolName = portalSchool.name;
+                localStorage.removeItem('hpc_student_queue');
+                localStorage.removeItem('hpc_teacher_queue');
+                studentsQueue = [];
+                teacherQueue = [];
+                if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                    chrome.storage.local.set({
+                        hpc_active_school: {
+                            school_id: portalSchool.id,
+                            school_name: portalSchool.name,
+                            udise_code: portalSchool.udise_code || '',
+                            role: CURRENT_MODE,
+                            synced_at: Date.now()
+                        }
+                    });
+                }
             }
         }
 
-        // 4. Fallback: only if no SCHOOL_ID is detected yet and we are in school mode
-        if (!SCHOOL_ID && CURRENT_MODE === 'school') {
-            const withPending = availableSchools.find(s => s.pending > 0);
-            if (withPending) {
-                console.log(`[HPC Assist] Switching active school to pending queue: ${withPending.name} (${withPending.pending} students)`);
-                SCHOOL_ID = withPending.id;
-                currentSchoolName = withPending.name;
-            } else if (availableSchools.length > 0) {
-                SCHOOL_ID = availableSchools[0].id;
-                currentSchoolName = availableSchools[0].name;
-            }
+        // 5. Update school name if SCHOOL_ID is known
+        if (SCHOOL_ID) {
+            const matched = availableSchools.find(s => s.id === SCHOOL_ID);
+            if (matched) currentSchoolName = matched.name;
+        }
+
+        // Note: NO RANDOM FALLBACK. We strictly NEVER select another school's pending queue automatically.
+        if (!SCHOOL_ID) {
+            console.warn('[HPC Assist] No active school selected or detected. Please select your school in the widget.');
         }
     }
 
-    // Load queue from localStorage or Server API
+    // Helper: Detect the logged-in school from the PARAKH portal page
+    function detectPortalSchool() {
+        if (!availableSchools || availableSchools.length === 0) return null;
+
+        // A. Check portal localStorage and sessionStorage for school UDISE or credentials
+        const storages = [window.localStorage, window.sessionStorage];
+        for (const st of storages) {
+            try {
+                for (let i = 0; i < st.length; i++) {
+                    const key = st.key(i);
+                    const val = st.getItem(key);
+                    if (!val || typeof val !== 'string') continue;
+                    for (const sc of availableSchools) {
+                        if (sc.udise_code && sc.udise_code.length >= 8 && val.includes(sc.udise_code)) {
+                            return sc;
+                        }
+                    }
+                }
+            } catch(e) {}
+        }
+
+        // B. Check portal header / user profile badges in DOM
+        const headerEls = document.querySelectorAll('header, nav, .navbar, .user-name, .school-name, .user-profile, .profile-name, [class*="school"], [class*="user"], .card-header');
+        let headerText = '';
+        headerEls.forEach(el => { headerText += ' ' + (el.innerText || ''); });
+        if (!headerText) headerText = document.body ? (document.body.innerText || '') : '';
+        headerText = headerText.toLowerCase();
+
+        for (const sc of availableSchools) {
+            const scUdise = (sc.udise_code || '').trim().toLowerCase();
+            const scName  = (sc.name || '').trim().toLowerCase();
+            if (scUdise && scUdise.length >= 8 && headerText.includes(scUdise)) {
+                return sc;
+            }
+            if (scName && scName.length >= 6 && headerText.includes(scName)) {
+                return sc;
+            }
+        }
+
+        // C. Check username input if on login page
+        const userInput = document.querySelector('input[name="username"], input[name="email"], input[type="text"]');
+        if (userInput && userInput.value) {
+            const rawVal = userInput.value.trim();
+            const match = availableSchools.find(s => s.udise_code === rawVal || (s.name && s.name.length >= 6 && s.name.toLowerCase() === rawVal.toLowerCase()));
+            if (match) return match;
+        }
+
+        return null;
+    }
+
+    // Load queue from localStorage or Server API (Strictly isolated by School ID and UDISE)
     async function loadQueue(forceServer = false) {
+        if (!SCHOOL_ID) {
+            studentsQueue = [];
+            return false;
+        }
+
+        const activeSchool = availableSchools.find(s => s.id === SCHOOL_ID);
+        const currentUdise = activeSchool?.udise_code || '';
+
+        // Strict cache validation: ONLY use cache if it strictly belongs to THIS SCHOOL and THIS UDISE
         if (!forceServer) {
             try {
                 const raw = localStorage.getItem('hpc_student_queue');
                 if (raw) {
                     const parsed = JSON.parse(raw);
-                    if (parsed.school_id === SCHOOL_ID && Array.isArray(parsed.students) && parsed.students.length > 0) {
+                    const cacheMatches = parsed.school_id === SCHOOL_ID &&
+                        (!currentUdise || !parsed.udise_code || parsed.udise_code === currentUdise);
+
+                    if (cacheMatches && Array.isArray(parsed.students) && parsed.students.length > 0) {
                         studentsQueue = parsed.students;
                         currentSchoolName = parsed.school_name || currentSchoolName;
+                        console.log(`[HPC Assist] Loaded ${studentsQueue.length} students from verified school cache (${currentSchoolName}, ID: ${SCHOOL_ID})`);
                         return true;
+                    } else {
+                        console.log(`[HPC Assist] Cache belonged to another school (cached ID: ${parsed.school_id}, active: ${SCHOOL_ID}). Invalidating.`);
+                        localStorage.removeItem('hpc_student_queue');
                     }
                 }
             } catch(e) {}
@@ -235,7 +357,8 @@
         }
 
         try {
-            const url = `${SERVER_URL}/hpc/students/queue${SCHOOL_ID ? '?school_id=' + SCHOOL_ID : ''}`;
+            // Always request explicitly for THIS school ID with timestamp cache busting
+            const url = `${SERVER_URL}/hpc/students/queue?school_id=${SCHOOL_ID}&_ts=${Date.now()}`;
             const res = await fetch(url, {
                 headers: {
                     'Accept': 'application/json',
@@ -244,17 +367,28 @@
             });
             const data = await res.json();
             if (data.ok && Array.isArray(data.students)) {
+                // Security verification: Server response must strictly match requested school
+                if (data.school_id && data.school_id !== SCHOOL_ID) {
+                    console.error('[HPC Assist] Security Mismatch! Requested school_id:', SCHOOL_ID, 'got:', data.school_id);
+                    studentsQueue = [];
+                    return false;
+                }
+
                 studentsQueue = data.students;
                 currentSchoolName = data.school_name || currentSchoolName;
                 localStorage.setItem('hpc_student_queue', JSON.stringify({
-                    school_id: data.school_id || SCHOOL_ID,
-                    school_name: data.school_name || currentSchoolName,
-                    students: data.students
+                    school_id: SCHOOL_ID,
+                    udise_code: currentUdise || data.udise_code || '',
+                    school_name: currentSchoolName,
+                    students: data.students,
+                    timestamp: Date.now()
                 }));
+                console.log(`[HPC Assist] Successfully loaded ${studentsQueue.length} fresh students for ${currentSchoolName} (UDISE: ${currentUdise})`);
                 return true;
             } else {
                 console.warn('[HPC Assist] Queue endpoint returned error or no students:', data);
                 studentsQueue = [];
+                localStorage.removeItem('hpc_student_queue');
                 return false;
             }
         } catch(err) {
@@ -289,8 +423,13 @@
         } catch(e) {}
     }
 
-    // Load Teacher Evaluation queue from localStorage or Server API
+    // Load Teacher Evaluation queue from localStorage or Server API (Strictly isolated by School ID)
     async function loadTeacherQueue(forceServer = false) {
+        if (!SCHOOL_ID) {
+            teacherQueue = [];
+            return false;
+        }
+
         if (!forceServer) {
             try {
                 const raw = localStorage.getItem('hpc_teacher_queue');
@@ -299,6 +438,8 @@
                     if (parsed.school_id === SCHOOL_ID && Array.isArray(parsed.students) && parsed.students.length > 0) {
                         teacherQueue = parsed.students;
                         return true;
+                    } else {
+                        localStorage.removeItem('hpc_teacher_queue');
                     }
                 }
             } catch(e) {}
@@ -310,7 +451,7 @@
         }
 
         try {
-            const url = `${SERVER_URL}/hpc/teacher/evaluations/queue${SCHOOL_ID ? '?school_id=' + SCHOOL_ID : ''}`;
+            const url = `${SERVER_URL}/hpc/teacher/evaluations/queue?school_id=${SCHOOL_ID}&_ts=${Date.now()}`;
             const res = await fetch(url, {
                 headers: {
                     'Accept': 'application/json',
@@ -319,20 +460,26 @@
             });
             const data = await res.json();
             if (data.ok && Array.isArray(data.students)) {
+                if (data.school_id && data.school_id !== SCHOOL_ID) {
+                    teacherQueue = [];
+                    return false;
+                }
                 teacherQueue = data.students;
                 localStorage.setItem('hpc_teacher_queue', JSON.stringify({
-                    school_id: data.school_id || SCHOOL_ID,
+                    school_id: SCHOOL_ID,
                     school_name: data.school_name || currentSchoolName,
-                    students: data.students
+                    students: data.students,
+                    timestamp: Date.now()
                 }));
                 return true;
             } else {
                 console.warn('[HPC Assist] Teacher evaluations queue returned no students or error:', data);
                 teacherQueue = [];
+                localStorage.removeItem('hpc_teacher_queue');
                 return false;
             }
         } catch(err) {
-            console.warn('[HPC Assist] Could not fetch teacher evaluation queue:', err);
+            console.warn('[HPC Assist] Could not fetch teacher evaluation queue from server:', err);
             return false;
         }
     }
@@ -889,12 +1036,25 @@
                     SCHOOL_ID = newId;
                     const matched = availableSchools.find(s => s.id === newId);
                     currentSchoolName = matched ? matched.name : '';
+                    const newUdise = matched ? (matched.udise_code || '') : '';
                     localStorage.setItem('hpc_active_school_id', String(newId));
+                    localStorage.removeItem('hpc_student_queue');
+                    localStorage.removeItem('hpc_teacher_queue');
+                    studentsQueue = [];
+                    teacherQueue = [];
                     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                        chrome.storage.local.set({ hpc_active_school: { school_id: newId, school_name: currentSchoolName } });
+                        chrome.storage.local.set({
+                            hpc_active_school: {
+                                school_id: newId,
+                                school_name: currentSchoolName,
+                                udise_code: newUdise,
+                                role: CURRENT_MODE,
+                                synced_at: Date.now()
+                            }
+                        });
                     }
                     showSchoolSelector = false; // Collapse selector back to active school view
-                    logStatus(`🏫 Switched to ${currentSchoolName}. Syncing queue...`);
+                    logStatus(`🏫 Switched to ${currentSchoolName}. Loading roster...`);
                     await loadQueue(true);
                     currentIndex = 0;
                     localStorage.setItem('hpc_student_index', '0');

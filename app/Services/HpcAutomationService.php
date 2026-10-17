@@ -301,6 +301,7 @@ class HpcAutomationService
         return response()->json([
             'ok'          => true,
             'school_id'   => $school->id,
+            'udise_code'  => $school->udise_code,
             'school_name' => $school->name,
             'total'       => count($valid),
             'students'    => $valid,
@@ -389,7 +390,14 @@ class HpcAutomationService
 
     public function startSession($school): array
     {
-        $loginUrl   = config('hpc.login_url', 'https://hpc.parakh.ncert.gov.in/en/login');
+        $loginUrl = config('hpc.login_url', 'https://hpc.parakh.ncert.gov.in/en/login');
+        if ($school) {
+            $hashParams = '#hpc_school_id=' . $school->id . '&hpc_udise=' . urlencode($school->udise_code ?? '');
+            $loginUrlWithHash = $loginUrl . $hashParams;
+        } else {
+            $loginUrlWithHash = $loginUrl;
+        }
+
         $profileDir = $this->getActiveProfileDir($school);
         @mkdir($profileDir, 0777, true);
         @file_put_contents($profileDir . '/session_active.txt', now()->toIso8601String());
@@ -397,15 +405,18 @@ class HpcAutomationService
         if (function_exists('exec')) {
             $macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
             if (file_exists($macChrome)) {
-                exec('nohup ' . escapeshellarg($macChrome) . ' --user-data-dir=' . escapeshellarg($profileDir) . ' ' . escapeshellarg($loginUrl) . ' > /dev/null 2>&1 &');
+                exec('nohup ' . escapeshellarg($macChrome) . ' --user-data-dir=' . escapeshellarg($profileDir) . ' ' . escapeshellarg($loginUrlWithHash) . ' > /dev/null 2>&1 &');
             }
         }
 
         $schoolName = $school ? $school->name : 'Active School';
         return [
-            'ok'      => true,
-            'url'     => $loginUrl,
-            'message' => "HPC School session connected for {$schoolName}. Please log into the portal.",
+            'ok'          => true,
+            'url'         => $loginUrlWithHash,
+            'school_id'   => $school?->id,
+            'udise_code'  => $school?->udise_code,
+            'school_name' => $schoolName,
+            'message'     => "HPC School session connected for {$schoolName}. Please log into the portal.",
         ];
     }
 

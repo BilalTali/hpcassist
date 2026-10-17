@@ -1652,16 +1652,23 @@
         // ── Step 2 HPC School Session Controls ──
         async function startHpcSchoolSession() {
             try {
+                if (window.__HPC_CONFIG) {
+                    window.postMessage({ type: 'HPC_ACTIVE_SCHOOL_SYNC', config: window.__HPC_CONFIG }, '*');
+                    document.dispatchEvent(new CustomEvent('HPC_ACTIVE_SCHOOL_SYNC', { detail: window.__HPC_CONFIG }));
+                }
                 const res = await fetch("{{ route('hpc.session.start') }}", {
                     method: 'POST',
                     headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' }
                 });
                 const data = await res.json();
-                window.open(data.url || "{{ config('hpc.login_url') }}", "_blank");
+                const schoolHash = '#hpc_school_id=' + encodeURIComponent("{{ $school?->id ?? '' }}") + '&hpc_udise=' + encodeURIComponent("{{ $school?->udise_code ?? '' }}");
+                const targetUrl = (data.url || "{{ config('hpc.login_url') }}") + schoolHash;
+                window.open(targetUrl, "_blank");
                 alert(data.message || 'Connected to HPC School session. Opening official portal.');
                 window.location.reload();
             } catch(e) {
-                window.open("{{ config('hpc.login_url') }}", "_blank");
+                const schoolHash = '#hpc_school_id=' + encodeURIComponent("{{ $school?->id ?? '' }}") + '&hpc_udise=' + encodeURIComponent("{{ $school?->udise_code ?? '' }}");
+                window.open("{{ config('hpc.login_url') }}" + schoolHash, "_blank");
                 window.location.reload();
             }
         }
@@ -1684,16 +1691,23 @@
         // ── Step 4 HPC Teacher Session Controls ──
         async function startHpcTeacherSession() {
             try {
+                if (window.__HPC_CONFIG) {
+                    window.postMessage({ type: 'HPC_ACTIVE_SCHOOL_SYNC', config: window.__HPC_CONFIG }, '*');
+                    document.dispatchEvent(new CustomEvent('HPC_ACTIVE_SCHOOL_SYNC', { detail: window.__HPC_CONFIG }));
+                }
                 const res = await fetch("{{ route('hpc.teacher.session.start') }}", {
                     method: 'POST',
                     headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' }
                 });
                 const data = await res.json();
-                window.open(data.url || "{{ config('hpc.login_url') }}", "_blank");
+                const teacherHash = '#hpc_school_id=' + encodeURIComponent("{{ $school?->id ?? '' }}") + '&hpc_udise=' + encodeURIComponent("{{ $school?->udise_code ?? '' }}") + '&hpc_role=teacher';
+                const targetUrl = (data.url || "{{ config('hpc.login_url') }}") + teacherHash;
+                window.open(targetUrl, "_blank");
                 alert(data.message || 'Connected to HPC Teacher session. Opening official portal.');
                 window.location.reload();
             } catch(e) {
-                window.open("{{ config('hpc.login_url') }}", "_blank");
+                const teacherHash = '#hpc_school_id=' + encodeURIComponent("{{ $school?->id ?? '' }}") + '&hpc_udise=' + encodeURIComponent("{{ $school?->udise_code ?? '' }}") + '&hpc_role=teacher';
+                window.open("{{ config('hpc.login_url') }}" + teacherHash, "_blank");
                 window.location.reload();
             }
         }
@@ -2460,10 +2474,18 @@
         });
     </script>
 
-    {{-- HPC Configuration injected for the Chrome Extension (Fix 4.3).
-         The progress_token is read by hpc_content.js via window.__HPC_CONFIG.
-         It is safe to surface in the page because the same token is validated
-         server-side on /hpc/run/progress and /hpc/students/queue. --}}
+    {{-- HPC Configuration injected for the Chrome Extension (Bridge).
+         Surfaced in both DOM element and window.__HPC_CONFIG for Manifest V3 content script access. --}}
+    <div id="hpc-extension-bridge"
+         style="display:none;"
+         data-school-id="{{ $school?->id ?? '' }}"
+         data-school-name="{{ $school?->name ?? '' }}"
+         data-udise-code="{{ $school?->udise_code ?? '' }}"
+         data-token="{{ $schoolToken ?? '' }}"
+         data-progress-token="{{ config('hpc.progress_token') }}"
+         data-server-url="{{ rtrim(config('app.url'), '/') }}"
+         data-role="school"></div>
+
     <script>
         window.__HPC_CONFIG = {
             server_url: "{{ rtrim(config('app.url'), '/') }}",
@@ -2474,6 +2496,13 @@
             progress_token: "{{ config('hpc.progress_token') }}",
             role: 'school'
         };
+
+        // Broadcast active school to extension bridge across window boundaries
+        try {
+            window.postMessage({ type: 'HPC_ACTIVE_SCHOOL_SYNC', config: window.__HPC_CONFIG }, '*');
+            document.dispatchEvent(new CustomEvent('HPC_ACTIVE_SCHOOL_SYNC', { detail: window.__HPC_CONFIG }));
+        } catch(e) {}
+    </script>
 
         // ── Step 3: Refresh HPC-confirmed students table via AJAX ──────────────
         async function loadStep3Table() {

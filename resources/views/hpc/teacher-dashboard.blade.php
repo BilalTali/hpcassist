@@ -1060,15 +1060,32 @@
     </script>
 
     {{-- HPC Extension Bridge Configuration for Teacher Role --}}
+    <div id="hpc-extension-bridge"
+         style="display:none;"
+         data-school-id="{{ $schoolId ?? '' }}"
+         data-school-name="{{ $activeSchool['name'] ?? ($school?->name ?? '') }}"
+         data-udise-code="{{ $activeSchool['udise_code'] ?? ($activeSchool['udise'] ?? ($school?->udise_code ?? '')) }}"
+         data-teacher-id="{{ $activeTeacher['id'] ?? '' }}"
+         data-teacher-name="{{ $activeTeacher['name'] ?? '' }}"
+         data-role="teacher"
+         data-progress-token="{{ config('hpc.progress_token') }}"
+         data-server-url="{{ rtrim(config('app.url'), '/') }}"></div>
+
     <script>
         window.__HPC_CONFIG = {
             server_url: "{{ rtrim(config('app.url'), '/') }}",
             school_id: {{ json_encode($schoolId) }},
             school_name: "{{ addslashes($activeSchool['name'] ?? ($school?->name ?? '')) }}",
+            udise_code: "{{ addslashes($activeSchool['udise_code'] ?? ($activeSchool['udise'] ?? ($school?->udise_code ?? ''))) }}",
             teacher_id: "{{ $activeTeacher['id'] ?? '' }}",
             teacher_name: "{{ addslashes($activeTeacher['name'] ?? '') }}",
             role: "teacher",
             progress_token: "{{ config('hpc.progress_token') }}"
         };
+
+        try {
+            window.postMessage({ type: 'HPC_ACTIVE_SCHOOL_SYNC', config: window.__HPC_CONFIG }, '*');
+            document.dispatchEvent(new CustomEvent('HPC_ACTIVE_SCHOOL_SYNC', { detail: window.__HPC_CONFIG }));
+        } catch(e) {}
     </script>
 </x-app-layout>

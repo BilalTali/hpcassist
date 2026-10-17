@@ -1180,13 +1180,20 @@
                         <div style="font-size: 10px; color: #64748b; margin-top: 4px; text-align: center;">Syncs live portal roster to your Excel template</div>
                     </div>
 
-                    <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                        <div style="font-size: 10px; font-weight: 700; color: #475569; margin-bottom: 4px; text-transform: uppercase;">Switch HPC Stage:</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 10px;">
+                            <a href="https://hpc.parakh.ncert.gov.in/en/hpc/foundational-stage" style="display: block; text-align: center; padding: 4px; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; border-radius: 6px; text-decoration: none; font-weight: 600;">Foundational</a>
+                            <a href="https://hpc.parakh.ncert.gov.in/en/hpc/preparatory-stage" style="display: block; text-align: center; padding: 4px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; text-decoration: none; font-weight: 600;">Preparatory</a>
+                            <a href="https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage" style="display: block; text-align: center; padding: 4px; background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; border-radius: 6px; text-decoration: none; font-weight: 600;">Middle</a>
+                            <a href="https://hpc.parakh.ncert.gov.in/en/hpc/secondary-stage" style="display: block; text-align: center; padding: 4px; background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; border-radius: 6px; text-decoration: none; font-weight: 600;">Secondary</a>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 10px; padding-top: 6px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
                         <button id="hpc-mode-toggle-btn" style="background: none; border: none; color: #64748b; font-size: 11px; cursor: pointer; padding: 2px 4px; text-decoration: underline;">
                             🏫 Switch to School Submitter
                         </button>
-                        <a href="https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage" style="color: #1e40af; font-weight: 600; font-size: 11px; text-decoration: none;">
-                            Stages ↗
-                        </a>
                     </div>
                 </div>
             `;

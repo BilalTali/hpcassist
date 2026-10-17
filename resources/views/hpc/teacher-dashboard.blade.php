@@ -242,6 +242,42 @@
 
             </div>
 
+            <!-- 4 HPC STAGES SELECTOR BAR -->
+            @php
+                $activeStageSlug = \App\Services\StageTemplateService::normalizeStage($selectedStage !== 'all' ? $selectedStage : ($selectedGrade ? \App\Services\StageTemplateService::getStageForGrade($selectedGrade) : 'middle-stage'));
+                $stageDefinitions = \App\Services\StageTemplateService::getStages();
+            @endphp
+            <div class="bg-white rounded-xl shadow-xs border border-slate-200 p-3 mb-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-100">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>🏛️</span> Active Stage:
+                        </span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold text-white shadow-xs" style="background: {{ $stageDefinitions[$activeStageSlug]['color'] ?? '#ea580c' }}">
+                            {{ $stageDefinitions[$activeStageSlug]['title'] }} ({{ $stageDefinitions[$activeStageSlug]['grade_range'] }})
+                        </span>
+                    </div>
+                    <span class="text-[11px] text-slate-500 font-medium">
+                        Each stage generates a strictly tailored official NCERT template.
+                    </span>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    @foreach($stageDefinitions as $sSlug => $sDef)
+                        @php $isActive = ($activeStageSlug === $sSlug); @endphp
+                        <a href="{{ route('hpc.teacher.dashboard', ['stage' => $sSlug]) }}"
+                           class="flex flex-col p-2.5 rounded-xl border transition {{ $isActive ? 'bg-slate-900 text-white border-slate-900 shadow-sm ring-2 ring-indigo-500/50' : 'bg-slate-50/70 hover:bg-slate-100/80 text-slate-700 border-slate-200' }}">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xs font-bold">{{ $sDef['title'] }}</span>
+                                <span class="text-[9px] font-bold px-1.5 py-0.2 rounded {{ $isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600' }}">{{ $sDef['grade_range'] }}</span>
+                            </div>
+                            <div class="text-[10px] {{ $isActive ? 'text-slate-300' : 'text-slate-500' }} line-clamp-1 leading-tight">
+                                {{ $sDef['description'] }}
+                            </div>
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+
             <!-- SECTION 2: 3-STEP EVALUATION WORKFLOW -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
 
@@ -251,12 +287,12 @@
                         <div class="flex items-center justify-between mb-2">
                             <span class="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">1</span>
                             <span class="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                                33 Visible Columns
+                                {{ $stageDefinitions[$activeStageSlug]['title'] }}
                             </span>
                         </div>
-                        <h3 class="text-sm font-bold text-slate-900 mb-1">Download Assessment Template</h3>
+                        <h3 class="text-sm font-bold text-slate-900 mb-1">Download {{ $stageDefinitions[$activeStageSlug]['title'] }} Template</h3>
                         <p class="text-xs text-slate-500 mb-3 leading-relaxed">
-                            Compact sheet without horizontal dragging. Fill obtained marks directly on screen.
+                            Official {{ $stageDefinitions[$activeStageSlug]['title'] }} ({{ $stageDefinitions[$activeStageSlug]['grade_range'] }}) assessment sheet with live cell validation.
                         </p>
 
                         <!-- Feature highlights -->
@@ -271,19 +307,19 @@
                             </div>
                             <div class="flex items-center gap-1.5 text-slate-700">
                                 <span class="text-amber-600 font-bold">✏️</span>
-                                <span><strong>Marks Ready:</strong> 8 subject columns highlighted yellow</span>
+                                <span><strong>Marks Ready:</strong> Curricular subject marks highlighted yellow</span>
                             </div>
                             <div class="flex items-center gap-1.5 text-slate-700">
                                 <span class="text-indigo-600 font-bold">📁</span>
-                                <span><strong>Expand [ + ]:</strong> 114 detailed columns collapsed in groups</span>
+                                <span><strong>NCF Rubrics:</strong> Awareness, Sensitivity &amp; Creativity dragdowns</span>
                             </div>
                         </div>
                     </div>
 
-                    <a id="btn-download-template" href="{{ route('hpc.teacher.template.download') }}{{ !empty($selectedGrade) ? '?grade=' . urlencode($selectedGrade) : (!empty($selectedStage) && $selectedStage !== 'all' ? '?stage=' . urlencode($selectedStage) : '') }}"
-                       @if(empty($students)) onclick="if(!confirm('⚠️ No students have been fetched from PARAKH portal yet.\n\nTo ensure your evaluations match PARAKH portal, please login and click \'📥 Fetch Students from This Page\' in the extension widget first.\n\nDo you still want to proceed?')) return false;" @endif
+                    <a id="btn-download-template" href="{{ route('hpc.stage.template.download', ['stage' => $activeStageSlug]) }}{{ !empty($selectedGrade) ? '&grade=' . urlencode($selectedGrade) : '' }}"
+                       @if(empty($students)) onclick="if(!confirm('⚠️ No students have been fetched from PARAKH portal yet for this stage.\n\nTo ensure your evaluations match PARAKH portal, please login and click \'📥 Fetch Students from This Page\' in the extension widget first.\n\nDo you still want to proceed?')) return false;" @endif
                        class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow">
-                        📥 Download Template (.xlsx)
+                        📥 Download {{ $stageDefinitions[$activeStageSlug]['title'] }} Template (.xlsx)
                     </a>
                 </div>
 

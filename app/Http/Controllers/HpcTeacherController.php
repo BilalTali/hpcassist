@@ -51,11 +51,17 @@ class HpcTeacherController extends Controller
             }
         }
 
-        $stages = [
-            ['title' => 'Middle Stage (Class 6 - 8)', 'slug' => 'middle-stage', 'url' => 'https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage'],
-            ['title' => 'Preparatory Stage (Class 3 - 5)', 'slug' => 'preparatory-stage', 'url' => 'https://hpc.parakh.ncert.gov.in/en/hpc/preparatory-stage'],
-            ['title' => 'Foundational Stage (Balvatika - Class 2)', 'slug' => 'foundational-stage', 'url' => 'https://hpc.parakh.ncert.gov.in/en/hpc/foundational-stage'],
-        ];
+        $allStageDefs = \App\Services\StageTemplateService::getStages();
+        $stages = array_values(array_map(function($s) {
+            return [
+                'title'       => $s['title'] . ' (' . $s['grade_range'] . ')',
+                'slug'        => $s['slug'],
+                'url'         => $s['portal_url'],
+                'color'       => $s['color'],
+                'description' => $s['description'],
+                'grades'      => $s['grades'],
+            ];
+        }, $allStageDefs));
 
         $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         $schoolId = $school?->id ?? (int)preg_replace('/[^0-9]/', '', (string)($activeSchool['id'] ?? '')) ?: null;
@@ -147,14 +153,20 @@ class HpcTeacherController extends Controller
             $stage = null;
         }
 
+        if (! $stage && $grade) {
+            $stage = \App\Services\StageTemplateService::getStageForGrade($grade);
+        }
+        $stage = \App\Services\StageTemplateService::normalizeStage($stage ?: 'middle-stage');
+
         $students = $this->getTeacherTemplateStudents($grade, $stage);
 
         if (empty($students)) {
-            $msg = '⚠️ No students fetched from PARAKH portal yet' . ($grade ? " for {$grade}" : ($stage ? " for {$stage}" : '')) . '. Please log in to PARAKH portal, open your stage page (e.g. Middle Stage), and click "📥 Fetch Students from This Page" in the HPC Assist extension first.';
-            return redirect()->to(route('hpc.teacher.dashboard') . ($grade ? '?grade=' . urlencode($grade) : ''))->with('error', $msg);
+            $stageTitle = \App\Services\StageTemplateService::getStages()[$stage]['title'] ?? 'Selected Stage';
+            $msg = "⚠️ No students fetched from PARAKH portal yet for {$stageTitle}" . ($grade ? " ({$grade})" : '') . ". Please log in to PARAKH portal, open the {$stageTitle} page, and click \"📥 Fetch Students from This Page\" in the HPC Assist extension first.";
+            return redirect()->to(route('hpc.teacher.dashboard', ['stage' => $stage]))->with('error', $msg);
         }
 
-        return $this->generateSpreadsheetResponse($students, $grade);
+        return $this->generateSpreadsheetResponse($students, $grade, $stage);
     }
 
     public function syncRoster(Request $request): \Symfony\Component\HttpFoundation\Response
@@ -278,16 +290,14 @@ class HpcTeacherController extends Controller
         ]);
     }
 
-    private function generateSpreadsheetResponse(array $students, ?string $grade = null): \Symfony\Component\HttpFoundation\StreamedResponse
+    private function generateSpreadsheetResponse(array $students, ?string $grade = null, ?string $stage = null): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        /** @var Spreadsheet $spreadsheet */
-        $spreadsheet = new Spreadsheet();
-
-        $this->buildInstructionsSheet($spreadsheet);
-        $this->buildEvaluationsSheet($spreadsheet, $students);
+        $stage = \App\Services\StageTemplateService::normalizeStage($stage ?: 'middle-stage');
+        $stageService = app(\App\Services\StageTemplateService::class);
+        $spreadsheet = $stageService->buildSpreadsheet($stage, $students);
 
         $gradeSuffix = ($grade && $grade !== 'all') ? '_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $grade) : '';
-        $filename    = "hpc_teacher_assessment_template{$gradeSuffix}.xlsx";
+        $filename    = "hpc_assessment_{$stage}{$gradeSuffix}.xlsx";
         /** @var Xlsx $writer */
         $writer      = new Xlsx($spreadsheet);
 
@@ -303,6 +313,7 @@ class HpcTeacherController extends Controller
     public function getStageGrades(?string $stage): array
     {
         return match (strtolower(trim((string)$stage))) {
+            'secondary-stage', 'secondary'       => ['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'],
             'middle-stage', 'middle'             => ['Grade 6', 'Grade 7', 'Grade 8'],
             'preparatory-stage', 'preparatory'   => ['Grade 3', 'Grade 4', 'Grade 5'],
             'foundational-stage', 'foundational' => ['Balvatika 1', 'Balvatika 2', 'Balvatika 3', 'Grade 1', 'Grade 2'],

@@ -93,19 +93,31 @@ class SchoolWorkingDay extends Model
     public static function getDefault(?string $stage = 'middle'): self
     {
         $stage = $stage ?: 'middle';
-        $record = self::where('stage', $stage)->first();
+        try {
+            $record = self::where('stage', $stage)->first();
 
-        if (! $record) {
+            if (! $record) {
+                $defaults = self::defaultDays();
+                $record = self::create(array_merge([
+                    'stage'         => $stage,
+                    'academic_year' => '2025-2026',
+                    'is_default'    => true,
+                    'total_days'    => array_sum($defaults),
+                    'remarks'       => ucfirst($stage) . ' Stage Academic Calendar',
+                ], $defaults));
+            }
+
+            return $record;
+        } catch (\Throwable $e) {
             $defaults = self::defaultDays();
-            $record = self::create(array_merge([
+            $fallback = new self(array_merge([
                 'stage'         => $stage,
                 'academic_year' => '2025-2026',
                 'is_default'    => true,
                 'total_days'    => array_sum($defaults),
-                'remarks'       => ucfirst($stage) . ' Stage Academic Calendar',
+                'remarks'       => ucfirst($stage) . ' Stage Academic Calendar (In-Memory Fallback)',
             ], $defaults));
+            return $fallback;
         }
-
-        return $record;
     }
 }

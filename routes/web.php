@@ -4,6 +4,8 @@ use App\Http\Controllers\HpcController;
 use App\Http\Controllers\HpcTeacherController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SchoolManageController;
+use App\Http\Controllers\StageController;
+use App\Http\Controllers\StateController;
 use App\Http\Controllers\UdiseController;
 use Illuminate\Support\Facades\Route;
 
@@ -203,6 +205,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/hpc/teacher',             [HpcTeacherController::class, 'dashboard'])->name('hpc.teacher.dashboard');
     Route::get('/hpc/teacher/template/download',     [HpcTeacherController::class, 'downloadTemplate'])->name('hpc.teacher.template.download');
     Route::post('/hpc/teacher/upload',               [HpcTeacherController::class, 'upload'])->name('hpc.teacher.upload');
+
+    // ── 4 Stages HPC Assessment Management & StateController Aliases ──────────
+    Route::get('/hpc/stage',                         [StageController::class, 'index'])->name('hpc.stage.index');
+    Route::get('/hpc/stage/template/download',       [StageController::class, 'downloadTemplate'])->name('hpc.stage.template.download');
+    Route::post('/hpc/stage/upload',                 [StageController::class, 'upload'])->name('hpc.stage.upload');
+    Route::get('/hpc/state',                         [StateController::class, 'index'])->name('hpc.state.index');
+    Route::get('/hpc/state/template/download',       [StateController::class, 'downloadTemplate'])->name('hpc.state.template.download');
+    Route::post('/hpc/state/upload',                 [StateController::class, 'upload'])->name('hpc.state.upload');
     Route::post('/hpc/teacher/discover',             [HpcTeacherController::class, 'discover'])->name('hpc.teacher.discover');
     Route::post('/hpc/teacher/run/start',            [HpcTeacherController::class, 'runStart'])->name('hpc.teacher.run.start');
     Route::get('/hpc/teacher/run/status',            [HpcTeacherController::class, 'runStatus'])->name('hpc.teacher.run.status');

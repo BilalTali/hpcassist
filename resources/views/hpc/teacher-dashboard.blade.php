@@ -316,11 +316,12 @@
                         </div>
                     </div>
 
-                    <a id="btn-download-template" href="{{ route('hpc.stage.template.download', ['stage' => $activeStageSlug]) }}{{ !empty($selectedGrade) ? '&grade=' . urlencode($selectedGrade) : '' }}"
-                       @if(empty($students)) onclick="if(!confirm('⚠️ No students have been fetched from PARAKH portal yet for this stage.\n\nTo ensure your evaluations match PARAKH portal, please login and click \'📥 Fetch Students from This Page\' in the extension widget first.\n\nDo you still want to proceed?')) return false;" @endif
-                       class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow">
+                    <button type="button" id="btn-download-template" onclick="openConfigureTemplateModal()"
+                            data-stage="{{ $activeStageSlug }}"
+                            data-grade="{{ $selectedGrade ?? '' }}"
+                            class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow cursor-pointer">
                         📥 Download {{ $stageDefinitions[$activeStageSlug]['title'] }} Template (.xlsx)
-                    </a>
+                    </button>
                 </div>
 
                 <!-- STEP 2: Upload Excel -->
@@ -720,12 +721,10 @@
             const countBadge = document.getElementById('students-count');
             const dlBtn = document.getElementById('btn-download-template');
 
-            // Dynamically update Step 1 template download URL
+            // Dynamically update Step 1 template configuration data
             if (dlBtn) {
-                const params = new URLSearchParams();
-                if (grade) params.set('grade', grade);
-                if (stage && stage !== 'all') params.set('stage', stage);
-                dlBtn.href = '{{ route('hpc.teacher.template.download') }}' + (params.toString() ? '?' + params.toString() : '');
+                dlBtn.dataset.stage = (stage && stage !== 'all') ? stage : '{{ $activeStageSlug }}';
+                dlBtn.dataset.grade = grade || '';
             }
 
             if (btn) btn.disabled = true;
@@ -800,6 +799,7 @@
 
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('stage', '{{ $activeStageSlug }}');
 
             try {
                 const res = await fetch('{{ route('hpc.teacher.upload') }}', {
@@ -1093,7 +1093,189 @@
                 alert('Reset error: ' + e.message);
             }
         }
+
+        let activeModalStage = '{{ $activeStageSlug }}';
+        let activeModalGrade = '{{ $selectedGrade ?? '' }}';
+
+        function openConfigureTemplateModal() {
+            const dlBtn = document.getElementById('btn-download-template');
+            activeModalStage = dlBtn?.dataset?.stage || '{{ $activeStageSlug }}';
+            activeModalGrade = dlBtn?.dataset?.grade || '{{ $selectedGrade ?? '' }}';
+
+            const isPrep = activeModalStage.includes('prep');
+            const middleSelect = document.getElementById('modal-preset-middle');
+            const prepSelect = document.getElementById('modal-preset-prep');
+            const pill = document.getElementById('modal-stage-pill');
+
+            if (isPrep) {
+                if (middleSelect) middleSelect.classList.add('hidden');
+                if (prepSelect) prepSelect.classList.remove('hidden');
+                if (pill) pill.innerText = 'Preparatory Stage (Class 3-5)';
+            } else {
+                if (middleSelect) middleSelect.classList.remove('hidden');
+                if (prepSelect) prepSelect.classList.add('hidden');
+                if (pill) pill.innerText = 'Middle Stage (Class 6-8)';
+            }
+
+            const modal = document.getElementById('template-config-modal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeConfigureTemplateModal() {
+            const modal = document.getElementById('template-config-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function toggleActivityMode() {
+            const isGlobal = document.querySelector('input[name="modal_activity_mode"]:checked')?.value === 'global';
+            const wrapper = document.getElementById('modal-presets-wrapper');
+            if (wrapper) {
+                if (isGlobal) {
+                    wrapper.classList.remove('opacity-40', 'pointer-events-none');
+                } else {
+                    wrapper.classList.add('opacity-40', 'pointer-events-none');
+                }
+            }
+        }
+
+        function executeTemplateDownload() {
+            const isGlobal = document.querySelector('input[name="modal_activity_mode"]:checked')?.value === 'global';
+            const isPrep = activeModalStage.includes('prep');
+            const preset = isPrep 
+                ? document.getElementById('modal-preset-prep')?.value 
+                : document.getElementById('modal-preset-middle')?.value;
+            const autoFill = document.getElementById('modal-auto-fill')?.checked ? '1' : '0';
+
+            const baseUrl = '{{ route('hpc.stage.template.download') }}';
+            const params = new URLSearchParams();
+            params.set('stage', activeModalStage);
+            if (activeModalGrade) params.set('grade', activeModalGrade);
+            params.set('global_activities', isGlobal ? '1' : '0');
+            if (isGlobal && preset) params.set('activity_preset', preset);
+            params.set('auto_fill', autoFill);
+
+            window.location.href = baseUrl + '?' + params.toString();
+            closeConfigureTemplateModal();
+        }
     </script>
+
+    <!-- MODAL: CONFIGURE ASSESSMENT TEMPLATE (GLOBAL ACTIVITIES & AUTO-FILL) -->
+    <div id="template-config-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden transition-all transform animate-in fade-in zoom-in-95 duration-150">
+            <!-- Modal Header -->
+            <div class="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">📑</span>
+                    <div>
+                        <h3 class="text-sm font-bold text-white leading-tight">Configure Assessment Spreadsheet</h3>
+                        <p class="text-[11px] text-slate-300">Choose activity strategy &amp; student evaluation auto-fill</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="modal-stage-pill" class="text-[10px] font-extrabold uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2 py-0.5 rounded-full">
+                        {{ $stageDefinitions[$activeStageSlug]['title'] }}
+                    </span>
+                    <button type="button" onclick="closeConfigureTemplateModal()" class="text-slate-400 hover:text-white transition text-lg leading-none p-1">✕</button>
+                </div>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="p-5 space-y-4 text-xs max-h-[75vh] overflow-y-auto">
+
+                <!-- STEP A: Global Activities vs Manual Creation -->
+                <div>
+                    <label class="block font-bold text-slate-800 text-xs mb-1">
+                        1. Part-B Holistic Activities Strategy <span class="text-rose-500">*</span>
+                    </label>
+                    <p class="text-[11px] text-slate-500 mb-2.5">
+                        Would you like to assign approved Global NCERT Activities to this class, or create custom activities manually?
+                    </p>
+
+                    <div class="space-y-2">
+                        <!-- Option 1: Global Activities (Recommended) -->
+                        <label class="flex items-start gap-2.5 p-3 rounded-xl border border-indigo-300 bg-indigo-50/40 hover:bg-indigo-50/70 cursor-pointer transition">
+                            <input type="radio" name="modal_activity_mode" value="global" checked onchange="toggleActivityMode()"
+                                   class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-bold text-slate-900 text-xs">🌐 Use Global NCERT Exemplar Activities</span>
+                                    <span class="text-[9px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.2 rounded">Recommended</span>
+                                </div>
+                                <p class="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                                    Automatically populates official NCF-SE activities for the entire class. Titles, approaches, rubrics, self-reflections, peer feedback, and teacher support plans are pre-filled so you only need to review or tweak in Excel.
+                                </p>
+
+                                <!-- Activity Preset Dropdowns -->
+                                <div id="modal-presets-wrapper" class="mt-2.5 pt-2 border-t border-indigo-200/60">
+                                    <div class="text-[10px] font-bold uppercase tracking-wider text-indigo-900 mb-1">Select Class Activity Theme:</div>
+                                    
+                                    <!-- Middle Stage Presets -->
+                                    <select id="modal-preset-middle" class="w-full text-xs font-semibold bg-white border border-indigo-200 rounded-lg p-2 text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <option value="science_solar">🔬 Science: Solar System 3D Model &amp; Daily Life Geometry (Art-Integrated)</option>
+                                        <option value="math_geometry">📐 Mathematics: Geometric Symmetry &amp; Garden Mapping (Toy-Based)</option>
+                                        <option value="social_heritage">🌍 Social Science: Unity in Diversity &amp; Heritage Mapping (Experiential)</option>
+                                        <option value="languages_story">📖 Language 1 (R1): Creative Monologue &amp; Roleplay (Art-Integrated)</option>
+                                    </select>
+
+                                    <!-- Preparatory Stage Presets -->
+                                    <select id="modal-preset-prep" class="w-full text-xs font-semibold bg-white border border-indigo-200 rounded-lg p-2 text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 hidden">
+                                        <option value="evs_nature">🌿 The World Around Us: Plant Seed Germination &amp; Nature Study (Inquiry-Based)</option>
+                                        <option value="math_shapes">📐 Mathematics: Geometric Shapes, Toy-Clock &amp; Measuring (Toy-Based)</option>
+                                        <option value="lang_folktale">📖 Language 1: Regional Folktale Dramatization &amp; Puppet Theatre (Art-Integrated)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </label>
+
+                        <!-- Option 2: Blank / Manual Activities -->
+                        <label class="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 cursor-pointer transition">
+                            <input type="radio" name="modal_activity_mode" value="manual" onchange="toggleActivityMode()"
+                                   class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
+                            <div class="flex-1">
+                                <span class="font-bold text-slate-800 text-xs">✍️ Blank Activities (Manual Entry in Excel)</span>
+                                <p class="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                    Leaves Part-B activity columns blank with dropdown rules enabled so you can write custom school projects completely from scratch.
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- STEP B: Auto-Fill Mode -->
+                <div class="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+                    <label class="flex items-start gap-2.5 cursor-pointer">
+                        <input type="checkbox" id="modal-auto-fill" checked
+                               class="mt-0.5 text-emerald-600 rounded focus:ring-emerald-500">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-bold text-emerald-950 text-xs">⚡ Automatically Pre-Fill All Student Evaluations</span>
+                                <span class="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">Zero Blank Cells</span>
+                            </div>
+                            <p class="text-[11px] text-emerald-900/80 mt-1 leading-relaxed">
+                                Fully populates monthly attendance (~95%), Part-A2 learner voice, Part-A3 ambition cards, Part-A4 parent partnership, and subject marks (40–48/50).
+                            </p>
+                            <p class="text-[10px] text-emerald-700 font-semibold mt-1">
+                                💡 Result: The Excel is 100% valid out of the box! You only need to verify, tweak individual scores or remarks if needed, and upload back.
+                            </p>
+                        </div>
+                    </label>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-slate-50 px-5 py-3 border-t border-slate-200 flex items-center justify-between gap-2">
+                <button type="button" onclick="closeConfigureTemplateModal()"
+                        class="px-3.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold transition">
+                    Cancel
+                </button>
+                <button type="button" onclick="executeTemplateDownload()"
+                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition hover:shadow inline-flex items-center gap-1.5">
+                    <span>📥 Download Pre-Filled Excel (.xlsx)</span>
+                </button>
+            </div>
+        </div>
+    </div>
 
     {{-- HPC Extension Bridge Configuration for Teacher Role --}}
     <div id="hpc-extension-bridge"

@@ -2229,6 +2229,10 @@
 
     function getStageUrlForGrade(grade) {
         const gStr = String(grade || '').toLowerCase();
+        if (gStr.includes('prep')) return 'https://hpc.parakh.ncert.gov.in/en/hpc/preparatory-stage';
+        if (gStr.includes('found')) return 'https://hpc.parakh.ncert.gov.in/en/hpc/foundational-stage';
+        if (gStr.includes('sec')) return 'https://hpc.parakh.ncert.gov.in/en/hpc/secondary-stage';
+        if (gStr.includes('mid')) return 'https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage';
         const gNum = parseInt(gStr.replace(/[^0-9]/g, ''), 10);
         if (gNum >= 1 && gNum <= 2) {
             return 'https://hpc.parakh.ncert.gov.in/en/hpc/foundational-stage';
@@ -2320,34 +2324,54 @@
 
     async function fillPartA2(s) {
         logStatus(`[Part-A2] Filling All About Me for ${s.name}...`);
-        const orderedA2 = [
-            s.live_with     || 'Family',
-            s.stay_at       || 'Sugin, Budgam',
-            s.free_time     || 'Reading books and drawing',
-            s.do_well       || 'Learning new skills and actively participating',
-            s.responsible   || 'most times',
-            s.do_better     || s.could_improve || 'Time management in exams',
-            s.care_others   || s.care_about || 'Helping peers with notes',
-            s.feel_proud    || 'Solving challenging problems independently',
-            s.friend_name   || s.student_name || 'Ayaan Ahmad',
-            s.friend_age    || s.student_age || '12',
-            s.acad_goal     || s.academic_goal || 'Score above 90% in Mathematics and Science',
-            s.acad_goal_why || s.goal_importance || 'Builds solid foundation for pursuing higher studies in Engineering',
-            s.acad_step1    || s.goal_step1 || 'Dedicate 45 minutes daily to numerical problem solving and formula revision',
-            s.acad_step2    || s.goal_step2 || 'Clarify doubts with subject teachers immediately and practice weekly mock tests',
-            s.pers_goal_why || 'Keeps mind alert, improves stamina, and enhances daily concentration',
-            s.pers_step1    || 'Wake up at 6:00 AM every morning and do 30 minutes of yoga and jogging',
-            s.pers_step2    || 'Read at least 15 pages of non-academic literature before bedtime',
-            s.pers_goal     || s.personal_goal || 'Develop regular physical exercise and disciplined reading routine',
-            s.sch_learn1    || s.learnt_school || 'Laws of reflection and refraction in science laboratory',
-            s.sch_learn2    || 'Formulating and solving linear equations in single variable',
-            s.sch_learn3    || 'Constitutional preamble and fundamental rights in Social Science',
-            s.out_learn1    || s.learnt_outside || 'Organic kitchen gardening, composting, and soil preparation',
-            s.out_learn2    || 'Bicycle maintenance, tire inflation, and chain lubrication',
-            s.out_learn3    || 'Basic household budgeting and grocery calculation',
-            s.help_with     || s.teacher_help || 'Hands-on science experiments and advanced mathematical puzzles',
-            s.teacher_know  || 'I am enthusiastic about collaborative group projects and active discussions'
-        ];
+        const url = location.href.toLowerCase();
+        const isPrep = url.includes('preparatory') || (s.stage && s.stage.includes('prep')) || (s.grade && ['Grade 3', 'Grade 4', 'Grade 5', '3', '4', '5'].includes(s.grade));
+
+        let orderedA2 = [];
+        if (isPrep) {
+            orderedA2 = [
+                s.live_with        || 'My parents, siblings, and grandparents',
+                s.fav_dish         || s.fav_food || 'Rajma and Rice',
+                s.fav_game         || 'Kho-Kho and Kabaddi',
+                s.free_time        || 'Reading storybooks and sketching',
+                s.do_well          || 'Solving math puzzles and drawing',
+                s.want_to_improve  || s.do_better || 'Neat cursive handwriting and spelling',
+                s.responsible      || 'most times',
+                s.proud_of         || s.feel_proud || 'Helping my classmate with reading',
+                s.goal_acad        || 'Read 15 storybooks in English and Urdu',
+                s.goal_step        || 'Read 2 pages every evening before bed',
+                s.good_deed        || 'Shared my lunch with a friend who forgot hers'
+            ];
+        } else {
+            orderedA2 = [
+                s.live_with     || 'Family',
+                s.stay_at       || 'Sugin, Budgam',
+                s.free_time     || 'Reading books and drawing',
+                s.do_well       || 'Learning new skills and actively participating',
+                s.responsible   || 'most times',
+                s.do_better     || s.could_improve || 'Time management in exams',
+                s.care_others   || s.care_about || 'Helping peers with notes',
+                s.feel_proud    || 'Solving challenging problems independently',
+                s.friend_name   || s.student_name || 'Ayaan Ahmad',
+                s.friend_age    || s.student_age || '12',
+                s.acad_goal     || s.academic_goal || 'Score above 90% in Mathematics and Science',
+                s.acad_goal_why || s.goal_importance || 'Builds solid foundation for pursuing higher studies in Engineering',
+                s.acad_step1    || s.goal_step1 || 'Dedicate 45 minutes daily to numerical problem solving and formula revision',
+                s.acad_step2    || s.goal_step2 || 'Clarify doubts with subject teachers immediately and practice weekly mock tests',
+                s.pers_goal_why || 'Keeps mind alert, improves stamina, and enhances daily concentration',
+                s.pers_step1    || 'Wake up at 6:00 AM every morning and do 30 minutes of yoga and jogging',
+                s.pers_step2    || 'Read at least 15 pages of non-academic literature before bedtime',
+                s.pers_goal     || s.personal_goal || 'Develop regular physical exercise and disciplined reading routine',
+                s.sch_learn1    || s.learnt_school || 'Laws of reflection and refraction in science laboratory',
+                s.sch_learn2    || 'Formulating and solving linear equations in single variable',
+                s.sch_learn3    || 'Constitutional preamble and fundamental rights in Social Science',
+                s.out_learn1    || s.learnt_outside || 'Organic kitchen gardening, composting, and soil preparation',
+                s.out_learn2    || 'Bicycle maintenance, tire inflation, and chain lubrication',
+                s.out_learn3    || 'Basic household budgeting and grocery calculation',
+                s.help_with     || s.teacher_help || 'Hands-on science experiments and advanced mathematical puzzles',
+                s.teacher_know  || 'I am enthusiastic about collaborative group projects and active discussions'
+            ];
+        }
 
         const elements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]), textarea, select'));
         orderedA2.forEach((val, idx) => {
@@ -2356,6 +2380,74 @@
             } else if (elements[idx]) {
                 setNativeValue(elements[idx], val);
             }
+        });
+
+        await sleep(800);
+    }
+
+    async function fillPreparatoryPartA3(s) {
+        logStatus(`[Part-A3: Preparatory] Filling Feelings, Peer 1, Peer 2 & Parent Feedback for ${s.name}...`);
+        
+        // 1. Peer Reviewer Names
+        const p1Name = s.peer1_name || 'Ayaan Ahmad';
+        const p2Name = s.peer2_name || 'Zaid Ahmad';
+        const textInputs = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"])'));
+        if (textInputs.length >= 2) {
+            setNativeValue(textInputs[0], p1Name);
+            setNativeValue(textInputs[1], p2Name);
+        } else if (textInputs.length === 1) {
+            setNativeValue(textInputs[0], p1Name);
+        }
+
+        // 2. Select radio / smiley options across all questions (Feelings, Peer 1, Peer 2, Parent Feedback)
+        const radioGroups = {};
+        document.querySelectorAll('input[type="radio"]').forEach(r => {
+            const name = r.name || 'group';
+            if (!radioGroups[name]) radioGroups[name] = [];
+            radioGroups[name].push(r);
+        });
+        Object.values(radioGroups).forEach(group => {
+            if (group.length > 0 && !group.some(r => r.checked)) {
+                const target = group.find(r => /yes|always|positive|1|agree/i.test(r.value || r.id || '')) || group[0];
+                target.click();
+                target.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+
+        // Also handle smiley li or button selection if custom UI
+        const optionLists = Array.from(document.querySelectorAll('.appropriate-option-select, .smiley-options, ul.options-list'));
+        optionLists.forEach(ul => {
+            const lis = Array.from(ul.querySelectorAll('li, div[role="button"], button'));
+            if (lis.length > 0 && !lis.some(li => li.classList.contains('active') || li.classList.contains('selected'))) {
+                const targetLi = lis.find(li => /yes|always/i.test(li.innerText || '')) || lis[0];
+                targetLi.click();
+            }
+        });
+
+        // 3. Home Resources Checkboxes
+        document.querySelectorAll('.childrens-resources li, .resources-available li').forEach(li => {
+            const lbl = (li.innerText || '').toLowerCase();
+            const cb = li.querySelector('input[type="checkbox"]');
+            if (cb && (lbl.includes('book') || lbl.includes('toy') || lbl.includes('phone') || lbl.includes('internet') || lbl.includes('tv') || lbl.includes('radio'))) {
+                if (!cb.checked) {
+                    cb.click();
+                    cb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+        });
+
+        // 4. Child Support Needs Checkboxes
+        document.querySelectorAll('.need-children-support-check input[type="checkbox"], input[type="checkbox"][name*="support"]').forEach((cb, idx) => {
+            if (idx < 3 && !cb.checked) {
+                cb.click();
+                cb.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+
+        // 5. Parent feedback textareas
+        const feedbackText = s.parent_support_needed || s.parent_feedback || 'Child is highly motivated and supported with reading and hands-on learning at home';
+        document.querySelectorAll('textarea').forEach(ta => {
+            setNativeValue(ta, feedbackText);
         });
 
         await sleep(800);
@@ -2633,15 +2725,23 @@
 
     async function fillHpcCredit(s) {
         logStatus(`[HPC-Credit] Filling Credit Marks and Submitting for ${s.name}...`);
+        const url = location.href.toLowerCase();
+        const isPrep = url.includes('preparatory') || (s && String(s.grade || s.class || s.stage || '').match(/^[345]|prep/i));
         const marksList = [];
         const m = s.marks || {};
-        const keys = ['l1', 'l2', 'l3', 'm', 'sci', 'soc', 'art', 'pe'];
+        
+        const keys = isPrep 
+            ? ['lang1', 'lang2', 'math', 'evs', 'art', 'pe', 'work']
+            : ['l1', 'l2', 'l3', 'm', 'sci', 'soc', 'art', 'pe'];
+
         keys.forEach(k => {
-            marksList.push(String((m[k] && m[k].max) || s[k + '_max'] || '50'));
-            marksList.push(String((m[k] && m[k].obt) || s[k + '_obt'] || '42'));
+            const maxVal = (m[k] && m[k].max) || s['sub_' + k + '_max'] || s[k + '_max'] || '50';
+            const obtVal = (m[k] && m[k].obt) || s['sub_' + k + '_obt'] || s[k + '_obt'] || '42';
+            marksList.push(String(maxVal));
+            marksList.push(String(obtVal));
         });
 
-        const teacherRemarks = s.remarks || 'Consistent performer with excellent curiosity and strong analytical reasoning';
+        const teacherRemarks = s.remarks || s.annual_holistic_remarks || s.holistic_remarks || s.general_remarks || 'Consistent performer with excellent curiosity and strong analytical reasoning';
 
         const table = document.querySelectorAll('table')[1] || document.querySelector('table');
         if (table) {
@@ -2703,7 +2803,12 @@
             return true;
         }
         if (url.includes('/part-a3')) {
-            await fillPartA3(s);
+            const isPrep = url.includes('preparatory') || (s && String(s.grade || s.class || s.stage || '').match(/^[345]|prep/i));
+            if (isPrep) {
+                await fillPreparatoryPartA3(s);
+            } else {
+                await fillPartA3(s);
+            }
             await clickContinueBtn();
             return true;
         }

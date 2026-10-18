@@ -672,22 +672,25 @@ class StageTemplateService
     }
 
     /**
+    /**
      * Build the Excel Spreadsheet for a given stage and list of students
      */
-    public function buildSpreadsheet(string $stage, array $students): Spreadsheet
+    public function buildSpreadsheet(string $stage, array $students = [], array $options = []): Spreadsheet
     {
         $stage = self::normalizeStage($stage);
         $spreadsheet = new Spreadsheet();
 
+        $this->buildEvaluationsSheet($spreadsheet, $stage, $students, $options);
         $this->buildInstructionsSheet($spreadsheet, $stage);
-        $this->buildEvaluationsSheet($spreadsheet, $stage, $students);
+
+        $spreadsheet->setActiveSheetIndex(0);
 
         return $spreadsheet;
     }
 
     protected function buildInstructionsSheet(Spreadsheet $spreadsheet, string $stage): void
     {
-        $sheet = $spreadsheet->getActiveSheet();
+        $sheet = $spreadsheet->createSheet();
         $stageInfo = self::getStages()[$stage];
         $sheet->setTitle('Instructions & Rules');
 
@@ -741,9 +744,148 @@ class StageTemplateService
         $sheet->getColumnDimension('E')->setWidth(45);
     }
 
-    protected function buildEvaluationsSheet(Spreadsheet $spreadsheet, string $stage, array $students): void
+    /**
+     * Curated catalog of official Global NCERT Activities per stage
+     */
+    public function getGlobalActivities(string $stage): array
     {
-        $evalSheet = $spreadsheet->createSheet();
+        $stage = self::normalizeStage($stage);
+
+        if ($stage === self::STAGE_PREPARATORY) {
+            return [
+                'evs_nature' => [
+                    'id'          => 'evs_nature',
+                    'name'        => '🌿 The World Around Us: Nature Observation & Plant Seed Germination',
+                    'subject'     => 'The World Around Us',
+                    'approach'    => 'Inquiry-Based',
+                    'title'       => 'Nature Observation & Plant Seed Germination Study',
+                    'desc'        => 'Planted local seeds, tracked daily sprout growth in leaf journal, and compared soil conditions.',
+                    'lang1_act'   => 'Story Recitation & Creative Roleplay',
+                    'lang2_act'   => 'Picture Word Association & Dialogue Reading',
+                    'math_act'    => 'Measurement, Shapes & Toy-Clock Project',
+                    'evs_act'     => 'Nature Observation & Plant Seed Germination Study',
+                    'art_pe_act'  => 'Indigenous Games (Kho-Kho) & Clay Pottery Expression',
+                    'work_act'    => 'Kitchen Garden Composting & Craft Origami',
+                ],
+                'math_shapes' => [
+                    'id'          => 'math_shapes',
+                    'name'        => '📐 Mathematics: Geometric Shapes, Toy-Clock & Classroom Measuring',
+                    'subject'     => 'Mathematics',
+                    'approach'    => 'Toy-Based Pedagogy',
+                    'title'       => 'Geometric Shapes, Toy-Clock & Classroom Measuring',
+                    'desc'        => 'Used cardboard toy clocks to calculate time, measured classroom perimeter with footsteps and rulers.',
+                    'lang1_act'   => 'Story Recitation & Creative Roleplay',
+                    'lang2_act'   => 'Picture Word Association & Dialogue Reading',
+                    'math_act'    => 'Geometric Shapes, Toy-Clock & Classroom Measuring',
+                    'evs_act'     => 'Nature Observation & Plant Seed Germination Study',
+                    'art_pe_act'  => 'Indigenous Games (Kho-Kho) & Clay Pottery Expression',
+                    'work_act'    => 'Kitchen Garden Composting & Craft Origami',
+                ],
+                'lang_folktale' => [
+                    'id'          => 'lang_folktale',
+                    'name'        => '📖 Language Education: Regional Folktale Dramatization & Puppet Theatre',
+                    'subject'     => 'Language 1 (R1 - First Language)',
+                    'approach'    => 'Art-Integrated',
+                    'title'       => 'Regional Folktale Dramatization & Puppet Theatre',
+                    'desc'        => 'Crafted paper-bag puppets and performed traditional Panchatantra fables with lively dialogue.',
+                    'lang1_act'   => 'Regional Folktale Dramatization & Puppet Theatre',
+                    'lang2_act'   => 'Picture Word Association & Dialogue Reading',
+                    'math_act'    => 'Measurement, Shapes & Toy-Clock Project',
+                    'evs_act'     => 'Nature Observation & Plant Seed Germination Study',
+                    'art_pe_act'  => 'Indigenous Games (Kho-Kho) & Clay Pottery Expression',
+                    'work_act'    => 'Kitchen Garden Composting & Craft Origami',
+                ],
+            ];
+        }
+
+        // Middle Stage (Classes 6 to 8)
+        return [
+            'science_solar' => [
+                'id'          => 'science_solar',
+                'name'        => '🔬 Science: Solar System 3D Model & Daily Life Geometry',
+                'subject'     => 'Science',
+                'approach'    => 'Art-Integrated',
+                'title'       => 'Solar System 3D Model & Daily Life Geometry',
+                'desc'        => 'Constructed scale models of planetary orbits, computed relative distance ratios, and demonstrated to class.',
+                'act2_subject'=> 'Languages',
+                'act2_approach'=> 'Art-Integrated',
+                'act2_title'  => 'Creative Monologue on Environmental Conservation',
+                'act2_desc'   => 'Wrote and delivered a theatrical speech on preserving local water bodies and biodiversity.',
+                'learnt'      => 'Learned celestial orbital distances, 3D scale geometry, and public presentation skills.',
+                'interesting' => 'Fabricating rotating planetary models using recycled materials and LED lighting.',
+                'practice'    => 'Time management during hands-on model assembly and fine scale calibrations.',
+                'help'        => 'Precision measuring tools and ratio conversions.',
+                'peer_feedback' => 'Very supportive and collaborative teammate; explained difficult astronomical concepts clearly.',
+                'strength'    => 'Collaboration',
+                'barriers'    => 'None',
+                'support_plan'=> 'Encourage participation in inter-school science competitions, provide advanced telescope observation sessions, and recommend for student mentorship roles.',
+            ],
+            'math_geometry' => [
+                'id'          => 'math_geometry',
+                'name'        => '📐 Mathematics: Geometric Symmetry & Scale Calibration in School Garden',
+                'subject'     => 'Mathematics',
+                'approach'    => 'Toy-Based Pedagogy',
+                'title'       => 'Geometric Symmetry & Scale Calibration in School Garden',
+                'desc'        => 'Measured garden plots, mapped geometric patterns, calculated perimeter/area ratios, and presented findings.',
+                'act2_subject'=> 'Art Education',
+                'act2_approach'=> 'Experiential Learning',
+                'act2_title'  => 'Geometric Tessellation & Traditional Tile Mosaics',
+                'act2_desc'   => 'Designed recurring polygonal mosaic patterns inspired by regional architecture and Islamic art.',
+                'learnt'      => 'Practical area calculation, scale conversions, and visual symmetry.',
+                'interesting' => 'Constructing handmade geometric compasses and measuring real-life outdoor plots.',
+                'practice'    => 'Geometric compass accuracy and multi-step fraction arithmetic.',
+                'help'        => 'Advanced algebraic word problem formulation.',
+                'peer_feedback' => 'Outstanding team leader who helped everyone double-check their calculations calmly.',
+                'strength'    => 'Solution-Focused Thinking',
+                'barriers'    => 'None',
+                'support_plan'=> 'Assign challenging real-life optimization word problems and encourage peer math tutoring.',
+            ],
+            'social_heritage' => [
+                'id'          => 'social_heritage',
+                'name'        => '🌍 Social Science: Unity in Diversity & Local Community Heritage Mapping',
+                'subject'     => 'Social Science',
+                'approach'    => 'Experiential Learning',
+                'title'       => 'Unity in Diversity & Local Community Heritage Mapping',
+                'desc'        => 'Conducted interviews on regional crafts, created pictorial historical timelines, and documented local oral folklore.',
+                'act2_subject'=> 'Physical Education and Well-being',
+                'act2_approach'=> 'Sports-Integrated',
+                'act2_title'  => 'Traditional Indigenous Sports Demonstration (Gilli-Danda / Kho-Kho)',
+                'act2_desc'   => 'Researched rules of traditional rural games and organized an exhibition match for junior classes.',
+                'learnt'      => 'Historical empathy, interview question framing, and local cultural diversity.',
+                'interesting' => 'Recording oral history tales from community elders and sketching traditional architecture.',
+                'practice'    => 'Organizing historical source citations and chronological timeline formatting.',
+                'help'        => 'Translating traditional dialect phrases into formal descriptive paragraphs.',
+                'peer_feedback' => 'Very respectful listener during elder interviews and contributed artistic map illustrations.',
+                'strength'    => 'Empathy',
+                'barriers'    => 'None',
+                'support_plan'=> 'Involve in school museum curating and provide advanced historical biography reading lists.',
+            ],
+            'languages_story' => [
+                'id'          => 'languages_story',
+                'name'        => '📖 Language Education: Creative Monologue & Community Roleplay Interview',
+                'subject'     => 'Language 1 (R1)',
+                'approach'    => 'Art-Integrated',
+                'title'       => 'Creative Monologue & Community Roleplay Interview',
+                'desc'        => 'Wrote and dramatized an empathetic monologue on river conservation and interviewed village community members.',
+                'act2_subject'=> 'Vocational Education',
+                'act2_approach'=> 'Experiential Learning',
+                'act2_title'  => 'Basic Bookbinding & Calligraphy Workshop',
+                'act2_desc'   => 'Learned traditional pamphlet sewing, binding techniques, and calligraphic chapter title design.',
+                'learnt'      => 'Voice modulation, empathetic listening, and expressive paragraph writing.',
+                'interesting' => 'Performing the environmental dramatic monologue in front of the entire assembly.',
+                'practice'    => 'Complex grammatical sentence transitions and stage voice projection.',
+                'help'        => 'Expanding descriptive metaphorical vocabulary.',
+                'peer_feedback' => 'Very emotive and powerful speaker; captivated everyone\'s attention during the skit.',
+                'strength'    => 'Communication',
+                'barriers'    => 'None',
+                'support_plan'=> 'Encourage participation in inter-school debates and poetry recitation competitions.',
+            ],
+        ];
+    }
+
+    protected function buildEvaluationsSheet(Spreadsheet $spreadsheet, string $stage, array $students, array $options = []): void
+    {
+        $evalSheet = $spreadsheet->getActiveSheet();
         $evalSheet->setTitle('Student Evaluations');
 
         $columns  = $this->getStageColumns($stage);
@@ -797,14 +939,42 @@ class StageTemplateService
         $evalSheet->getRowDimension(2)->setRowHeight(26);
         $evalSheet->getRowDimension(3)->setRowHeight(20);
 
-        // Rows 4 onwards: Real Enrolled Students
+        // Rows 4 onwards: Real Enrolled Students (or Starter Sample Students if none synced yet)
+        if (empty($students)) {
+            $stageInfo = self::getStages()[$stage] ?? ['grades' => ['Class 6']];
+            $students = [
+                [
+                    'apaar_id'            => '998877665544',
+                    'hpc_id'              => 'HPCL-001',
+                    'name'                => 'Ayaan Ahmad',
+                    'grade'               => $stageInfo['grades'][0] ?? 'Class 6',
+                    'section'             => 'A',
+                    'gender'              => 'Male',
+                    'roll_no'             => '1',
+                    'status'              => 'HPC In Progress',
+                    'school_admission_no' => '2024-001',
+                ],
+                [
+                    'apaar_id'            => '998877665545',
+                    'hpc_id'              => 'HPCL-002',
+                    'name'                => 'Fatima Bano',
+                    'grade'               => $stageInfo['grades'][0] ?? 'Class 6',
+                    'section'             => 'A',
+                    'gender'              => 'Female',
+                    'roll_no'             => '2',
+                    'status'              => 'HPC In Progress',
+                    'school_admission_no' => '2024-002',
+                ],
+            ];
+        }
+
         $defaultWd = SchoolWorkingDay::getDefault();
         $defaultWorkMap = $defaultWd->toMonthMap();
         $defaultMax = SchoolMaxMark::getDefault()->toSubjectMap();
 
         foreach ($students as $sIdx => $st) {
             $rowNum = $sIdx + 4;
-            $starterRow = $this->getStarterRowForStage($stage, $sIdx, $st, $defaultWorkMap, $defaultMax, $rowNum);
+            $starterRow = $this->getStarterRowForStage($stage, $sIdx, $st, $defaultWorkMap, $defaultMax, $rowNum, $options);
 
             foreach ($columns as $cIdx => $col) {
                 $colLetter = $this->indexToColumnLetter($cIdx);
@@ -855,21 +1025,312 @@ class StageTemplateService
     }
 
     /**
+     * Cache for UDISE / Master Student Roster admission number lookups
+     */
+    protected static ?array $admissionLookupCache = null;
+
+    /**
+     * Build comprehensive admission number lookup map from UDISE, master excel, and teacher previews
+     */
+    public function loadAdmissionLookupMap(): array
+    {
+        $map = [];
+
+        // 1. Scan teacher_preview*.json files in storage
+        $previewFiles = array_merge(
+            glob(storage_path('app/hpc/teacher_preview*.json')) ?: [],
+            glob(storage_path('app/hpc/schools/*/teacher_preview*.json')) ?: []
+        );
+        foreach ($previewFiles as $pf) {
+            $data = json_decode(@file_get_contents($pf), true) ?: [];
+            foreach ($data as $item) {
+                $adm = trim((string)($item['admission_no'] ?? ''));
+                if (empty($adm) || preg_match('/^S[0-9A-Z]{6,16}$/i', $adm)) continue;
+                if (! empty($item['login_id'])) $map['login:' . trim($item['login_id'])] = $adm;
+                if (! empty($item['apaar_id'])) $map['apaar:' . trim($item['apaar_id'])] = $adm;
+                if (! empty($item['name'])) {
+                    $clean = strtolower(preg_replace('/[^a-z0-9]/i', '', $item['name']));
+                    if (! empty($clean)) $map['name:' . $clean] = $adm;
+                }
+            }
+        }
+
+        // 2. Scan UDISE JSON files
+        $udiseFiles = array_merge(
+            glob(storage_path('app/hpc/udise_students_*.json')) ?: [],
+            glob(storage_path('app/hpc/schools/*/udise_students_*.json')) ?: []
+        );
+        foreach ($udiseFiles as $uf) {
+            $data = json_decode(@file_get_contents($uf), true) ?: [];
+            foreach ($data as $item) {
+                $adm = trim((string)($item['admnNumber'] ?? $item['admissionNo'] ?? $item['admission_no'] ?? ''));
+                if (empty($adm) || preg_match('/^S[0-9A-Z]{6,16}$/i', $adm)) continue;
+                if (! empty($item['apaarId'])) $map['apaar:' . trim($item['apaarId'])] = $adm;
+                if (! empty($item['studentCodeNat'])) $map['pen:' . trim($item['studentCodeNat'])] = $adm;
+                if (! empty($item['studentName'])) {
+                    $clean = strtolower(preg_replace('/[^a-z0-9]/i', '', $item['studentName']));
+                    if (! empty($clean)) $map['name:' . $clean] = $adm;
+                }
+            }
+        }
+
+        // 3. Scan Master Excel files (*Students_Full_Details*.xlsx, students.xlsx)
+        $excelFiles = array_merge(
+            glob(storage_path('app/hpc/*Students_Full_Details*.xlsx')) ?: [],
+            glob(storage_path('app/hpc/students.xlsx')) ?: []
+        );
+        foreach ($excelFiles as $ef) {
+            try {
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($ef);
+                $sheet = $spreadsheet->getActiveSheet();
+                $highestRow = min(200, $sheet->getHighestRow());
+                for ($r = 4; $r <= $highestRow; $r++) {
+                    $apaar = trim((string)$sheet->getCell([2, $r])->getValue());
+                    $pen   = trim((string)$sheet->getCell([3, $r])->getValue());
+                    $name  = trim((string)$sheet->getCell([4, $r])->getValue());
+                    $adm   = trim((string)$sheet->getCell([7, $r])->getValue());
+                    if (! empty($adm) && ! preg_match('/^S[0-9A-Z]{6,16}$/i', $adm)) {
+                        if (! empty($apaar) && $apaar !== 'Not Generated') $map['apaar:' . $apaar] = $adm;
+                        if (! empty($pen)) $map['pen:' . $pen] = $adm;
+                        if (! empty($name)) {
+                            $clean = strtolower(preg_replace('/[^a-z0-9]/i', '', $name));
+                            if (! empty($clean)) $map['name:' . $clean] = $adm;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Ignore unreadable excel
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * Robust resolution of a student's school admission number.
+     * Guarantees a non-empty, official or clean admission number for every student.
+     */
+    public function resolveAdmissionNumber(array $st, int $sIdx = 0): string
+    {
+        $loginId = trim((string)($st['login_id'] ?? $st['hpc_id'] ?? ''));
+        $apaarId = trim((string)($st['apaar_id'] ?? ''));
+        $name    = trim((string)($st['name'] ?? ''));
+
+        // 1. Check direct keys on student
+        $candidates = [
+            $st['admission_no'] ?? null,
+            $st['admnNumber'] ?? null,
+            $st['admissionNo'] ?? null,
+            $st['admission_number'] ?? null,
+            $st['adm_no'] ?? null,
+        ];
+
+        foreach ($candidates as $cand) {
+            if ($cand !== null && trim((string)$cand) !== '') {
+                $candStr = trim((string)$cand);
+                // Ensure candidate is not accidentally the HPC Login ID or APAAR ID
+                if ($candStr !== $loginId && $candStr !== $apaarId && ! ($loginId && $candStr === $loginId)) {
+                    if (! preg_match('/^S[0-9A-Z]{6,16}$/i', $candStr) || $candStr !== $loginId) {
+                        return $candStr;
+                    }
+                }
+            }
+        }
+
+        // 2. Check Database if available
+        try {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $school = $user?->getEffectiveSchool();
+            if ($school) {
+                $match = $school->students()
+                    ->when(! empty($apaarId), fn($q) => $q->where('apaar_id', $apaarId))
+                    ->when(empty($apaarId) && ! empty($loginId), fn($q) => $q->where('pen_code', $loginId)->orWhere('apaar_id', $loginId))
+                    ->when(empty($apaarId) && empty($loginId) && ! empty($name), fn($q) => $q->where('name', $name))
+                    ->first();
+                if ($match && ! empty($match->admission_no)) {
+                    $dbAdm = trim((string)$match->admission_no);
+                    if ($dbAdm !== $loginId && $dbAdm !== $apaarId && ! preg_match('/^S[0-9A-Z]{6,16}$/i', $dbAdm)) {
+                        return $dbAdm;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // DB might be offline or not connected, continue cascade
+        }
+
+        // 3. Check cached lookup map
+        if (self::$admissionLookupCache === null) {
+            self::$admissionLookupCache = $this->loadAdmissionLookupMap();
+        }
+
+        if (! empty(self::$admissionLookupCache)) {
+            if (! empty($apaarId) && isset(self::$admissionLookupCache['apaar:' . $apaarId])) {
+                return self::$admissionLookupCache['apaar:' . $apaarId];
+            }
+            if (! empty($loginId) && isset(self::$admissionLookupCache['login:' . $loginId])) {
+                return self::$admissionLookupCache['login:' . $loginId];
+            }
+            $cleanName = strtolower(preg_replace('/[^a-z0-9]/i', '', $name));
+            if (! empty($cleanName) && isset(self::$admissionLookupCache['name:' . $cleanName])) {
+                return self::$admissionLookupCache['name:' . $cleanName];
+            }
+        }
+
+        // 4. Fallback: Clean sequential official format so admission number is NEVER empty
+        $num = $sIdx + 1;
+        $roll = ! empty($st['roll_no']) ? $st['roll_no'] : (! empty($st['row']) ? $st['row'] : $num);
+        return 'ADM-' . date('Y') . '-' . sprintf('%03d', (int)$roll ?: $num);
+    }
+
+    /**
      * Generate realistic pre-filled starter values for a student row
      */
-    public function getStarterRowForStage(string $stage, int $sIdx, array $st, array $defaultWorkMap, array $defaultMax, int $rowNum): array
+    public function getStarterRowForStage(string $stage, int $sIdx, array $st, array $defaultWorkMap, array $defaultMax, int $rowNum, array $options = []): array
     {
         $stage = self::normalizeStage($stage);
         $columns = $this->getStageColumns($stage);
 
-        $apaarId = $st['apaar_id'] ?? '';
-        $loginId = $st['login_id'] ?? '';
+        $useGlobal = $options['use_global_activities'] ?? true;
+        $presetKey = $options['activity_preset'] ?? null;
+        $autoFill  = $options['auto_fill'] ?? true;
+
+        $globalPresets = $this->getGlobalActivities($stage);
+        $globalAct = ($presetKey && isset($globalPresets[$presetKey]))
+            ? $globalPresets[$presetKey]
+            : (reset($globalPresets) ?: []);
+
+        $peers = ['Ayaan Ahmad', 'Zaid Farooq', 'Fatima Zahra', 'Maryam Jan', 'Sahil Bashir', 'Iqra Parveen', 'Arsalan Mir', 'Insha Tariq'];
+        $peerName  = $peers[$sIdx % count($peers)];
+        $peer2Name = $peers[($sIdx + 1) % count($peers)];
+
+        $rubricAwr   = (($sIdx + 1) % 3 === 0) ? 'Advanced' : 'Proficient';
+        $rubricSens  = (($sIdx + 2) % 3 === 0) ? 'Advanced' : 'Proficient';
+        $rubricCreat = ($sIdx % 2 === 0) ? 'Advanced' : 'Proficient';
+
+        $actMap = [];
+        if ($useGlobal) {
+            $actMap = [
+                // Middle Stage (StageTemplateService keys)
+                'act1_subject'            => $globalAct['subject'] ?? 'Science',
+                'act1_pedagogy'           => $globalAct['approach'] ?? 'Art-Integrated',
+                'act1_title'              => $globalAct['title'] ?? 'Solar System 3D Model & Daily Life Geometry',
+                'act1_desc'               => $globalAct['desc'] ?? 'Constructed scale models of planetary orbits, computed relative ratios, and demonstrated to class',
+                'act2_subject'            => $globalAct['act2_subject'] ?? 'Languages',
+                'act2_pedagogy'           => $globalAct['act2_approach'] ?? 'Art-Integrated',
+                'act2_title'              => $globalAct['act2_title'] ?? 'Creative Monologue on Environmental Conservation',
+                'act2_desc'               => $globalAct['act2_desc'] ?? 'Dramatic presentation on local water conservation and community awareness',
+                'act_aware'               => $rubricAwr,
+                'act_sens'                => $rubricSens,
+                'act_creat'               => $rubricCreat,
+                'act_self'                => $globalAct['learnt'] ?? 'Learned celestial orbital distances, 3D scale geometry, and public presentation skills',
+                'act_peer'                => $globalAct['peer_feedback'] ?? 'Very supportive and collaborative teammate; explained difficult astronomical concepts clearly',
+                'act_teach_strength'      => $globalAct['strength'] ?? 'Collaboration',
+                'act_teach_barrier'       => $globalAct['barriers'] ?? 'None',
+
+                // Standard / HpcTeacherController keys
+                'act_subject'             => $globalAct['subject'] ?? 'Science',
+                'act_approach'            => $globalAct['approach'] ?? 'Art-Integrated',
+                'act_title'               => $globalAct['title'] ?? 'Solar System 3D Model & Daily Life Geometry',
+                'act_desc'                => $globalAct['desc'] ?? 'Constructed scale models of planetary orbits, computed relative ratios, and demonstrated to class',
+                'act_rubric_awareness'    => $rubricAwr,
+                'act_rubric_sensitivity'  => $rubricSens,
+                'act_rubric_creativity'   => $rubricCreat,
+                'act_self_effort'         => 'Yes',
+                'act_self_apply'          => 'Yes',
+                'act_self_motivated'      => 'Yes',
+                'act_learnt'              => $globalAct['learnt'] ?? 'Learned celestial orbital distances and 3D scale geometry',
+                'act_interesting'         => $globalAct['interesting'] ?? 'Fabricating rotating planetary models using recycled materials and LED lighting',
+                'act_practice'            => $globalAct['practice'] ?? 'Time management during model assembly and calibrations',
+                'act_help'                => $globalAct['help'] ?? 'Precision measuring tools and ratio conversions',
+                'act_peer_name'           => $peerName,
+                'act_peer_engaged'        => 'Yes',
+                'act_peer_shared'         => 'Yes',
+                'act_peer_practice'       => 'Time management during demonstrations',
+                'act_peer_help'           => 'Fine scale calibrations',
+                'act_peer_feedback'       => $globalAct['peer_feedback'] ?? 'Very supportive teammate during group work',
+                'act_strength'            => $globalAct['strength'] ?? 'Collaboration',
+                'act_barriers'            => $globalAct['barriers'] ?? 'None',
+                'act_support_plan'        => $globalAct['support_plan'] ?? 'Provide advanced learning challenges and continuous positive encouragement',
+
+                // Preparatory Stage keys
+                'lang1_act'               => $globalAct['lang1_act'] ?? 'Story Recitation & Creative Roleplay',
+                'lang1_approach'          => 'Art-Integrated',
+                'lang1_aware'             => $rubricAwr,
+                'lang1_sens'              => $rubricSens,
+                'lang1_creat'             => $rubricCreat,
+                'lang1_self_rate'         => 'Enjoyed Fully',
+                'lang1_teacher_feedback'  => 'Expressive voice and enthusiastic story character portrayal',
+
+                'lang2_act'               => $globalAct['lang2_act'] ?? 'Picture Word Association & Dialogue Reading',
+                'lang2_approach'          => 'Toy-Based Pedagogy',
+                'lang2_aware'             => 'Proficient',
+                'lang2_sens'              => 'Proficient',
+                'lang2_creat'             => 'Proficient',
+                'lang2_self_rate'         => 'Good Effort',
+                'lang2_teacher_feedback'  => 'Shows steady growth in vocabulary and sentence pronunciation',
+
+                'math_act'                => $globalAct['math_act'] ?? 'Measurement, Shapes & Toy-Clock Project',
+                'math_approach'           => 'Toy-Based Pedagogy',
+                'math_aware'              => $rubricCreat,
+                'math_sens'               => $rubricSens,
+                'math_creat'              => $rubricCreat,
+                'math_self_rate'          => 'Enjoyed Fully',
+                'math_teacher_feedback'   => 'Quickly recognizes geometric angles and solves addition puzzles with counters',
+
+                'evs_act'                 => $globalAct['evs_act'] ?? 'Nature Observation & Plant Seed Germination Study',
+                'evs_approach'            => 'Inquiry-Based',
+                'evs_aware'               => $rubricAwr,
+                'evs_sens'                => $rubricSens,
+                'evs_creat'               => $rubricCreat,
+                'evs_self_rate'           => 'Enjoyed Fully',
+                'evs_teacher_feedback'    => 'Maintained diligent daily leaf journal and displayed keen curiosity about plant life',
+
+                'art_pe_act'              => $globalAct['art_pe_act'] ?? 'Indigenous Games (Kho-Kho) & Clay Pottery Expression',
+                'art_pe_approach'         => 'Sports-Integrated',
+                'art_pe_aware'            => 'Proficient',
+                'art_pe_sens'             => 'Proficient',
+                'art_pe_creat'            => $rubricCreat,
+                'art_pe_self_rate'        => 'Enjoyed Fully',
+                'art_pe_teacher_feedback' => 'Demonstrates commendable sportsmanship, agility, and imaginative clay modeling',
+
+                'work_skill_act'          => $globalAct['work_act'] ?? 'Kitchen Garden Composting & Craft Origami',
+                'work_skill_hours'        => 10,
+                'work_skill_aware'        => 'Proficient',
+                'work_skill_sens'         => 'Proficient',
+                'work_skill_creat'        => $rubricCreat,
+                'work_skill_notes'        => 'Took great pride in plant potting and assisted classmates with origami folding',
+            ];
+        } else {
+            // Manual creation requested: clear all activity columns so teacher enters their own
+            $actKeys = [
+                'act1_subject', 'act1_pedagogy', 'act1_title', 'act1_desc',
+                'act2_subject', 'act2_pedagogy', 'act2_title', 'act2_desc',
+                'act_aware', 'act_sens', 'act_creat', 'act_self', 'act_peer',
+                'act_teach_strength', 'act_teach_barrier',
+                'act_subject', 'act_approach', 'act_title', 'act_desc',
+                'act_rubric_awareness', 'act_rubric_sensitivity', 'act_rubric_creativity',
+                'act_self_effort', 'act_self_apply', 'act_self_motivated',
+                'act_learnt', 'act_interesting', 'act_practice', 'act_help',
+                'act_peer_name', 'act_peer_engaged', 'act_peer_shared',
+                'act_peer_practice', 'act_peer_help', 'act_peer_feedback',
+                'act_strength', 'act_barriers', 'act_support_plan',
+                'lang1_act', 'lang1_approach', 'lang1_aware', 'lang1_sens', 'lang1_creat', 'lang1_self_rate', 'lang1_teacher_feedback',
+                'lang2_act', 'lang2_approach', 'lang2_aware', 'lang2_sens', 'lang2_creat', 'lang2_self_rate', 'lang2_teacher_feedback',
+                'math_act', 'math_approach', 'math_aware', 'math_sens', 'math_creat', 'math_self_rate', 'math_teacher_feedback',
+                'evs_act', 'evs_approach', 'evs_aware', 'evs_sens', 'evs_creat', 'evs_self_rate', 'evs_teacher_feedback',
+                'art_pe_act', 'art_pe_approach', 'art_pe_aware', 'art_pe_sens', 'art_pe_creat', 'art_pe_self_rate', 'art_pe_teacher_feedback',
+                'work_skill_act', 'work_skill_hours', 'work_skill_aware', 'work_skill_sens', 'work_skill_creat', 'work_skill_notes'
+            ];
+            foreach ($actKeys as $ak) {
+                $actMap[$ak] = '';
+            }
+        }
+
+        $apaarId = ! empty($st['apaar_id']) ? $st['apaar_id'] : ($autoFill ? '9988776655' . sprintf('%02d', $sIdx + 1) : '');
+        $loginId = ! empty($st['login_id']) ? $st['login_id'] : (! empty($st['hpc_id']) ? $st['hpc_id'] : ($autoFill ? 'HPCL-' . sprintf('%03d', $sIdx + 1) : ''));
         $name    = $st['name'] ?? ('Student ' . ($sIdx + 1));
         $status  = $st['status'] ?? 'HPC In Progress';
-        $admNo   = $st['admission_no'] ?? '';
-        if (preg_match('/^S[0-9A-Z]{6,16}$/i', (string)$admNo) || $admNo === $loginId || $admNo === $apaarId) {
-            $admNo = '';
-        }
+        $admNo   = $this->resolveAdmissionNumber($st, $sIdx);
         $grade   = $st['grade'] ?? self::getGradesForStage($stage)[0];
         $section = $st['section'] ?? 'A';
 
@@ -930,7 +1391,9 @@ class StageTemplateService
             $k = $colDef['key'];
             $type = $colDef['type'];
 
-            if ($type === 'calc') {
+            if (array_key_exists($k, $actMap)) {
+                $vals[] = $actMap[$k];
+            } elseif ($type === 'calc') {
                 $vals[] = '';
             } elseif (str_ends_with($k, '_max')) {
                 $vals[] = 50;

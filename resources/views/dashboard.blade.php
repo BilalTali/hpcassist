@@ -1419,7 +1419,16 @@
                             },
                             body: fd
                         });
-                        const data = await res.json();
+                        const text = await res.text();
+                        let data;
+                        try {
+                            data = JSON.parse(text);
+                        } catch (parseErr) {
+                            console.error("Non-JSON server response:", text);
+                            alert("Server error (" + res.status + "): Please refresh the page and try again.");
+                            this.isUploadingAssessment = false;
+                            return;
+                        }
                         if (data.ok) {
                             window.location.href = "{{ route('dashboard') }}?step=4";
                         } else {

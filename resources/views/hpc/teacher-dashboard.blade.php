@@ -1138,6 +1138,13 @@
             if (modal) modal.classList.add('hidden');
         }
 
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeConfigureTemplateModal();
+            }
+        });
+
         function toggleActivityMode() {
             const isGlobal = document.querySelector('input[name="modal_activity_mode"]:checked')?.value === 'global';
             const wrapper = document.getElementById('modal-presets-wrapper');
@@ -1172,9 +1179,10 @@
     </script>
 
     <!-- MODAL: CONFIGURE ASSESSMENT TEMPLATE (GLOBAL ACTIVITIES & AUTO-FILL) -->
-    <!-- MODAL: CONFIGURE ASSESSMENT TEMPLATE (GLOBAL ACTIVITIES & AUTO-FILL) -->
-    <div id="template-config-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs hidden p-3 sm:p-4">
-        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full max-h-[85vh] flex flex-col overflow-hidden transition-all transform animate-in fade-in zoom-in-95 duration-150">
+    <div id="template-config-modal" 
+         onclick="if(event.target === this) closeConfigureTemplateModal()"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs hidden p-2 sm:p-4">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full max-h-[88vh] flex flex-col overflow-hidden transition-all transform animate-in fade-in zoom-in-95 duration-150">
             <!-- Modal Header (Always Visible) -->
             <div class="bg-slate-900 text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
                 <div class="flex items-center gap-2">
@@ -1188,7 +1196,7 @@
                     <span id="modal-stage-pill" class="text-[9px] font-extrabold uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2 py-0.5 rounded-full">
                         {{ $stageDefinitions[$activeStageSlug]['title'] }}
                     </span>
-                    <button type="button" onclick="closeConfigureTemplateModal()" class="text-slate-400 hover:text-white transition text-base leading-none p-1">✕</button>
+                    <button type="button" onclick="closeConfigureTemplateModal()" class="text-slate-400 hover:text-white transition text-base leading-none p-1" title="Close (Esc)">✕</button>
                 </div>
             </div>
 
@@ -1276,7 +1284,7 @@
 
                 <!-- 3-Sheet Workbook Instructions (Clickable Accordion) -->
                 <details class="group rounded-xl border border-indigo-200 bg-indigo-50/60 overflow-hidden transition">
-                    <summary class="p-2.5 flex items-center justify-between cursor-pointer font-bold text-xs text-indigo-950 hover:bg-indigo-100/60 select-none list-none">
+                    <summary class="p-2.5 flex items-center justify-between cursor-pointer font-bold text-xs text-indigo-950 hover:bg-indigo-100/60 select-none list-none [&::-webkit-details-marker]:hidden">
                         <div class="flex items-center gap-1.5">
                             <span class="text-sm">📑</span>
                             <span>All-in-One 3-Sheet Workbook Included</span>
@@ -1295,13 +1303,13 @@
             </div>
 
             <!-- Modal Footer (Always Visible on Screen) -->
-            <div class="bg-slate-50 px-4 py-2.5 sm:py-3 border-t border-slate-200 flex items-center justify-between gap-2 flex-shrink-0">
+            <div class="bg-slate-50 px-4 py-2.5 sm:py-3 border-t border-slate-200 flex items-center justify-between gap-2 flex-shrink-0 z-10">
                 <button type="button" onclick="closeConfigureTemplateModal()"
-                        class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold transition">
+                        class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer">
                     Cancel
                 </button>
                 <button type="button" onclick="executeTemplateDownload()"
-                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition hover:shadow inline-flex items-center gap-1.5">
+                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition hover:shadow inline-flex items-center gap-1.5 cursor-pointer">
                     <span>📥 Download Excel Workbook (.xlsx)</span>
                 </button>
             </div>

@@ -1112,6 +1112,7 @@
                         ${activeLabel}
                         <span style="color: #1e40af; font-weight: 700; margin-left: 4px;">${progressCount}</span>
                     </span>
+                    <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.2.7</span>
                     <span style="font-size: 9px; padding: 2px 7px; border-radius: 8px; font-weight: 700; background: ${isAnyRunning ? '#dbeafe' : '#dcfce7'}; color: ${isAnyRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isAnyRunning ? '#bfdbfe' : '#bbf7d0'};">
                         ${isAnyRunning ? '⚡ RUNNING' : 'READY'}
                     </span>
@@ -1146,6 +1147,7 @@
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="font-size: 16px;">👩‍🏫</span>
                             <strong style="font-weight: 800; font-size: 13px; color: #0f172a; letter-spacing: -0.2px;">Teacher Evaluation</strong>
+                            <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.2.7</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 10px; background: ${isTeacherRunning ? '#dbeafe' : '#dcfce7'}; color: ${isTeacherRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isTeacherRunning ? '#bfdbfe' : '#bbf7d0'}; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
@@ -1233,6 +1235,7 @@
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span style="font-size: 16px;">🚀</span>
                         <strong style="font-weight: 800; font-size: 13px; color: #0f172a; letter-spacing: -0.2px;">HPC Assist Submitter</strong>
+                        <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.2.7</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="font-size: 10px; background: ${isRunning ? '#dbeafe' : '#dcfce7'}; color: ${isRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isRunning ? '#bfdbfe' : '#bbf7d0'}; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
@@ -2292,21 +2295,29 @@
     }
 
     async function clickContinueBtn() {
-        await sleep(600);
-        const candidates = Array.from(document.querySelectorAll('button, a[role="button"], input[type="button"], input[type="submit"], .btn'));
+        logStatus('Waiting for Continue button to be ready...');
+        let continueBtn = null;
 
-        // Priority 1: Text contains 'continue' and strictly does NOT contain 'draft' or 'back'
-        let continueBtn = candidates.find(b => {
-            const t = (b.innerText || b.value || '').trim().toLowerCase();
-            return t.includes('continue') && !t.includes('draft') && !t.includes('back');
-        });
+        // Poll up to 6 seconds (12 x 500ms) for the Continue button to become available & enabled
+        for (let wait = 0; wait < 12; wait++) {
+            await sleep(500);
+            const candidates = Array.from(document.querySelectorAll('button, a[role="button"], input[type="button"], input[type="submit"], .btn'));
 
-        // Priority 2: Text contains 'next' and does NOT contain 'draft'
-        if (!continueBtn) {
+            // Priority 1: Text contains 'continue' and strictly does NOT contain 'draft' or 'back'
             continueBtn = candidates.find(b => {
                 const t = (b.innerText || b.value || '').trim().toLowerCase();
-                return t.includes('next') && !t.includes('draft') && !t.includes('page') && !t.includes('back');
+                return t.includes('continue') && !t.includes('draft') && !t.includes('back');
             });
+
+            // Priority 2: Text contains 'next' and does NOT contain 'draft'
+            if (!continueBtn) {
+                continueBtn = candidates.find(b => {
+                    const t = (b.innerText || b.value || '').trim().toLowerCase();
+                    return t.includes('next') && !t.includes('draft') && !t.includes('page') && !t.includes('back');
+                });
+            }
+
+            if (continueBtn && !continueBtn.disabled) break;
         }
 
         if (continueBtn) {
@@ -2325,6 +2336,7 @@
             continueBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
             continueBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
             continueBtn.click();
+            try { HTMLElement.prototype.click.call(continueBtn); } catch(e) {}
 
             // Monitor for SPA navigation
             for (let step = 0; step < 8; step++) {
@@ -2817,6 +2829,7 @@
                 clickable.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
                 clickable.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
                 clickable.click();
+                try { HTMLElement.prototype.click.call(clickable); } catch(e) {}
 
                 if (match !== clickable) {
                     match.click();
@@ -2846,6 +2859,8 @@
             document.querySelectorAll('input[type="checkbox"]').forEach((cb, i) => {
                 if (i < 2 && !cb.checked) {
                     cb.click();
+                    cb.checked = true;
+                    cb.dispatchEvent(new Event('input', { bubbles: true }));
                     cb.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             });
@@ -2857,31 +2872,46 @@
             // ─────────────────────────────────────────────────────────
             await goToStep(2, ['Subject', 'CG', 'Competencies']);
             await sleep(600);
-            const wrapper = document.querySelector('.scroller-cg-domain .custom-dropdown-wrapper, .custom-dropdown-wrapper');
-            if (wrapper) {
+
+            // Custom Dropdowns (Domain / Subject / CG)
+            const wrappers = Array.from(document.querySelectorAll('.custom-dropdown-wrapper, .scroller-cg-domain .custom-dropdown-wrapper'));
+            for (const wrapper of wrappers) {
                 const header = wrapper.querySelector('.custom-dropdown-header');
                 if (header) {
                     header.click();
-                    await sleep(400);
+                    await sleep(350);
                     const items = Array.from(document.querySelectorAll('.custom-dropdown-item'));
-                    const targetDomain = items.find(el => el.innerText.trim().toLowerCase().includes('world') || el.innerText.trim().toLowerCase().includes(actSubject.slice(0, 4).toLowerCase())) || items[0];
-                    if (targetDomain) targetDomain.click();
-                    await sleep(400);
+                    const targetDomain = items.find(el => {
+                        const txt = el.innerText.trim().toLowerCase();
+                        return txt.includes('world') || txt.includes(actSubject.slice(0, 4).toLowerCase());
+                    }) || items[0];
+                    if (targetDomain) {
+                        targetDomain.click();
+                        await sleep(350);
+                    }
                 }
             }
+
+            // Native Select Dropdowns
             document.querySelectorAll('select').forEach(sel => {
                 if (!sel.value || sel.selectedIndex <= 0) {
-                    sel.selectedIndex = 1;
+                    sel.selectedIndex = Math.min(1, sel.options.length - 1);
+                    sel.dispatchEvent(new Event('input', { bubbles: true }));
                     sel.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             });
-            // Ensure competencies are checked
-            const cpts = document.querySelectorAll('input[name="cpt"], input[type="checkbox"][id*="cpt" i], .scroller-container input[type="checkbox"], input[type="checkbox"]');
-            if (cpts.length > 0 && !Array.from(cpts).some(c => c.checked)) {
+
+            // Ensure Competencies are checked
+            const cpts = Array.from(document.querySelectorAll('input[name="cpt"], input[type="checkbox"][id*="cpt" i], .scroller-container input[type="checkbox"], input[type="checkbox"]'));
+            if (cpts.length > 0 && !cpts.some(c => c.checked)) {
                 cpts[0].click();
+                cpts[0].checked = true;
+                cpts[0].dispatchEvent(new Event('input', { bubbles: true }));
                 cpts[0].dispatchEvent(new Event('change', { bubbles: true }));
                 if (cpts[1]) {
                     cpts[1].click();
+                    cpts[1].checked = true;
+                    cpts[1].dispatchEvent(new Event('input', { bubbles: true }));
                     cpts[1].dispatchEvent(new Event('change', { bubbles: true }));
                 }
             }
@@ -2893,24 +2923,43 @@
             // ─────────────────────────────────────────────────────────
             await goToStep(3, ['Assessment Qs', 'Activity & Assessment', 'Questions']);
             await sleep(600);
+
             document.querySelectorAll('.appropriate-option-select li, ul.options-list li, .rubric-item button, [role="option"]').forEach((el, i) => {
                 if (i < 3) el.click();
             });
-            const tab3Radios = Array.from(document.querySelectorAll('input[type="radio"]'));
-            const t3Groups = {};
-            tab3Radios.forEach((r, idx) => {
-                const g = (r.name && r.name !== 'group') ? r.name : ('t3_' + Math.floor(idx / 3));
-                if (!t3Groups[g]) t3Groups[g] = [];
-                t3Groups[g].push(r);
+
+            // Group radio buttons in Step 3 by row / Y coordinate
+            const tab3Radios = Array.from(document.querySelectorAll('input[type="radio"], [role="radio"]'));
+            const t3Groups = [];
+            tab3Radios.forEach(r => {
+                const rect = r.getBoundingClientRect();
+                const parentRow = r.closest('tr, [role="row"], .card, .form-group, fieldset, [role="radiogroup"], .row');
+                let g = t3Groups.find(grp => {
+                    if (r.name && grp.name && r.name === grp.name) return true;
+                    if (parentRow && grp.parentRow && parentRow === grp.parentRow) return true;
+                    if (Math.abs(rect.top - grp.top) < 22) return true;
+                    return false;
+                });
+                if (!g) {
+                    g = { name: r.name, parentRow, top: rect.top, radios: [] };
+                    t3Groups.push(g);
+                }
+                g.radios.push(r);
             });
-            Object.values(t3Groups).forEach(grp => {
-                if (!grp.some(r => r.checked)) {
-                    const target = grp.find(r => /prof|2|yes/i.test(r.value || '')) || grp[Math.min(1, grp.length - 1)] || grp[0];
-                    target.click();
-                    target.checked = true;
-                    target.dispatchEvent(new Event('change', { bubbles: true }));
+
+            t3Groups.forEach(grp => {
+                const list = grp.radios;
+                if (!list.some(r => r.checked || r.getAttribute('aria-checked') === 'true')) {
+                    const target = list.find(r => /prof|2|yes/i.test(r.value || '')) || list[Math.min(1, list.length - 1)] || list[0];
+                    if (target) {
+                        target.click();
+                        target.checked = true;
+                        target.dispatchEvent(new Event('input', { bubbles: true }));
+                        target.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
                 }
             });
+
             document.querySelectorAll('textarea').forEach(ta => {
                 if (!ta.value || ta.value.trim() === '') {
                     setNativeValue(ta, actDesc);
@@ -2925,8 +2974,68 @@
             await goToStep(4, ['Assessment Rubric', 'Rubric']);
             await sleep(800);
 
-            // Explicit search for Awareness, Sensitivity, Creativity rows
-            ['awareness', 'sensitivity', 'creativity'].forEach(keyword => {
+            // Find ALL radio inputs in Step 4
+            const step4Radios = Array.from(document.querySelectorAll('input[type="radio"], [role="radio"], .form-check-input'));
+
+            // Group radios by vertical row (top coordinate) or parent row container
+            // This is 100% tag-agnostic and guarantees Row 1, Row 2, Row 3 all form separate groups!
+            const rubricGroups = [];
+            step4Radios.forEach(r => {
+                const rect = r.getBoundingClientRect();
+                const parentRow = r.closest('tr, [role="row"], .card, .form-group, fieldset, [role="radiogroup"], .row, li, div[class*="row"]');
+                let g = rubricGroups.find(grp => {
+                    if (r.name && grp.name && r.name === grp.name) return true;
+                    if (parentRow && grp.parentRow && parentRow === grp.parentRow) return true;
+                    if (Math.abs(rect.top - grp.top) < 22) return true;
+                    return false;
+                });
+                if (!g) {
+                    g = { name: r.name, parentRow, top: rect.top, radios: [] };
+                    rubricGroups.push(g);
+                }
+                g.radios.push(r);
+            });
+
+            logStatus(`[Part-B] Step 4: Identified ${rubricGroups.length} rubric rows.`);
+
+            // Fill EVERY row with Proficient (or specific level)
+            rubricGroups.forEach((grp, idx) => {
+                let targetLvl = actLevel;
+                if (idx === 0) targetLvl = actAwr;
+                else if (idx === 1) targetLvl = actSen;
+                else if (idx === 2) targetLvl = actCre;
+
+                const radios = grp.radios;
+                let chosen = radios.find(r => {
+                    const val = (r.value || '').toLowerCase();
+                    const lbl = (r.closest('label')?.innerText || r.parentElement?.innerText || '').toLowerCase();
+                    if (targetLvl.includes('begin')) return val.includes('begin') || val === '0' || val === '1' || lbl.includes('begin');
+                    if (targetLvl.includes('adv')) return val.includes('adv') || val === '3' || lbl.includes('adv');
+                    return val.includes('prof') || val === '2' || lbl.includes('prof');
+                });
+
+                if (!chosen) {
+                    let pIdx = 1;
+                    if (targetLvl.includes('begin')) pIdx = 0;
+                    else if (targetLvl.includes('adv')) pIdx = Math.min(2, radios.length - 1);
+                    else pIdx = Math.min(1, radios.length - 1);
+                    chosen = radios[pIdx] || radios[0];
+                }
+
+                if (chosen) {
+                    try { chosen.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+                    chosen.click();
+                    chosen.checked = true;
+                    chosen.setAttribute('aria-checked', 'true');
+                    chosen.dispatchEvent(new Event('input', { bubbles: true }));
+                    chosen.dispatchEvent(new Event('change', { bubbles: true }));
+                    const pLabel = chosen.closest('label, td, div');
+                    if (pLabel && pLabel !== chosen) pLabel.click();
+                }
+            });
+
+            // Explicit keyword search fallback for Awareness, Sensitivity, Creativity / Novelty
+            ['awareness', 'sensitivity', 'creativity', 'attempts to add', 'adds new', 'expression'].forEach(keyword => {
                 const els = Array.from(document.querySelectorAll('*')).filter(el => {
                     if (el.children.length > 2) return false;
                     const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
@@ -2936,7 +3045,7 @@
                     const row = el.closest('tr, [role="row"], .card, .form-group, fieldset, [role="radiogroup"], .row') || el.parentElement;
                     if (row) {
                         const radios = Array.from(row.querySelectorAll('input[type="radio"], [role="radio"], .form-check-input'));
-                        if (radios.length > 0) {
+                        if (radios.length > 0 && !radios.some(r => r.checked)) {
                             const prof = radios.find(r => /prof|2|yes/i.test(r.value || '')) || radios[Math.min(1, radios.length - 1)] || radios[0];
                             if (prof) {
                                 prof.click();
@@ -2947,18 +3056,13 @@
                                 if (pLabel && pLabel !== prof) pLabel.click();
                             }
                         }
-                        const cells = Array.from(row.querySelectorAll('td'));
-                        if (cells.length >= 3) {
-                            const cell = cells[2] || cells[cells.length - 1];
-                            if (cell) (cell.querySelector('input, label') || cell).click();
-                        }
                     }
                 });
             });
 
             // Table rows fallback: ensure every row has a checked radio
             const rubricRows = Array.from(document.querySelectorAll('table tbody tr, table tr')).filter(tr => {
-                return !tr.querySelector('th') || tr.querySelectorAll('td').length >= 3;
+                return !tr.querySelector('th') || tr.querySelectorAll('td').length >= 2;
             });
             rubricRows.forEach(row => {
                 const radios = Array.from(row.querySelectorAll('input[type="radio"], input[type="checkbox"], .form-check-input, [role="radio"]'));
@@ -2985,6 +3089,7 @@
             document.querySelectorAll('select').forEach((sel, i) => {
                 if (!sel.value || sel.selectedIndex <= 0) {
                     sel.selectedIndex = Math.min(1, sel.options.length - 1);
+                    sel.dispatchEvent(new Event('input', { bubbles: true }));
                     sel.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             });
@@ -3016,6 +3121,7 @@
                 if (!r.checked && (idx % 2 === 0 || r.value === 'yes' || r.value === '1')) {
                     r.click();
                     r.checked = true;
+                    r.dispatchEvent(new Event('input', { bubbles: true }));
                     r.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             });
@@ -3046,19 +3152,23 @@
                 finishBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
                 finishBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
                 finishBtn.click();
+                try { HTMLElement.prototype.click.call(finishBtn); } catch(e) {}
                 logStatus('[Part-B] ✓ Clicked Finish Activity button.');
-                await sleep(1500);
-
-                // Confirm modal if shown
-                const modal = document.querySelector('.modal, .swal2-popup, [role="dialog"], .fade.show');
-                if (modal) {
-                    const confirmBtn = Array.from(modal.querySelectorAll('button')).find(b => 
-                        /finish|yes|confirm|proceed|ok|complete/i.test((b.innerText || '').trim())
-                    );
-                    if (confirmBtn) {
-                        confirmBtn.click();
-                        logStatus('[Part-B] ✓ Confirmed Finish modal.');
-                        await sleep(1500);
+                
+                // Wait up to 3s for confirmation modal
+                for (let mWait = 0; mWait < 6; mWait++) {
+                    await sleep(500);
+                    const modal = document.querySelector('.modal, .swal2-popup, [role="dialog"], .fade.show');
+                    if (modal) {
+                        const confirmBtn = Array.from(modal.querySelectorAll('button')).find(b => 
+                            /finish|yes|confirm|proceed|ok|complete/i.test((b.innerText || '').trim())
+                        );
+                        if (confirmBtn) {
+                            confirmBtn.click();
+                            logStatus('[Part-B] ✓ Confirmed Finish modal.');
+                            await sleep(1500);
+                            break;
+                        }
                     }
                 }
             }
@@ -3068,14 +3178,27 @@
         await processActivityTabs();
 
         // Check if there is an uncompleted Activity 2 in the sidebar
-        const act2Btn = Array.from(document.querySelectorAll('button, div[role="button"], li')).find(b => {
-            const t = (b.innerText || '').trim();
-            return /^\s*2\s+/m.test(t) && (t.includes('TWCG') || t.includes('Activity') || t.includes('C-'));
+        const sidebarActItems = Array.from(document.querySelectorAll('div, li, button, a')).filter(el => {
+            const t = (el.innerText || '').trim();
+            if (el.children.length > 2 || t.length > 60 || t.length < 3) return false;
+            const isAct = t.includes('WCG') || t.includes('TWCG') || t.includes('C-1') || t.includes('C-2') || /activity\s*\d/i.test(t);
+            const isAdd = t.includes('Add Activity');
+            return isAct && !isAdd;
         });
-        if (act2Btn) {
-            logStatus('[Part-B] Found Activity 2 in sidebar. Processing Activity 2...');
-            act2Btn.click();
-            await sleep(1000);
+
+        // Find one that is NOT currently active (doesn't have active class or arrow)
+        const uncompletedAct = sidebarActItems.find(el => {
+            const cls = (el.className || '').toLowerCase();
+            const parentCls = (el.parentElement?.className || '').toLowerCase();
+            const isCurrent = cls.includes('active') || parentCls.includes('active') || el.innerText.includes('▶') || el.querySelector('.active');
+            return !isCurrent;
+        });
+
+        if (uncompletedAct) {
+            logStatus(`[Part-B] Found second activity in sidebar: "${uncompletedAct.innerText.trim()}". Processing...`);
+            uncompletedAct.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            uncompletedAct.click();
+            await sleep(1200);
             await processActivityTabs();
         }
 
@@ -3256,30 +3379,45 @@
         });
 
         // ── 4. SMART FORM-WIDE RADIO GROUPING (Row-by-Row fallback) ──
-        const allRadios = Array.from(document.querySelectorAll('input[type="radio"], [role="radio"]'));
-        const radioGroups = new Map();
+        const allPartCRadios = Array.from(document.querySelectorAll('input[type="radio"], [role="radio"], .form-check-input'));
+        const partCGroups = [];
 
-        allRadios.forEach((r, idx) => {
-            let key = (r.name || '').trim();
-            if (!key || key === 'group' || key === 'radio' || key === 'undefined') {
-                const parent = r.closest('tr, [role="row"], fieldset, [role="radiogroup"], .form-group, .card, .row');
-                key = parent ? (parent.id || ('parent_' + Array.from(document.querySelectorAll('tr, .form-group, .card')).indexOf(parent))) : ('chunk_' + Math.floor(idx / 3));
+        allPartCRadios.forEach(r => {
+            const rect = r.getBoundingClientRect();
+            const parent = r.closest('tr, [role="row"], fieldset, [role="radiogroup"], .form-group, .card, .row, li');
+            let g = partCGroups.find(grp => {
+                if (r.name && grp.name && r.name === grp.name) return true;
+                if (parent && grp.parent && parent === grp.parent) return true;
+                if (Math.abs(rect.top - grp.top) < 22) return true;
+                return false;
+            });
+            if (!g) {
+                g = { name: r.name, parent, top: rect.top, radios: [] };
+                partCGroups.push(g);
             }
-            if (!radioGroups.has(key)) radioGroups.set(key, []);
-            radioGroups.get(key).push(r);
+            g.radios.push(r);
         });
 
-        radioGroups.forEach((grp, key) => {
-            if (grp.length > 0 && !grp.some(r => r.checked || r.getAttribute('aria-checked') === 'true')) {
-                const targetRadio = grp.find(r => {
+        partCGroups.forEach((grp, idx) => {
+            const list = grp.radios;
+            if (list.length > 0 && !list.some(r => r.checked || r.getAttribute('aria-checked') === 'true')) {
+                let targetLvl = actLevel;
+                if (idx === 0) targetLvl = actAwr;
+                else if (idx === 1) targetLvl = actSen;
+                else if (idx === 2) targetLvl = actCre;
+
+                const targetRadio = list.find(r => {
                     const val = (r.value || '').toLowerCase();
                     const lbl = (r.closest('label')?.innerText || r.parentElement?.innerText || '').toLowerCase();
+                    if (targetLvl.includes('begin')) return val.includes('begin') || val === '0' || val === '1' || lbl.includes('begin');
+                    if (targetLvl.includes('adv')) return val.includes('adv') || val === '3' || lbl.includes('adv');
                     return val.includes('prof') || val === '2' || val === 'yes' || lbl.includes('prof');
-                }) || grp[Math.min(1, grp.length - 1)] || grp[0];
+                }) || list[Math.min(1, list.length - 1)] || list[0];
 
                 if (targetRadio) {
                     targetRadio.click();
                     targetRadio.checked = true;
+                    targetRadio.setAttribute('aria-checked', 'true');
                     targetRadio.dispatchEvent(new Event('input', { bubbles: true }));
                     targetRadio.dispatchEvent(new Event('change', { bubbles: true }));
                     const pLabel = targetRadio.closest('label, td, div');

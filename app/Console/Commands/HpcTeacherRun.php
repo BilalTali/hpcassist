@@ -819,17 +819,48 @@ class HpcTeacherRun extends Command
 
         // ── 7. Fill Part-C ───────────────────────────────────────────────────
         if (str_contains($client->getCurrentURL(), '/part-C')) {
+            $actAwrVal = $actAwr;
             $client->executeScript("
+                const actAwr = " . json_encode($actAwrVal) . ";
+
+                // 1. Explicit search for Awareness
+                const allAwarenessEls = Array.from(document.querySelectorAll('*')).filter(el => {
+                    if (el.children.length > 2) return false;
+                    const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+                    return txt.includes('awareness') && txt.length < 80;
+                });
+                allAwarenessEls.forEach(el => {
+                    const row = el.closest('tr, [role=\"row\"], .card, .form-group, fieldset, [role=\"radiogroup\"], .row') || el.parentElement;
+                    if (row) {
+                        const radios = Array.from(row.querySelectorAll('input[type=\"radio\"], [role=\"radio\"], .form-check-input'));
+                        if (radios.length > 0) {
+                            const prof = radios.find(r => /prof|2|yes/i.test(r.value || '')) || radios[Math.min(1, radios.length - 1)] || radios[0];
+                            if (prof) { prof.click(); prof.checked = true; prof.dispatchEvent(new Event('change', { bubbles: true })); }
+                        }
+                    }
+                });
+
+                // 2. Table rows selection
+                document.querySelectorAll('table tbody tr, table tr').forEach(row => {
+                    const radios = Array.from(row.querySelectorAll('input[type=\"radio\"]'));
+                    if (radios.length > 0 && !radios.some(r => r.checked)) {
+                        const target = radios[Math.min(1, radios.length - 1)] || radios[0];
+                        target.click(); target.checked = true; target.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                });
+
+                // 3. Fallback form-wide radio groups
                 const radioGroups = {};
-                document.querySelectorAll('input[type=\"radio\"]').forEach(r => {
-                    const name = r.name || 'group';
+                document.querySelectorAll('input[type=\"radio\"]').forEach((r, idx) => {
+                    const name = (r.name && r.name !== 'group') ? r.name : ('row_' + Math.floor(idx / 3));
                     if (!radioGroups[name]) radioGroups[name] = [];
                     radioGroups[name].push(r);
                 });
                 Object.values(radioGroups).forEach(group => {
                     if (group.length > 0 && !group.some(r => r.checked)) {
-                        const prof = group.find(r => r.value === 'proficient' || r.value === '2' || r.value === 'yes') || group[0];
+                        const prof = group.find(r => /prof|2|yes/i.test(r.value || '')) || group[Math.min(1, group.length - 1)] || group[0];
                         prof.click();
+                        prof.checked = true;
                         prof.dispatchEvent(new Event('change', { bubbles: true }));
                     }
                 });

@@ -116,6 +116,17 @@
         console.log('[HPC Assist]', msg);
         const el = document.getElementById('hpc-widget-status');
         if (el) el.textContent = msg;
+
+        // Remote live logging beacon to server
+        if (SERVER_URL) {
+            try {
+                fetch(`${SERVER_URL}/hpc/teacher/evaluations/log`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ message: msg, school_id: SCHOOL_ID, url: location.href })
+                }).catch(() => {});
+            } catch(e) {}
+        }
     }
 
     function setNativeValue(element, value) {

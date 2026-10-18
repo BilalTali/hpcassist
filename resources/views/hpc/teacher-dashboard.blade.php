@@ -1172,57 +1172,58 @@
     </script>
 
     <!-- MODAL: CONFIGURE ASSESSMENT TEMPLATE (GLOBAL ACTIVITIES & AUTO-FILL) -->
-    <div id="template-config-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs hidden p-4">
-        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden transition-all transform animate-in fade-in zoom-in-95 duration-150">
-            <!-- Modal Header -->
-            <div class="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
+    <!-- MODAL: CONFIGURE ASSESSMENT TEMPLATE (GLOBAL ACTIVITIES & AUTO-FILL) -->
+    <div id="template-config-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs hidden p-3 sm:p-4">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full max-h-[85vh] flex flex-col overflow-hidden transition-all transform animate-in fade-in zoom-in-95 duration-150">
+            <!-- Modal Header (Always Visible) -->
+            <div class="bg-slate-900 text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
                 <div class="flex items-center gap-2">
-                    <span class="text-xl">📑</span>
+                    <span class="text-lg">📑</span>
                     <div>
-                        <h3 class="text-sm font-bold text-white leading-tight">Configure Assessment Spreadsheet</h3>
-                        <p class="text-[11px] text-slate-300">Choose activity strategy &amp; student evaluation auto-fill</p>
+                        <h3 class="text-xs sm:text-sm font-bold text-white leading-tight">Configure Assessment Spreadsheet</h3>
+                        <p class="text-[10px] text-slate-300">Choose activity strategy &amp; student evaluation auto-fill</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span id="modal-stage-pill" class="text-[10px] font-extrabold uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2 py-0.5 rounded-full">
+                    <span id="modal-stage-pill" class="text-[9px] font-extrabold uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2 py-0.5 rounded-full">
                         {{ $stageDefinitions[$activeStageSlug]['title'] }}
                     </span>
-                    <button type="button" onclick="closeConfigureTemplateModal()" class="text-slate-400 hover:text-white transition text-lg leading-none p-1">✕</button>
+                    <button type="button" onclick="closeConfigureTemplateModal()" class="text-slate-400 hover:text-white transition text-base leading-none p-1">✕</button>
                 </div>
             </div>
 
-            <!-- Modal Content -->
-            <div class="p-5 space-y-4 text-xs max-h-[75vh] overflow-y-auto">
+            <!-- Modal Content (Scrollable) -->
+            <div class="p-3.5 sm:p-4 space-y-3 text-xs overflow-y-auto flex-1">
 
                 <!-- STEP A: Global Activities vs Manual Creation -->
                 <div>
                     <label class="block font-bold text-slate-800 text-xs mb-1">
                         1. Part-B Holistic Activities Strategy <span class="text-rose-500">*</span>
                     </label>
-                    <p class="text-[11px] text-slate-500 mb-2.5">
+                    <p class="text-[10px] text-slate-500 mb-2">
                         Would you like to assign approved Global NCERT Activities to this class, or create custom activities manually?
                     </p>
 
-                    <div class="space-y-2">
+                    <div class="space-y-1.5">
                         <!-- Option 1: Global Activities (Recommended) -->
-                        <label class="flex items-start gap-2.5 p-3 rounded-xl border border-indigo-300 bg-indigo-50/40 hover:bg-indigo-50/70 cursor-pointer transition">
+                        <label class="flex items-start gap-2 p-2.5 rounded-xl border border-indigo-300 bg-indigo-50/40 hover:bg-indigo-50/70 cursor-pointer transition">
                             <input type="radio" name="modal_activity_mode" value="global" checked onchange="toggleActivityMode()"
                                    class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
-                            <div class="flex-1">
+                            <div class="flex-1 min-w-0">
                                 <div class="flex items-center gap-1.5">
                                     <span class="font-bold text-slate-900 text-xs">🌐 Use Global NCERT Exemplar Activities</span>
-                                    <span class="text-[9px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.2 rounded">Recommended</span>
+                                    <span class="text-[8px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.2 rounded">Recommended</span>
                                 </div>
-                                <p class="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
-                                    Automatically populates official NCF-SE activities for the entire class. Titles, approaches, rubrics, self-reflections, peer feedback, and teacher support plans are pre-filled so you only need to review or tweak in Excel.
+                                <p class="text-[10px] text-slate-600 mt-0.5 leading-relaxed">
+                                    Automatically populates official NCF-SE activities for the entire class. Titles, rubrics, self-reflections, peer feedback, and support plans are pre-filled so you only review or tweak in Excel.
                                 </p>
 
                                 <!-- Activity Preset Dropdowns -->
-                                <div id="modal-presets-wrapper" class="mt-2.5 pt-2 border-t border-indigo-200/60">
-                                    <div class="text-[10px] font-bold uppercase tracking-wider text-indigo-900 mb-1">Select Class Activity Theme:</div>
+                                <div id="modal-presets-wrapper" class="mt-2 pt-1.5 border-t border-indigo-200/60">
+                                    <div class="text-[9px] font-bold uppercase tracking-wider text-indigo-900 mb-1">Select Class Activity Theme:</div>
                                     
                                     <!-- Middle Stage Presets -->
-                                    <select id="modal-preset-middle" class="w-full text-xs font-semibold bg-white border border-indigo-200 rounded-lg p-2 text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                    <select id="modal-preset-middle" class="w-full text-xs font-semibold bg-white border border-indigo-200 rounded-lg p-1.5 text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
                                         <option value="science_solar">🔬 Science: Solar System 3D Model &amp; Daily Life Geometry (Art-Integrated)</option>
                                         <option value="math_geometry">📐 Mathematics: Geometric Symmetry &amp; Garden Mapping (Toy-Based)</option>
                                         <option value="social_heritage">🌍 Social Science: Unity in Diversity &amp; Heritage Mapping (Experiential)</option>
@@ -1230,7 +1231,7 @@
                                     </select>
 
                                     <!-- Preparatory Stage Presets -->
-                                    <select id="modal-preset-prep" class="w-full text-xs font-semibold bg-white border border-indigo-200 rounded-lg p-2 text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 hidden">
+                                    <select id="modal-preset-prep" class="w-full text-xs font-semibold bg-white border border-indigo-200 rounded-lg p-1.5 text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 hidden">
                                         <option value="evs_nature">🌿 The World Around Us: Plant Seed Germination &amp; Nature Study (Inquiry-Based)</option>
                                         <option value="math_shapes">📐 Mathematics: Geometric Shapes, Toy-Clock &amp; Measuring (Toy-Based)</option>
                                         <option value="lang_folktale">📖 Language 1: Regional Folktale Dramatization &amp; Puppet Theatre (Art-Integrated)</option>
@@ -1240,12 +1241,12 @@
                         </label>
 
                         <!-- Option 2: Blank / Manual Activities -->
-                        <label class="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 cursor-pointer transition">
+                        <label class="flex items-start gap-2 p-2.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 cursor-pointer transition">
                             <input type="radio" name="modal_activity_mode" value="manual" onchange="toggleActivityMode()"
                                    class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
-                            <div class="flex-1">
+                            <div class="flex-1 min-w-0">
                                 <span class="font-bold text-slate-800 text-xs">✍️ Blank Activities (Manual Entry in Excel)</span>
-                                <p class="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                <p class="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
                                     Leaves Part-B activity columns blank with dropdown rules enabled so you can write custom school projects completely from scratch.
                                 </p>
                             </div>
@@ -1254,50 +1255,54 @@
                 </div>
 
                 <!-- STEP B: Auto-Fill Mode -->
-                <div class="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl">
-                    <label class="flex items-start gap-2.5 cursor-pointer">
+                <div class="p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+                    <label class="flex items-start gap-2 cursor-pointer">
                         <input type="checkbox" id="modal-auto-fill" checked
                                class="mt-0.5 text-emerald-600 rounded focus:ring-emerald-500">
-                        <div class="flex-1">
+                        <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-1.5">
                                 <span class="font-bold text-emerald-950 text-xs">⚡ Automatically Pre-Fill All Student Evaluations</span>
-                                <span class="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">Zero Blank Cells</span>
+                                <span class="text-[8px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">Zero Blank Cells</span>
                             </div>
-                            <p class="text-[11px] text-emerald-900/80 mt-1 leading-relaxed">
+                            <p class="text-[10px] text-emerald-900/80 mt-0.5 leading-relaxed">
                                 Fully populates monthly attendance (~95%), Part-A2 learner voice, Part-A3 ambition cards, Part-A4 parent partnership, and subject marks (40–48/50).
                             </p>
-                            <p class="text-[10px] text-emerald-700 font-semibold mt-1">
+                            <p class="text-[9px] text-emerald-700 font-semibold mt-0.5">
                                 💡 Result: The Excel is 100% valid out of the box! You only need to verify, tweak individual scores or remarks if needed, and upload back.
                             </p>
                         </div>
                     </label>
                 </div>
 
-                <!-- 3-Sheet Workbook Tip -->
-                <div class="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-1">
-                    <div class="flex items-center gap-1.5 font-bold text-indigo-950 text-xs">
-                        <span>📑 All-in-One 3-Sheet Workbook Included</span>
-                        <span class="text-[9px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.2 rounded">New</span>
+                <!-- 3-Sheet Workbook Instructions (Clickable Accordion) -->
+                <details class="group rounded-xl border border-indigo-200 bg-indigo-50/60 overflow-hidden transition">
+                    <summary class="p-2.5 flex items-center justify-between cursor-pointer font-bold text-xs text-indigo-950 hover:bg-indigo-100/60 select-none list-none">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-sm">📑</span>
+                            <span>All-in-One 3-Sheet Workbook Included</span>
+                            <span class="text-[9px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded">Click to View Details</span>
+                        </div>
+                        <span class="text-[10px] text-indigo-600 transition-transform duration-200 group-open:rotate-180">▼</span>
+                    </summary>
+                    <div class="px-3 pb-2.5 pt-1 text-[10px] sm:text-[11px] text-indigo-900/80 leading-relaxed space-y-1 border-t border-indigo-200/60 bg-white/70">
+                        <p>• <strong>Sheet 1: Manual Entry (Blank):</strong> All enrolled students ready for manual evaluation data entry with dropdown lists &amp; empty-cell alerts.</p>
+                        <p>• <strong>Sheet 2: Pre-Filled (Auto-Fill):</strong> 100% complete baseline evaluation (~95% attendance, rubric ratings, marks 40–48/50, remarks).</p>
+                        <p>• <strong>Sheet 3: Instructions &amp; Rules:</strong> Detailed validation rules and permitted values for every part (A1 to E).</p>
+                        <p>• <strong>Focus Frozen Pane:</strong> Only <strong>Student Name</strong> is visible on the frozen left pane (click <strong>[+]</strong> in Excel to show APAAR &amp; Login IDs anytime).</p>
+                        <p>• <strong>Fixed Part Headings:</strong> Row 1 permanently locks part headers (e.g. <code>Part A(2) All About Me</code>) on every column so they never scroll off.</p>
                     </div>
-                    <p class="text-[11px] text-indigo-900/80 leading-relaxed">
-                        • <strong>Sheet 1: Manual Entry (Blank):</strong> All enrolled students ready for manual evaluation data entry with dropdown lists &amp; empty-cell alerts.<br>
-                        • <strong>Sheet 2: Pre-Filled (Auto-Fill):</strong> 100% complete baseline evaluation (~95% attendance, rubric ratings, marks 40–48/50, remarks).<br>
-                        • <strong>Sheet 3: Instructions &amp; Rules:</strong> Detailed validation rules and permitted values for every part (A1 to E).<br>
-                        • <strong>Focus Frozen Pane:</strong> Only <strong>Student Name</strong> is visible on the frozen left pane (click <strong>[+]</strong> in Excel to show APAAR &amp; Login IDs anytime).<br>
-                        • <strong>Fixed Part Headings:</strong> Row 1 permanently locks part headers (e.g. <code>Part A(2) All About Me</code>) on every column so they never scroll off.
-                    </p>
-                </div>
+                </details>
             </div>
 
-            <!-- Modal Footer -->
-            <div class="bg-slate-50 px-5 py-3 border-t border-slate-200 flex items-center justify-between gap-2">
+            <!-- Modal Footer (Always Visible on Screen) -->
+            <div class="bg-slate-50 px-4 py-2.5 sm:py-3 border-t border-slate-200 flex items-center justify-between gap-2 flex-shrink-0">
                 <button type="button" onclick="closeConfigureTemplateModal()"
-                        class="px-3.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold transition">
+                        class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold transition">
                     Cancel
                 </button>
                 <button type="button" onclick="executeTemplateDownload()"
                         class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition hover:shadow inline-flex items-center gap-1.5">
-                    <span>📥 Download Pre-Filled Excel (.xlsx)</span>
+                    <span>📥 Download Excel Workbook (.xlsx)</span>
                 </button>
             </div>
         </div>

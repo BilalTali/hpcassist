@@ -129,6 +129,20 @@
         }
     }
 
+    function isLanguageOrHeaderElement(el) {
+        if (!el) return false;
+        if (el.closest('header, nav, .navbar, .top-bar, .header, #hpc-status-widget, [class*="navbar" i], [class*="topbar" i], [class*="header" i]')) {
+            return true;
+        }
+        const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+        const id = (el.id || '').toLowerCase();
+        const cls = (el.className || '').toLowerCase();
+        const name = (el.name || '').toLowerCase();
+        if (id.includes('lang') || cls.includes('lang') || name.includes('lang') || id.includes('screen-reader')) return true;
+        if (txt === 'en' || txt === 'hi' || txt === 'hindi' || txt === 'english' || txt.includes('भाषा') || txt.includes('language') || txt.includes('स्क्रीन रीडर')) return true;
+        return false;
+    }
+
     function setNativeValue(element, value) {
         if (!element) return;
         element.focus();
@@ -1112,7 +1126,7 @@
                         ${activeLabel}
                         <span style="color: #1e40af; font-weight: 700; margin-left: 4px;">${progressCount}</span>
                     </span>
-                    <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.2.7</span>
+                    <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.2.8</span>
                     <span style="font-size: 9px; padding: 2px 7px; border-radius: 8px; font-weight: 700; background: ${isAnyRunning ? '#dbeafe' : '#dcfce7'}; color: ${isAnyRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isAnyRunning ? '#bfdbfe' : '#bbf7d0'};">
                         ${isAnyRunning ? '⚡ RUNNING' : 'READY'}
                     </span>
@@ -1147,7 +1161,7 @@
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="font-size: 16px;">👩‍🏫</span>
                             <strong style="font-weight: 800; font-size: 13px; color: #0f172a; letter-spacing: -0.2px;">Teacher Evaluation</strong>
-                            <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.2.7</span>
+                            <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.2.8</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 10px; background: ${isTeacherRunning ? '#dbeafe' : '#dcfce7'}; color: ${isTeacherRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isTeacherRunning ? '#bfdbfe' : '#bbf7d0'}; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
@@ -1235,7 +1249,7 @@
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span style="font-size: 16px;">🚀</span>
                         <strong style="font-weight: 800; font-size: 13px; color: #0f172a; letter-spacing: -0.2px;">HPC Assist Submitter</strong>
-                        <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.2.7</span>
+                        <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.2.8</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="font-size: 10px; background: ${isRunning ? '#dbeafe' : '#dcfce7'}; color: ${isRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isRunning ? '#bfdbfe' : '#bbf7d0'}; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
@@ -2303,19 +2317,14 @@
             await sleep(500);
             const candidates = Array.from(document.querySelectorAll('button, a[role="button"], input[type="button"], input[type="submit"], .btn'));
 
-            // Priority 1: Text contains 'continue' and strictly does NOT contain 'draft' or 'back'
+            // Priority 1: Text contains 'continue' or 'next' or Hindi 'जारी रखें' or 'आगे बढ़ें' or 'अगला'
             continueBtn = candidates.find(b => {
+                if (isLanguageOrHeaderElement(b)) return false;
                 const t = (b.innerText || b.value || '').trim().toLowerCase();
-                return t.includes('continue') && !t.includes('draft') && !t.includes('back');
+                const isBack = t.includes('draft') || t.includes('back') || t.includes('वापस') || t.includes('रद्द');
+                const isCont = t.includes('continue') || t.includes('next') || t.includes('जारी रखें') || t.includes('आगे बढ़ें') || t.includes('अगला');
+                return isCont && !isBack;
             });
-
-            // Priority 2: Text contains 'next' and does NOT contain 'draft'
-            if (!continueBtn) {
-                continueBtn = candidates.find(b => {
-                    const t = (b.innerText || b.value || '').trim().toLowerCase();
-                    return t.includes('next') && !t.includes('draft') && !t.includes('page') && !t.includes('back');
-                });
-            }
 
             if (continueBtn && !continueBtn.disabled) break;
         }
@@ -2349,7 +2358,7 @@
                 const modal = document.querySelector('.modal, .swal2-popup, [role="dialog"], .fade.show');
                 if (modal) {
                     const confirmBtn = Array.from(modal.querySelectorAll('button')).find(b => 
-                        /proceed|continue|yes|ok|confirm/i.test((b.innerText || '').trim())
+                        /proceed|continue|yes|ok|confirm|हाँ|पुष्टि|आगे बढ़ें|पूर्ण/i.test((b.innerText || '').trim())
                     );
                     if (confirmBtn) {
                         confirmBtn.click();
@@ -2792,29 +2801,55 @@
         const actLearnt = s.act_learnt || 'Learned plant germination stages, botanical measurement, and collaborative teamwork';
         const actInteresting = s.act_interesting || 'Observing seeds sprout and recording growth measurements';
         const actPractice = s.act_practice || 'Time management during daily data recording';
+        const actHelp = s.act_help || 'Advanced plant classification and collaborative experiment design';
         const actSupportPlan = s.act_support_plan || 'Provide advanced learning challenges and continuous positive encouragement';
+        const peerName = s.act_peer_name || 'Ayaan Ahmad';
+        const peerFeedback = s.act_peer_feedback || 'Very supportive teammate during group work';
 
         // ─────────────────────────────────────────────────────────────
-        // Step Navigator: Clicks Step 1..6 based on DOM inspection
+        // Step Navigator: Clicks Step 1..6 (Immune to language & header)
         // ─────────────────────────────────────────────────────────────
-        const goToStep = async (stepNum, keywords) => {
-            logStatus(`[Part-B] Activating Step ${stepNum} (${keywords[0]})...`);
-            
-            const allElements = Array.from(document.querySelectorAll('div, button, li, a, span, p'));
-            let match = allElements.find(el => {
+        const goToStep = async (stepNum, keywords = []) => {
+            logStatus(`[Part-B] Activating Step ${stepNum}...`);
+
+            // Safe elements: STRICTLY exclude headers, navbars, breadcrumbs, and widget
+            const safeElements = Array.from(document.querySelectorAll('div, button, li, a, [role="tab"], [role="button"]')).filter(el => {
+                if (isLanguageOrHeaderElement(el)) return false;
+                if (el.closest('.breadcrumb, [class*="breadcrumb" i]')) return false;
                 const t = (el.innerText || '').trim().replace(/\s+/g, ' ');
-                if (t.length < 3 || t.length > 60) return false;
-                const hasNum = new RegExp(`(^|\\s|\\()${stepNum}(\\)|\\s|$)`).test(t) || t.startsWith(String(stepNum));
-                const hasKw = keywords.some(k => t.toLowerCase().includes(k.toLowerCase()));
-                return hasNum && hasKw;
+                if (t.length < 1 || t.length > 70) return false;
+                return true;
             });
 
+            // 1. Primary: Match middle-column step container starting with stepNum (e.g. "1 Activity...", "1 गतिविधि...", "1")
+            let match = safeElements.find(el => {
+                const t = (el.innerText || '').trim().replace(/\s+/g, ' ');
+                const startsWithNum = new RegExp(`^\\s*\\(?${stepNum}\\)?[\\s\\.\\-\\–\\:]+`).test(t) || t === String(stepNum);
+                const parentText = (el.parentElement?.innerText || '') + ' ' + (el.parentElement?.parentElement?.innerText || '');
+                const isInStepList = parentText.includes(String(stepNum === 1 ? 2 : 1)) || parentText.includes('6');
+                return startsWithNum && isInStepList;
+            });
+
+            // 2. Secondary: Keyword match (English or Hindi)
+            if (!match && keywords.length > 0) {
+                match = safeElements.find(el => {
+                    const t = (el.innerText || '').trim().toLowerCase();
+                    const hasNum = new RegExp(`(^|\\s|\\()${stepNum}(\\)|\\s|$)`).test(t) || t.startsWith(String(stepNum));
+                    const hasKw = keywords.some(k => t.includes(k.toLowerCase()));
+                    return hasNum && hasKw;
+                });
+            }
+
+            // 3. Tertiary: Circle badge with exact digit stepNum in the step list
             if (!match) {
-                const badge = Array.from(document.querySelectorAll('span, div, p')).find(el => {
-                    return el.children.length === 0 && (el.innerText || '').trim() === String(stepNum);
+                const badge = safeElements.find(el => {
+                    const t = (el.innerText || '').trim();
+                    if (t !== String(stepNum) || el.children.length > 0) return false;
+                    const pText = (el.parentElement?.parentElement?.innerText || '');
+                    return (pText.includes('1') && pText.includes('2')) || pText.includes('6');
                 });
                 if (badge) {
-                    match = badge.closest('button, [role="tab"], [role="button"], li') || badge.parentElement;
+                    match = badge.closest('button, [role="tab"], [role="button"], li, div') || badge.parentElement;
                 }
             }
 
@@ -2848,15 +2883,16 @@
 
         const processActivityTabs = async () => {
             // ─────────────────────────────────────────────────────────
-            // 1. TARGET STEP 1: Activity Details
+            // 1. TARGET STEP 1: Activity Details / गतिविधि विवरण
             // ─────────────────────────────────────────────────────────
-            await goToStep(1, ['Activity Details', 'Details']);
-            await sleep(400);
+            await goToStep(1, ['Activity Details', 'Details', 'गतिविधि विवरण', 'विवरण']);
+            await sleep(500);
             const nameInp = document.querySelector('input[placeholder*="Activity Name" i], .acivity-name-updates input, input[name*="activity_name" i], input[type="text"]');
             if (nameInp && (!nameInp.value || nameInp.value.trim() === '')) {
                 setNativeValue(nameInp, actTitle);
             }
             document.querySelectorAll('input[type="checkbox"]').forEach((cb, i) => {
+                if (isLanguageOrHeaderElement(cb)) return;
                 if (i < 2 && !cb.checked) {
                     cb.click();
                     cb.checked = true;
@@ -2868,22 +2904,22 @@
             await sleep(600);
 
             // ─────────────────────────────────────────────────────────
-            // 2. TARGET STEP 2: Subject, CG & Competencies
+            // 2. TARGET STEP 2: Subject, CG & Competencies / विषय, CG और क्षमताएँ
             // ─────────────────────────────────────────────────────────
-            await goToStep(2, ['Subject', 'CG', 'Competencies']);
+            await goToStep(2, ['Subject', 'CG', 'Competencies', 'विषय', 'क्षमता']);
             await sleep(600);
 
-            // Custom Dropdowns (Domain / Subject / CG)
-            const wrappers = Array.from(document.querySelectorAll('.custom-dropdown-wrapper, .scroller-cg-domain .custom-dropdown-wrapper'));
+            // Custom Dropdowns (Domain / Subject / CG) - strictly exclude header/nav!
+            const wrappers = Array.from(document.querySelectorAll('.custom-dropdown-wrapper, .scroller-cg-domain .custom-dropdown-wrapper')).filter(w => !isLanguageOrHeaderElement(w));
             for (const wrapper of wrappers) {
                 const header = wrapper.querySelector('.custom-dropdown-header');
                 if (header) {
                     header.click();
                     await sleep(350);
-                    const items = Array.from(document.querySelectorAll('.custom-dropdown-item'));
+                    const items = Array.from(document.querySelectorAll('.custom-dropdown-item')).filter(it => !isLanguageOrHeaderElement(it));
                     const targetDomain = items.find(el => {
                         const txt = el.innerText.trim().toLowerCase();
-                        return txt.includes('world') || txt.includes(actSubject.slice(0, 4).toLowerCase());
+                        return txt.includes('world') || txt.includes('चारों ओर') || txt.includes(actSubject.slice(0, 4).toLowerCase());
                     }) || items[0];
                     if (targetDomain) {
                         targetDomain.click();
@@ -2892,8 +2928,9 @@
                 }
             }
 
-            // Native Select Dropdowns
+            // Native Select Dropdowns - strictly exclude language selects!
             document.querySelectorAll('select').forEach(sel => {
+                if (isLanguageOrHeaderElement(sel)) return;
                 if (!sel.value || sel.selectedIndex <= 0) {
                     sel.selectedIndex = Math.min(1, sel.options.length - 1);
                     sel.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2901,8 +2938,8 @@
                 }
             });
 
-            // Ensure Competencies are checked
-            const cpts = Array.from(document.querySelectorAll('input[name="cpt"], input[type="checkbox"][id*="cpt" i], .scroller-container input[type="checkbox"], input[type="checkbox"]'));
+            // Competencies checkboxes
+            const cpts = Array.from(document.querySelectorAll('input[type="checkbox"]')).filter(cb => !isLanguageOrHeaderElement(cb));
             if (cpts.length > 0 && !cpts.some(c => c.checked)) {
                 cpts[0].click();
                 cpts[0].checked = true;
@@ -2919,17 +2956,19 @@
             await sleep(600);
 
             // ─────────────────────────────────────────────────────────
-            // 3. TARGET STEP 3: Activity & Assessment Qs
+            // 3. TARGET STEP 3: Activity & Assessment Qs / गतिविधि और मूल्यांकन प्रश्न
             // ─────────────────────────────────────────────────────────
-            await goToStep(3, ['Assessment Qs', 'Activity & Assessment', 'Questions']);
+            await goToStep(3, ['Assessment Qs', 'Activity & Assessment', 'Questions', 'मूल्यांकन प्रश्न', 'प्रश्न']);
             await sleep(600);
 
-            document.querySelectorAll('.appropriate-option-select li, ul.options-list li, .rubric-item button, [role="option"]').forEach((el, i) => {
+            // Click option list items (strictly excluding header/nav)
+            document.querySelectorAll('.appropriate-option-select li, ul.options-list li, .rubric-item button').forEach((el, i) => {
+                if (isLanguageOrHeaderElement(el)) return;
                 if (i < 3) el.click();
             });
 
-            // Group radio buttons in Step 3 by row / Y coordinate
-            const tab3Radios = Array.from(document.querySelectorAll('input[type="radio"], [role="radio"]'));
+            // Group radio buttons in Step 3 by row / Y coordinate (excluding header/nav)
+            const tab3Radios = Array.from(document.querySelectorAll('input[type="radio"], [role="radio"]')).filter(r => !isLanguageOrHeaderElement(r));
             const t3Groups = [];
             tab3Radios.forEach(r => {
                 const rect = r.getBoundingClientRect();
@@ -2950,7 +2989,7 @@
             t3Groups.forEach(grp => {
                 const list = grp.radios;
                 if (!list.some(r => r.checked || r.getAttribute('aria-checked') === 'true')) {
-                    const target = list.find(r => /prof|2|yes/i.test(r.value || '')) || list[Math.min(1, list.length - 1)] || list[0];
+                    const target = list.find(r => /prof|2|yes|हाँ|प्रवीण/i.test(r.value || '')) || list[Math.min(1, list.length - 1)] || list[0];
                     if (target) {
                         target.click();
                         target.checked = true;
@@ -2961,6 +3000,7 @@
             });
 
             document.querySelectorAll('textarea').forEach(ta => {
+                if (isLanguageOrHeaderElement(ta)) return;
                 if (!ta.value || ta.value.trim() === '') {
                     setNativeValue(ta, actDesc);
                 }
@@ -2969,16 +3009,15 @@
             await sleep(600);
 
             // ─────────────────────────────────────────────────────────
-            // 4. TARGET STEP 4: Assessment Rubric (AWARENESS, SENSITIVITY, CREATIVITY)
+            // 4. TARGET STEP 4: Assessment Rubric / मूल्यांकन रूब्रिक
             // ─────────────────────────────────────────────────────────
-            await goToStep(4, ['Assessment Rubric', 'Rubric']);
+            await goToStep(4, ['Assessment Rubric', 'Rubric', 'मूल्यांकन रूब्रिक', 'रूब्रिक']);
             await sleep(800);
 
-            // Find ALL radio inputs in Step 4
-            const step4Radios = Array.from(document.querySelectorAll('input[type="radio"], [role="radio"], .form-check-input'));
+            // Find ALL radio inputs in Step 4 (excluding header/nav)
+            const step4Radios = Array.from(document.querySelectorAll('input[type="radio"], [role="radio"], .form-check-input')).filter(r => !isLanguageOrHeaderElement(r));
 
-            // Group radios by vertical row (top coordinate) or parent row container
-            // This is 100% tag-agnostic and guarantees Row 1, Row 2, Row 3 all form separate groups!
+            // Group radios by vertical row (top coordinate)
             const rubricGroups = [];
             step4Radios.forEach(r => {
                 const rect = r.getBoundingClientRect();
@@ -2998,7 +3037,7 @@
 
             logStatus(`[Part-B] Step 4: Identified ${rubricGroups.length} rubric rows.`);
 
-            // Fill EVERY row with Proficient (or specific level)
+            // Fill EVERY row with Proficient (Row 0: Awareness, Row 1: Sensitivity, Row 2: Creativity)
             rubricGroups.forEach((grp, idx) => {
                 let targetLvl = actLevel;
                 if (idx === 0) targetLvl = actAwr;
@@ -3009,9 +3048,9 @@
                 let chosen = radios.find(r => {
                     const val = (r.value || '').toLowerCase();
                     const lbl = (r.closest('label')?.innerText || r.parentElement?.innerText || '').toLowerCase();
-                    if (targetLvl.includes('begin')) return val.includes('begin') || val === '0' || val === '1' || lbl.includes('begin');
-                    if (targetLvl.includes('adv')) return val.includes('adv') || val === '3' || lbl.includes('adv');
-                    return val.includes('prof') || val === '2' || lbl.includes('prof');
+                    if (targetLvl.includes('begin') || targetLvl.includes('प्रारंभिक')) return val.includes('begin') || val === '0' || val === '1' || lbl.includes('begin') || lbl.includes('प्रारंभिक');
+                    if (targetLvl.includes('adv') || targetLvl.includes('उन्नत')) return val.includes('adv') || val === '3' || lbl.includes('adv') || lbl.includes('उन्नत');
+                    return val.includes('prof') || val === '2' || lbl.includes('prof') || lbl.includes('प्रवीण');
                 });
 
                 if (!chosen) {
@@ -3034,10 +3073,10 @@
                 }
             });
 
-            // Explicit keyword search fallback for Awareness, Sensitivity, Creativity / Novelty
-            ['awareness', 'sensitivity', 'creativity', 'attempts to add', 'adds new', 'expression'].forEach(keyword => {
+            // Explicit keyword search fallback (English & Hindi)
+            ['awareness', 'sensitivity', 'creativity', 'attempts to add', 'adds new', 'expression', 'जागरूकता', 'संवेदनशीलता', 'रचनात्मकता'].forEach(keyword => {
                 const els = Array.from(document.querySelectorAll('*')).filter(el => {
-                    if (el.children.length > 2) return false;
+                    if (isLanguageOrHeaderElement(el) || el.children.length > 2) return false;
                     const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
                     return txt.includes(keyword) && txt.length < 80;
                 });
@@ -3046,7 +3085,7 @@
                     if (row) {
                         const radios = Array.from(row.querySelectorAll('input[type="radio"], [role="radio"], .form-check-input'));
                         if (radios.length > 0 && !radios.some(r => r.checked)) {
-                            const prof = radios.find(r => /prof|2|yes/i.test(r.value || '')) || radios[Math.min(1, radios.length - 1)] || radios[0];
+                            const prof = radios.find(r => /prof|2|yes|प्रवीण/i.test(r.value || '')) || radios[Math.min(1, radios.length - 1)] || radios[0];
                             if (prof) {
                                 prof.click();
                                 prof.checked = true;
@@ -3062,12 +3101,13 @@
 
             // Table rows fallback: ensure every row has a checked radio
             const rubricRows = Array.from(document.querySelectorAll('table tbody tr, table tr')).filter(tr => {
+                if (isLanguageOrHeaderElement(tr)) return false;
                 return !tr.querySelector('th') || tr.querySelectorAll('td').length >= 2;
             });
             rubricRows.forEach(row => {
                 const radios = Array.from(row.querySelectorAll('input[type="radio"], input[type="checkbox"], .form-check-input, [role="radio"]'));
                 if (radios.length > 0 && !radios.some(r => r.checked)) {
-                    const chosen = radios.find(r => /prof|2|yes/i.test(r.value || '')) || radios[Math.min(1, radios.length - 1)] || radios[0];
+                    const chosen = radios.find(r => /prof|2|yes|प्रवीण/i.test(r.value || '')) || radios[Math.min(1, radios.length - 1)] || radios[0];
                     if (chosen) {
                         chosen.click();
                         chosen.checked = true;
@@ -3078,15 +3118,16 @@
                     }
                 }
             });
-            logStatus('[Part-B] ✓ Step 4 (Assessment Rubric: Awareness, Sensitivity, Creativity) fully filled!');
+            logStatus('[Part-B] ✓ Step 4 (Assessment Rubric) fully filled!');
             await sleep(600);
 
             // ─────────────────────────────────────────────────────────
-            // 5. TARGET STEP 5: Observational Notes
+            // 5. TARGET STEP 5: Observational Notes / अवलोकन नोट्स
             // ─────────────────────────────────────────────────────────
-            await goToStep(5, ['Observational Notes', 'Notes']);
+            await goToStep(5, ['Observational Notes', 'Notes', 'अवलोकन नोट्स', 'नोट्स', 'अवलोकन']);
             await sleep(600);
             document.querySelectorAll('select').forEach((sel, i) => {
+                if (isLanguageOrHeaderElement(sel)) return;
                 if (!sel.value || sel.selectedIndex <= 0) {
                     sel.selectedIndex = Math.min(1, sel.options.length - 1);
                     sel.dispatchEvent(new Event('input', { bubbles: true }));
@@ -3095,9 +3136,10 @@
             });
             // Fill all textareas & inputs in Step 5 (both top note and grid below)
             document.querySelectorAll('textarea').forEach((ta, idx) => {
+                if (isLanguageOrHeaderElement(ta)) return;
                 const p = (ta.placeholder || '').toLowerCase();
                 let note = actDesc;
-                if (idx === 1 || p.includes('plan') || p.includes('support')) {
+                if (idx === 1 || p.includes('plan') || p.includes('support') || p.includes('योजना')) {
                     note = actSupportPlan;
                 }
                 if (!ta.value || ta.value.trim() === '') {
@@ -3105,6 +3147,7 @@
                 }
             });
             document.querySelectorAll('input[type="text"]').forEach((inp, i) => {
+                if (isLanguageOrHeaderElement(inp)) return;
                 if (!inp.value || inp.value.trim() === '') {
                     setNativeValue(inp, i === 0 ? 'Observation of natural plant growth in school environment' : 'Active engagement and consistent effort');
                 }
@@ -3113,33 +3156,108 @@
             await sleep(600);
 
             // ─────────────────────────────────────────────────────────
-            // 6. TARGET STEP 6: Self Assessment
+            // 6. TARGET STEP 6: Self Assessment / स्व-मूल्यांकन (COMPLETE COVERAGE)
             // ─────────────────────────────────────────────────────────
-            await goToStep(6, ['Self Assessment', 'Self']);
-            await sleep(600);
-            document.querySelectorAll('input[type="radio"]').forEach((r, idx) => {
-                if (!r.checked && (idx % 2 === 0 || r.value === 'yes' || r.value === '1')) {
-                    r.click();
-                    r.checked = true;
-                    r.dispatchEvent(new Event('input', { bubbles: true }));
-                    r.dispatchEvent(new Event('change', { bubbles: true }));
+            await goToStep(6, ['Self Assessment', 'Self', 'स्व-मूल्यांकन', 'मूल्यांकन']);
+            await sleep(800);
+
+            // 6a. Fill ALL Radio Groups in Step 6 (Proud of Effort, Real Life, Motivated to Learn, etc.)
+            const step6Radios = Array.from(document.querySelectorAll('input[type="radio"], [role="radio"]')).filter(r => !isLanguageOrHeaderElement(r));
+            const step6Groups = [];
+            step6Radios.forEach(r => {
+                const rect = r.getBoundingClientRect();
+                const parent = r.closest('tr, [role="row"], fieldset, [role="radiogroup"], .form-group, .card, .row, li');
+                let g = step6Groups.find(grp => {
+                    if (r.name && grp.name && r.name === grp.name) return true;
+                    if (parent && grp.parent && parent === grp.parent) return true;
+                    if (Math.abs(rect.top - grp.top) < 22) return true;
+                    return false;
+                });
+                if (!g) {
+                    g = { name: r.name, parent, top: rect.top, radios: [] };
+                    step6Groups.push(g);
+                }
+                g.radios.push(r);
+            });
+
+            step6Groups.forEach(grp => {
+                const list = grp.radios;
+                if (!list.some(r => r.checked || r.getAttribute('aria-checked') === 'true')) {
+                    // Pick Yes / हाँ / Option 0
+                    const target = list.find(r => {
+                        const v = (r.value || '').toLowerCase();
+                        const lbl = (r.closest('label')?.innerText || r.parentElement?.innerText || '').toLowerCase();
+                        return /yes|हाँ|1|true/i.test(v) || /yes|हाँ/i.test(lbl);
+                    }) || list[0];
+
+                    if (target) {
+                        try { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+                        target.click();
+                        target.checked = true;
+                        target.setAttribute('aria-checked', 'true');
+                        target.dispatchEvent(new Event('input', { bubbles: true }));
+                        target.dispatchEvent(new Event('change', { bubbles: true }));
+                        const pLabel = target.closest('label, td, div');
+                        if (pLabel && pLabel !== target) pLabel.click();
+                    }
                 }
             });
-            document.querySelectorAll('textarea').forEach(ta => {
+
+            // 6b. Click pill/chip options if questions are formatted as buttons
+            document.querySelectorAll('.appropriate-option-select li, ul.options-list li, button.btn-outline, .pill, .chip').forEach((btn, idx) => {
+                if (isLanguageOrHeaderElement(btn)) return;
+                const txt = (btn.innerText || '').trim().toLowerCase();
+                if (txt.includes('yes') || txt.includes('हाँ') || idx === 0) {
+                    try { btn.click(); } catch(e) {}
+                }
+            });
+
+            // 6c. Fill ALL Textareas in Step 6 (Learnt, Interesting, Practice, Help)
+            const step6Textareas = Array.from(document.querySelectorAll('textarea')).filter(ta => !isLanguageOrHeaderElement(ta));
+            step6Textareas.forEach((ta, idx) => {
                 if (!ta.value || ta.value.trim() === '') {
-                    setNativeValue(ta, actLearnt || 'Learned practical observation skills, plant germination stages, and working cooperatively with classmates.');
+                    let noteVal = actLearnt;
+                    if (idx === 1) noteVal = actInteresting;
+                    else if (idx === 2) noteVal = actPractice;
+                    else if (idx === 3) noteVal = actHelp;
+                    setNativeValue(ta, noteVal);
                 }
             });
-            logStatus('[Part-B] ✓ Step 6 (Self Assessment) filled.');
+
+            // 6d. Fill ALL Text Inputs in Step 6 (Inputs for Learnt, Practice, Peer Name, Peer Feedback)
+            const step6Inputs = Array.from(document.querySelectorAll('input[type="text"]')).filter(inp => !isLanguageOrHeaderElement(inp));
+            step6Inputs.forEach((inp, idx) => {
+                if (!inp.value || inp.value.trim() === '') {
+                    let val = actLearnt;
+                    if (idx === 1) val = actInteresting;
+                    else if (idx === 2) val = actPractice;
+                    else if (idx === 3) val = peerName;
+                    else if (idx === 4) val = peerFeedback;
+                    setNativeValue(inp, val);
+                }
+            });
+
+            // 6e. Select Dropdowns in Step 6
+            document.querySelectorAll('select').forEach(sel => {
+                if (isLanguageOrHeaderElement(sel)) return;
+                if (!sel.value || sel.selectedIndex <= 0) {
+                    sel.selectedIndex = Math.min(1, sel.options.length - 1);
+                    sel.dispatchEvent(new Event('input', { bubbles: true }));
+                    sel.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+
+            logStatus('[Part-B] ✓ Step 6 (Self & Peer Assessment) fully completed!');
             await sleep(800);
 
             // ─────────────────────────────────────────────────────────
-            // 7. THEN FINISH: Click "Finish Activity"
+            // 7. THEN FINISH: Click "Finish Activity" / गतिविधि पूर्ण करें
             // ─────────────────────────────────────────────────────────
             logStatus('[Part-B] Clicking "Finish Activity" button...');
             const finishBtns = Array.from(document.querySelectorAll('button, a[role="button"], .btn')).filter(b => {
+                if (isLanguageOrHeaderElement(b)) return false;
                 const t = (b.innerText || '').trim().toLowerCase();
-                return t.includes('finish activity') || t.includes('complete activity');
+                return t.includes('finish activity') || t.includes('complete activity') || t.includes('गतिविधि पूर्ण') || t.includes('पूर्ण करें');
             });
             const finishBtn = finishBtns[0] || document.querySelector('.hpc-finish-activity-btn');
             if (finishBtn && !finishBtn.disabled) {
@@ -3161,7 +3279,7 @@
                     const modal = document.querySelector('.modal, .swal2-popup, [role="dialog"], .fade.show');
                     if (modal) {
                         const confirmBtn = Array.from(modal.querySelectorAll('button')).find(b => 
-                            /finish|yes|confirm|proceed|ok|complete/i.test((b.innerText || '').trim())
+                            /finish|yes|confirm|proceed|ok|complete|हाँ|पुष्टि|आगे बढ़ें|पूर्ण/i.test((b.innerText || '').trim())
                         );
                         if (confirmBtn) {
                             confirmBtn.click();
@@ -3179,10 +3297,11 @@
 
         // Check if there is an uncompleted Activity 2 in the sidebar
         const sidebarActItems = Array.from(document.querySelectorAll('div, li, button, a')).filter(el => {
+            if (isLanguageOrHeaderElement(el)) return false;
             const t = (el.innerText || '').trim();
             if (el.children.length > 2 || t.length > 60 || t.length < 3) return false;
             const isAct = t.includes('WCG') || t.includes('TWCG') || t.includes('C-1') || t.includes('C-2') || /activity\s*\d/i.test(t);
-            const isAdd = t.includes('Add Activity');
+            const isAdd = t.includes('Add Activity') || t.includes('गतिविधि जोड़ें');
             return isAct && !isAdd;
         });
 

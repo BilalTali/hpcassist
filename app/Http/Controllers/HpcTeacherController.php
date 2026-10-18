@@ -52,7 +52,7 @@ class HpcTeacherController extends Controller
             }
         }
 
-        $allStageDefs = \App\Services\StageTemplateService::getStages();
+        $allStageDefs = StageTemplateService::getStages();
         $stages = array_values(array_map(function($s) {
             return [
                 'title'       => $s['title'] . ' (' . $s['grade_range'] . ')',
@@ -155,14 +155,14 @@ class HpcTeacherController extends Controller
         }
 
         if (! $stage && $grade) {
-            $stage = \App\Services\StageTemplateService::getStageForGrade($grade);
+            $stage = StageTemplateService::getStageForGrade($grade);
         }
-        $stage = \App\Services\StageTemplateService::normalizeStage($stage ?: 'middle-stage');
+        $stage = StageTemplateService::normalizeStage($stage ?: 'middle-stage');
 
         $students = $this->getTeacherTemplateStudents($grade, $stage);
 
         if (empty($students)) {
-            $stageTitle = \App\Services\StageTemplateService::getStages()[$stage]['title'] ?? 'Selected Stage';
+            $stageTitle = StageTemplateService::getStages()[$stage]['title'] ?? 'Selected Stage';
             $msg = "⚠️ No students fetched from PARAKH portal yet for {$stageTitle}" . ($grade ? " ({$grade})" : '') . ". Please log in to PARAKH portal, open the {$stageTitle} page, and click \"📥 Fetch Students from This Page\" in the HPC Assist extension first.";
             return redirect()->to(route('hpc.teacher.dashboard', ['stage' => $stage]))->with('error', $msg);
         }
@@ -273,7 +273,7 @@ class HpcTeacherController extends Controller
                 $admNo = '';
             }
             if (empty($admNo)) {
-                $stageService = app(\App\Services\StageTemplateService::class);
+                $stageService = app(StageTemplateService::class);
                 $admNo = $stageService->resolveAdmissionNumber([
                     'name'     => $name,
                     'apaar_id' => $apaarId,
@@ -344,8 +344,8 @@ class HpcTeacherController extends Controller
 
     private function generateSpreadsheetResponse(array $students, ?string $grade = null, ?string $stage = null, array $options = []): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $stage = \App\Services\StageTemplateService::normalizeStage($stage ?: 'middle-stage');
-        $stageService = app(\App\Services\StageTemplateService::class);
+        $stage = StageTemplateService::normalizeStage($stage ?: 'middle-stage');
+        $stageService = app(StageTemplateService::class);
         $spreadsheet = $stageService->buildSpreadsheet($stage, $students, $options);
 
         $gradeSuffix = ($grade && $grade !== 'all') ? '_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $grade) : '';
@@ -477,7 +477,7 @@ class HpcTeacherController extends Controller
         }
 
         // Guarantee EVERY student has a non-empty, valid school admission number
-        $stageService = app(\App\Services\StageTemplateService::class);
+        $stageService = app(StageTemplateService::class);
         foreach ($students as $idx => &$s) {
             $adm = $s['admission_no'] ?? '';
             if (empty($adm) || $adm === ($s['login_id'] ?? '') || $adm === ($s['apaar_id'] ?? '')) {
@@ -741,11 +741,11 @@ class HpcTeacherController extends Controller
             $ws  = $ss->getSheetByName('Student Evaluations') ?? $ss->getActiveSheet();
             $max = $ws->getHighestDataRow();
 
-            $stageService = app(\App\Services\StageTemplateService::class);
+            $stageService = app(StageTemplateService::class);
             $reqStage = $request->input('stage') ?: $request->query('stage');
             $detectedStage = null;
             if (! empty($reqStage)) {
-                $detectedStage = \App\Services\StageTemplateService::normalizeStage($reqStage);
+                $detectedStage = StageTemplateService::normalizeStage($reqStage);
             }
 
             // Inspect Instructions sheet header
@@ -753,13 +753,13 @@ class HpcTeacherController extends Controller
             if ($instSheet) {
                 $instTitle = (string)$instSheet->getCell('A1')->getValue();
                 if (stripos($instTitle, 'preparatory') !== false) {
-                    $detectedStage = \App\Services\StageTemplateService::STAGE_PREPARATORY;
+                    $detectedStage = StageTemplateService::STAGE_PREPARATORY;
                 } elseif (stripos($instTitle, 'foundational') !== false) {
-                    $detectedStage = \App\Services\StageTemplateService::STAGE_FOUNDATIONAL;
+                    $detectedStage = StageTemplateService::STAGE_FOUNDATIONAL;
                 } elseif (stripos($instTitle, 'secondary') !== false) {
-                    $detectedStage = \App\Services\StageTemplateService::STAGE_SECONDARY;
+                    $detectedStage = StageTemplateService::STAGE_SECONDARY;
                 } elseif (stripos($instTitle, 'middle') !== false) {
-                    $detectedStage = \App\Services\StageTemplateService::STAGE_MIDDLE;
+                    $detectedStage = StageTemplateService::STAGE_MIDDLE;
                 }
             }
 
@@ -767,10 +767,10 @@ class HpcTeacherController extends Controller
             if (! $detectedStage) {
                 $gSample = (string)$ws->getCell('F4')->getValue();
                 if (! empty($gSample)) {
-                    $detectedStage = \App\Services\StageTemplateService::getStageForGrade($gSample);
+                    $detectedStage = StageTemplateService::getStageForGrade($gSample);
                 }
             }
-            $detectedStage = $detectedStage ?: \App\Services\StageTemplateService::STAGE_MIDDLE;
+            $detectedStage = $detectedStage ?: StageTemplateService::STAGE_MIDDLE;
 
             // Fetch exact columns for detected stage
             $columns = $stageService->getStageColumns($detectedStage);
@@ -827,7 +827,7 @@ class HpcTeacherController extends Controller
 
                 // Normalise marks across stages
                 $marks = [];
-                if ($detectedStage === \App\Services\StageTemplateService::STAGE_PREPARATORY) {
+                if ($detectedStage === StageTemplateService::STAGE_PREPARATORY) {
                     $marks = [
                         'lang1' => ['max' => (string)($rowValues['sub_lang1_max'] ?: 50), 'obt' => (string)($rowValues['sub_lang1_obt'] ?: 42)],
                         'lang2' => ['max' => (string)($rowValues['sub_lang2_max'] ?: 50), 'obt' => (string)($rowValues['sub_lang2_obt'] ?: 40)],
@@ -874,10 +874,10 @@ class HpcTeacherController extends Controller
                     'pe_max'       => $marks['pe']['max'],
                     'pe_obt'       => $marks['pe']['obt'],
                     // Activity Aliases for Extension & Preview
-                    'act_subject'            => $rowValues['act_subject'] ?? $rowValues['act1_subject'] ?? ($detectedStage === \App\Services\StageTemplateService::STAGE_PREPARATORY ? 'The World Around Us' : 'Science'),
-                    'act_approach'           => $rowValues['act_approach'] ?? $rowValues['act1_pedagogy'] ?? ($detectedStage === \App\Services\StageTemplateService::STAGE_PREPARATORY ? ($rowValues['evs_approach'] ?? 'Inquiry-Based') : 'Art-Integrated'),
-                    'act_title'              => $rowValues['act_title'] ?? $rowValues['act1_title'] ?? ($detectedStage === \App\Services\StageTemplateService::STAGE_PREPARATORY ? ($rowValues['evs_act'] ?? 'Nature Observation and Plant Study') : 'Solar System 3D Model & Daily Life Geometry'),
-                    'act_desc'               => $rowValues['act_desc'] ?? $rowValues['act1_desc'] ?? ($detectedStage === \App\Services\StageTemplateService::STAGE_PREPARATORY ? 'Observation of natural plant growth in school environment' : 'Constructed scale models of planetary orbits, computed relative ratios, and demonstrated to class'),
+                    'act_subject'            => $rowValues['act_subject'] ?? $rowValues['act1_subject'] ?? ($detectedStage === StageTemplateService::STAGE_PREPARATORY ? 'The World Around Us' : 'Science'),
+                    'act_approach'           => $rowValues['act_approach'] ?? $rowValues['act1_pedagogy'] ?? ($detectedStage === StageTemplateService::STAGE_PREPARATORY ? ($rowValues['evs_approach'] ?? 'Inquiry-Based') : 'Art-Integrated'),
+                    'act_title'              => $rowValues['act_title'] ?? $rowValues['act1_title'] ?? ($detectedStage === StageTemplateService::STAGE_PREPARATORY ? ($rowValues['evs_act'] ?? 'Nature Observation and Plant Study') : 'Solar System 3D Model & Daily Life Geometry'),
+                    'act_desc'               => $rowValues['act_desc'] ?? $rowValues['act1_desc'] ?? ($detectedStage === StageTemplateService::STAGE_PREPARATORY ? 'Observation of natural plant growth in school environment' : 'Constructed scale models of planetary orbits, computed relative ratios, and demonstrated to class'),
                     'act_rubric_awareness'   => $rowValues['act_rubric_awareness'] ?? $rowValues['act_aware'] ?? $rowValues['evs_aware'] ?? $rowValues['lang1_aware'] ?? 'Proficient',
                     'act_rubric_sensitivity' => $rowValues['act_rubric_sensitivity'] ?? $rowValues['act_sens'] ?? $rowValues['evs_sens'] ?? $rowValues['lang1_sens'] ?? 'Proficient',
                     'act_rubric_creativity'  => $rowValues['act_rubric_creativity'] ?? $rowValues['act_creat'] ?? $rowValues['evs_creat'] ?? $rowValues['lang1_creat'] ?? 'Proficient',
@@ -1937,7 +1937,7 @@ class HpcTeacherController extends Controller
 
     public function getStudentStarterProfile(int $sIdx, array $st, array $defaultWorkMap, array $defaultMax, int $rowNum): array
     {
-        $stageService = app(\App\Services\StageTemplateService::class);
+        $stageService = app(StageTemplateService::class);
         $admNo   = $stageService->resolveAdmissionNumber($st, $sIdx);
         $loginId = ! empty($st['login_id']) ? (string)$st['login_id'] : '';
         $apaarId = ! empty($st['apaar_id']) ? (string)$st['apaar_id'] : '';

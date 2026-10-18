@@ -1030,13 +1030,55 @@ class StageTemplateService
     protected static ?array $admissionLookupCache = null;
 
     /**
-     * Build comprehensive admission number lookup map from UDISE, master excel, and teacher previews
+     * Build comprehensive admission number lookup map from uploaded Excel, previews, UDISE, and master rosters.
      */
     public function loadAdmissionLookupMap(): array
     {
         $map = [];
 
-        // 1. Scan teacher_preview*.json files in storage
+        // 1. Scan uploaded Excel files directly (exact what teacher uploaded)
+        $uploadedExcels = array_merge(
+            glob(storage_path('app/hpc/teacher_assessment_uploaded*.xlsx')) ?: [],
+            glob(storage_path('app/hpc/schools/*/teacher_assessment_uploaded*.xlsx')) ?: []
+        );
+        foreach ($uploadedExcels as $ue) {
+            try {
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($ue);
+                $sheet = $spreadsheet->getActiveSheet();
+                $highestRow = min(500, $sheet->getHighestRow());
+                $highestCol = min(30, \PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($sheet->getHighestColumn()));
+                $loginCol = 2;
+                $apaarCol = 1;
+                $nameCol  = 3;
+                $admCol   = 5;
+                for ($c = 1; $c <= $highestCol; $c++) {
+                    $header = strtolower(trim((string)$sheet->getCell([$c, 2])->getValue()));
+                    if (str_contains($header, 'login id') || str_contains($header, 'hpc login')) $loginCol = $c;
+                    elseif (str_contains($header, 'apaar')) $apaarCol = $c;
+                    elseif (str_contains($header, 'student name')) $nameCol = $c;
+                    elseif (str_contains($header, 'admission')) $admCol = $c;
+                }
+                for ($r = 4; $r <= $highestRow; $r++) {
+                    $login = trim((string)$sheet->getCell([$loginCol, $r])->getValue());
+                    $apaar = trim((string)$sheet->getCell([$apaarCol, $r])->getValue());
+                    $name  = trim((string)$sheet->getCell([$nameCol, $r])->getValue());
+                    $adm   = trim((string)$sheet->getCell([$admCol, $r])->getValue());
+                    if ($login === 'DEMO_SAMPLE' || str_contains(strtoupper($name), 'SAMPLE')) continue;
+                    if (! empty($adm) && $adm !== $login && $adm !== $apaar) {
+                        if (! empty($login)) $map['login:' . $login] = $adm;
+                        if (! empty($apaar)) $map['apaar:' . $apaar] = $adm;
+                        if (! empty($name)) {
+                            $clean = strtolower(preg_replace('/[^a-z0-9]/i', '', $name));
+                            if (! empty($clean)) $map['name:' . $clean] = $adm;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Ignore
+            }
+        }
+
+        // 2. Scan teacher_preview*.json files in storage
         $previewFiles = array_merge(
             glob(storage_path('app/hpc/teacher_preview*.json')) ?: [],
             glob(storage_path('app/hpc/schools/*/teacher_preview*.json')) ?: []
@@ -1044,10 +1086,12 @@ class StageTemplateService
         foreach ($previewFiles as $pf) {
             $data = json_decode(@file_get_contents($pf), true) ?: [];
             foreach ($data as $item) {
-                $adm = trim((string)($item['admission_no'] ?? ''));
-                if (empty($adm) || preg_match('/^S[0-9A-Z]{6,16}$/i', $adm)) continue;
-                if (! empty($item['login_id'])) $map['login:' . trim($item['login_id'])] = $adm;
-                if (! empty($item['apaar_id'])) $map['apaar:' . trim($item['apaar_id'])] = $adm;
+                $adm   = trim((string)($item['admission_no'] ?? ''));
+                $login = trim((string)($item['login_id'] ?? ''));
+                $apaar = trim((string)($item['apaar_id'] ?? ''));
+                if (empty($adm) || $adm === $login || $adm === $apaar) continue;
+                if (! empty($login)) $map['login:' . $login] = $adm;
+                if (! empty($apaar)) $map['apaar:' . $apaar] = $adm;
                 if (! empty($item['name'])) {
                     $clean = strtolower(preg_replace('/[^a-z0-9]/i', '', $item['name']));
                     if (! empty($clean)) $map['name:' . $clean] = $adm;
@@ -1055,7 +1099,29 @@ class StageTemplateService
             }
         }
 
-        // 2. Scan UDISE JSON files
+        // 3. Scan teacher_students.json rosters in storage
+        $studentFiles = array_merge(
+            glob(storage_path('app/hpc/teacher_students.json')) ?: [],
+            glob(storage_path('app/hpc/schools/*/teacher_students.json')) ?: [],
+            glob(storage_path('app/hpc/schools/*/teacher-profiles/teacher_*/teacher_students.json')) ?: []
+        );
+        foreach ($studentFiles as $sf) {
+            $data = json_decode(@file_get_contents($sf), true) ?: [];
+            foreach ($data as $item) {
+                $adm   = trim((string)($item['admission_no'] ?? ''));
+                $login = trim((string)($item['login_id'] ?? ''));
+                $apaar = trim((string)($item['apaar_id'] ?? ''));
+                if (empty($adm) || $adm === $login || $adm === $apaar) continue;
+                if (! empty($login)) $map['login:' . $login] = $adm;
+                if (! empty($apaar)) $map['apaar:' . $apaar] = $adm;
+                if (! empty($item['name'])) {
+                    $clean = strtolower(preg_replace('/[^a-z0-9]/i', '', $item['name']));
+                    if (! empty($clean)) $map['name:' . $clean] = $adm;
+                }
+            }
+        }
+
+        // 4. Scan UDISE JSON files
         $udiseFiles = array_merge(
             glob(storage_path('app/hpc/udise_students_*.json')) ?: [],
             glob(storage_path('app/hpc/schools/*/udise_students_*.json')) ?: []
@@ -1074,7 +1140,7 @@ class StageTemplateService
             }
         }
 
-        // 3. Scan Master Excel files (*Students_Full_Details*.xlsx, students.xlsx)
+        // 5. Scan Master Excel files (*Students_Full_Details*.xlsx, students.xlsx)
         $excelFiles = array_merge(
             glob(storage_path('app/hpc/*Students_Full_Details*.xlsx')) ?: [],
             glob(storage_path('app/hpc/students.xlsx')) ?: []
@@ -1108,7 +1174,7 @@ class StageTemplateService
 
     /**
      * Robust resolution of a student's school admission number.
-     * Guarantees a non-empty, official or clean admission number for every student.
+     * Fetches exact uploaded/registered admission number. If student has none, returns empty string (no dummy values).
      */
     public function resolveAdmissionNumber(array $st, int $sIdx = 0): string
     {
@@ -1158,17 +1224,17 @@ class StageTemplateService
             // DB might be offline or not connected, continue cascade
         }
 
-        // 3. Check cached lookup map
+        // 3. Check cached lookup map (loaded from uploaded Excel, teacher preview, and UDISE)
         if (self::$admissionLookupCache === null) {
             self::$admissionLookupCache = $this->loadAdmissionLookupMap();
         }
 
         if (! empty(self::$admissionLookupCache)) {
-            if (! empty($apaarId) && isset(self::$admissionLookupCache['apaar:' . $apaarId])) {
-                return self::$admissionLookupCache['apaar:' . $apaarId];
-            }
             if (! empty($loginId) && isset(self::$admissionLookupCache['login:' . $loginId])) {
                 return self::$admissionLookupCache['login:' . $loginId];
+            }
+            if (! empty($apaarId) && isset(self::$admissionLookupCache['apaar:' . $apaarId])) {
+                return self::$admissionLookupCache['apaar:' . $apaarId];
             }
             $cleanName = strtolower(preg_replace('/[^a-z0-9]/i', '', $name));
             if (! empty($cleanName) && isset(self::$admissionLookupCache['name:' . $cleanName])) {
@@ -1176,10 +1242,8 @@ class StageTemplateService
             }
         }
 
-        // 4. Fallback: Clean sequential official format so admission number is NEVER empty
-        $num = $sIdx + 1;
-        $roll = ! empty($st['roll_no']) ? $st['roll_no'] : (! empty($st['row']) ? $st['row'] : $num);
-        return 'ADM-' . date('Y') . '-' . sprintf('%03d', (int)$roll ?: $num);
+        // 4. If no admission number was ever uploaded or registered for this student, keep it empty (NO dummy generation)
+        return '';
     }
 
     /**
@@ -1326,8 +1390,8 @@ class StageTemplateService
             }
         }
 
-        $apaarId = ! empty($st['apaar_id']) ? $st['apaar_id'] : ($autoFill ? '9988776655' . sprintf('%02d', $sIdx + 1) : '');
-        $loginId = ! empty($st['login_id']) ? $st['login_id'] : (! empty($st['hpc_id']) ? $st['hpc_id'] : ($autoFill ? 'HPCL-' . sprintf('%03d', $sIdx + 1) : ''));
+        $apaarId = ! empty($st['apaar_id']) ? $st['apaar_id'] : '';
+        $loginId = ! empty($st['login_id']) ? $st['login_id'] : (! empty($st['hpc_id']) ? $st['hpc_id'] : '');
         $name    = $st['name'] ?? ('Student ' . ($sIdx + 1));
         $status  = $st['status'] ?? 'HPC In Progress';
         $admNo   = $this->resolveAdmissionNumber($st, $sIdx);

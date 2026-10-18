@@ -804,15 +804,27 @@
             try {
                 const res = await fetch('{{ route('hpc.teacher.upload') }}', {
                     method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': csrfToken },
+                    headers: { 
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
                     body: formData
                 });
-                const d = await res.json();
+                const text = await res.text();
+                let d;
+                try {
+                    d = JSON.parse(text);
+                } catch (parseErr) {
+                    console.error("Non-JSON server response:", text);
+                    statusDiv.innerHTML = `<span class="text-rose-600 font-bold">✕ Server error (${res.status}): Please refresh the page and try again.</span>`;
+                    return;
+                }
                 if (d.ok) {
                     statusDiv.innerHTML = `<span class="text-emerald-600 font-bold">✓ Validated ${d.valid} students (${d.total} total rows)</span>`;
                     renderPreviewTable(d.preview);
                 } else {
-                    statusDiv.innerHTML = `<span class="text-rose-600 font-bold">✕ Error: ${d.error}</span>`;
+                    statusDiv.innerHTML = `<span class="text-rose-600 font-bold">✕ Error: ${d.error || 'Upload failed'}</span>`;
                 }
             } catch (e) {
                 statusDiv.innerHTML = `<span class="text-rose-600 font-bold">✕ Upload failed: ${e.message}</span>`;
@@ -1261,16 +1273,18 @@
                     </label>
                 </div>
 
-                <!-- Focus Mode & Outlines Tip -->
+                <!-- 3-Sheet Workbook Tip -->
                 <div class="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-1">
                     <div class="flex items-center gap-1.5 font-bold text-indigo-950 text-xs">
-                        <span>🖥️ Maximized Screen &amp; Step-by-Step Outlines</span>
-                        <span class="text-[9px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.2 rounded">Optimized</span>
+                        <span>📑 All-in-One 3-Sheet Workbook Included</span>
+                        <span class="text-[9px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.2 rounded">New</span>
                     </div>
                     <p class="text-[11px] text-indigo-900/80 leading-relaxed">
-                        • <strong>Focus Frozen Pane:</strong> Only <strong>Student Name</strong> is visible on the left for maximum data entry width. Click <strong>[+]</strong> in Excel to expand APAAR &amp; Login IDs anytime.<br>
-                        • <strong>Fixed Part Headings:</strong> Column headers clearly state <code>[Part A(2) All About Me]</code> for seamless horizontal scrolling.<br>
-                        • <strong>Step-by-Step Work:</strong> Click <strong>[-]</strong> above any section in Excel to complete one part then collapse and move to the next!
+                        • <strong>Sheet 1: Manual Entry (Blank):</strong> All enrolled students ready for manual evaluation data entry with dropdown lists &amp; empty-cell alerts.<br>
+                        • <strong>Sheet 2: Pre-Filled (Auto-Fill):</strong> 100% complete baseline evaluation (~95% attendance, rubric ratings, marks 40–48/50, remarks).<br>
+                        • <strong>Sheet 3: Instructions &amp; Rules:</strong> Detailed validation rules and permitted values for every part (A1 to E).<br>
+                        • <strong>Focus Frozen Pane:</strong> Only <strong>Student Name</strong> is visible on the frozen left pane (click <strong>[+]</strong> in Excel to show APAAR &amp; Login IDs anytime).<br>
+                        • <strong>Fixed Part Headings:</strong> Row 1 permanently locks part headers (e.g. <code>Part A(2) All About Me</code>) on every column so they never scroll off.
                     </p>
                 </div>
             </div>

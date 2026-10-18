@@ -674,13 +674,27 @@ class StageTemplateService
     /**
     /**
      * Build the Excel Spreadsheet for a given stage and list of students
+     * Generates a 3-sheet workbook:
+     * - Sheet 1: Manual Entry (Blank) - for manual student evaluation entry
+     * - Sheet 2: Pre-Filled (Auto-Fill) - 100% complete pre-filled evaluation baseline
+     * - Sheet 3: Instructions & Rules - guidance, rules, and valid values for each part
      */
     public function buildSpreadsheet(string $stage, array $students = [], array $options = []): Spreadsheet
     {
         $stage = self::normalizeStage($stage);
         $spreadsheet = new Spreadsheet();
 
-        $this->buildEvaluationsSheet($spreadsheet, $stage, $students, $options);
+        // 1. Sheet 1: Manual Entry (Blank)
+        $blankOptions = array_merge($options, ['auto_fill' => false]);
+        $sheet1 = $spreadsheet->getActiveSheet();
+        $this->buildEvaluationsSheetContent($sheet1, $stage, $students, $blankOptions, 'Manual Entry (Blank)');
+
+        // 2. Sheet 2: Pre-Filled (Auto-Fill)
+        $filledOptions = array_merge($options, ['auto_fill' => true]);
+        $sheet2 = $spreadsheet->createSheet();
+        $this->buildEvaluationsSheetContent($sheet2, $stage, $students, $filledOptions, 'Pre-Filled (Auto-Fill)');
+
+        // 3. Sheet 3: Instructions & Rules for Each Part
         $this->buildInstructionsSheet($spreadsheet, $stage);
 
         $spreadsheet->setActiveSheetIndex(0);
@@ -694,25 +708,28 @@ class StageTemplateService
         $stageInfo = self::getStages()[$stage];
         $sheet->setTitle('Instructions & Rules');
 
-        $title = "HPCAssist - {$stageInfo['title']} ({$stageInfo['grade_range']}) Assessment Template";
+        $title = "HPCAssist - {$stageInfo['title']} ({$stageInfo['grade_range']}) Assessment Template Instructions";
         $sheet->setCellValue('A1', $title);
-        $sheet->mergeCells('A1:E1');
+        $sheet->mergeCells('A1:D1');
         $sheet->getStyle('A1')->applyFromArray([
-            'font'      => ['bold' => true, 'size' => 14, 'color' => ['argb' => 'FFFFFFFF']],
+            'font'      => ['bold' => true, 'size' => 13, 'color' => ['argb' => 'FFFFFFFF']],
             'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF1E293B']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
         ]);
         $sheet->getRowDimension(1)->setRowHeight(32);
 
         $rules = [
-            ['Rule #', 'Section / Stage', 'Field Type', 'Rule Description', 'Permitted Values / Guidance'],
-            ['1', 'Student Roster', 'Locked String', 'APAAR ID, HPC Login ID, Student Name, and Status are pre-populated from the PARAKH portal.', 'Read-only locked cells.'],
-            ['2', 'Status Protection', 'System Rule', 'Students marked "HPC Completed" are protected and will be skipped during automated portal sync.', 'HPC Completed (skipped), HPC In Progress (updated).'],
-            ['3', 'Stage Integrity', 'Stage Rule', "This template is strictly tailored for {$stageInfo['title']} ({$stageInfo['grade_range']}).", "Valid grades: " . implode(', ', $stageInfo['grades'])],
-            ['4', 'Monthly Attendance', 'Integers & Formulas', 'Working Days and Present Days for each month (Apr-Mar). Total Working, Present, and Attendance % calculate automatically.', 'Present <= Working days per month.'],
-            ['5', 'Abilities & Rubrics', 'Dragdown List', 'Evaluation across 3 core abilities: Awareness, Sensitivity, Creativity.', 'Options: Beginner, Proficient, Advanced.'],
-            ['6', 'Marks Grid', 'Integer', 'Summative marks scored in core subjects (0 to Max Marks).', 'Max Marks (default 50), Obtained (0 <= Obtained <= Max).'],
-            ['7', 'Declaration', 'Dragdown', 'Teacher certification of evaluation data accuracy.', 'Options: Yes, No.'],
+            ['Part / Section', 'Field Types & Scope', 'Validation Rules & Format', 'Permitted Values / Guidance for Teachers'],
+            ['Workbook Overview', '3-Sheet Structure', 'Sheet 1 is for Manual Entry (blank evaluations). Sheet 2 is Pre-Filled (baseline 100% complete data). Sheet 3 is Instructions.', 'Choose Sheet 1 to type your own evaluations, or Sheet 2 to tweak pre-filled evaluations.'],
+            ['🔒 Locked Metadata', 'Columns A to D (APAAR ID, Login ID, Name, Status)', 'Unique identifiers synchronized with the PARAKH portal roster. Do not edit Login ID or APAAR ID.', 'Columns A, B, D are collapsed by default in Focus Mode. Click [+] above Student Name in Excel to view them.'],
+            ['📋 Part A(1): Profile & Attendance', 'Columns E to AP (Admission No, Profile, Monthly Attendance Apr-Mar)', 'School Admission number is mandatory. Monthly working days and present days are arranged neck-to-neck for each month (Apr to Mar).', 'Present Days must be <= Working Days (0-31). Total Working, Present, and Attendance % calculate automatically.'],
+            ['🌟 Part A(2): All About Me', 'Columns AQ to BP (Learner Voice, Strengths, Habits, Goal Setting)', 'Student living arrangement, leisure hobbies, self-responsibility levels, areas of improvement, peer friends, and personal/academic goals.', 'Responsibility: All the time, Most times, Sometimes. Realistic student-voice descriptions.'],
+            ['🎯 Part A(3): Ambition Card', 'Columns BQ to BZ (Career Exploration, Mentor Guidance)', 'Student career dream, steps to achieve, 5 key skills, focus subjects, habits to cultivate, mentor teacher name and guidance plan.', 'Realistic career pathways (Doctor, Engineer, Teacher, Scientist, Artist, Civil Servant, Entrepreneur).'],
+            ['🤝 Part A(4): Parent Partnership', 'Columns CA to CJ (Home Resources, Child Understanding, Support Plan)', 'Home learning materials (Yes/No), Parent understanding of child (Yes, Sometimes, No, Not Sure), Support areas needed (Yes/No), and Home support plan.', 'Checkboxes: Yes / No; Radio smileys: Yes, Sometimes, No, Not Sure; Home plan text.'],
+            ['🔬 Part B: Holistic Activity 1 & 2', 'Columns CK to CY (Academic Domain & Co-Curricular / Creative)', 'Pedagogical approach (Art-Integrated, Sports-Integrated, Toy-Based, Inquiry-Based), activity title, description, NCF rubrics (Awareness, Sensitivity, Creativity), reflection, peer review, teacher feedback.', 'Rubric rating levels: Beginner, Proficient, Advanced. Self-effort: Yes / No. Peer praise and teacher support plan.'],
+            ['📊 Part C: Curricular Assessment', 'Columns CZ to DY (Domain Competency Performance Levels)', 'Year-end formative and summative achievement levels across core curriculum learning outcomes.', 'Assessment levels: Beginner, Proficient, Advanced.'],
+            ['🎯 Part D: HPC Credit Marks Grid', 'Columns DZ to EO (8 Core Subject Marks)', 'Summative Assessment marks for each of the 8 subjects. Max Marks (default 50) and Marks Obtained.', 'Obtained Marks must be an integer between 0 and Max Marks (e.g. 40 to 48 out of 50).'],
+            ['✍️ Part E: Declaration & Remarks', 'Columns EP to EQ (Teacher Certification & Annual Holistic Remarks)', 'Teacher declaration certifying entered evaluation data and annual holistic summary remark.', 'Declaration: Yes / No. Holistic remark summarizing overall development, cognitive growth, and social maturity.'],
         ];
 
         foreach ($rules as $rIdx => $row) {
@@ -722,26 +739,25 @@ class StageTemplateService
                 $sheet->setCellValue("{$colLetter}{$rowNum}", $val);
             }
             if ($rIdx === 0) {
-                $sheet->getStyle("A{$rowNum}:E{$rowNum}")->applyFromArray([
-                    'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+                $sheet->getStyle("A{$rowNum}:D{$rowNum}")->applyFromArray([
+                    'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 10],
                     'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF334155']],
-                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
                 ]);
-                $sheet->getRowDimension($rowNum)->setRowHeight(24);
+                $sheet->getRowDimension($rowNum)->setRowHeight(26);
             } else {
-                $sheet->getStyle("A{$rowNum}:E{$rowNum}")->applyFromArray([
+                $sheet->getStyle("A{$rowNum}:D{$rowNum}")->applyFromArray([
                     'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
-                    'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                    'alignment' => ['vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
                 ]);
-                $sheet->getRowDimension($rowNum)->setRowHeight(22);
+                $sheet->getRowDimension($rowNum)->setRowHeight(36);
             }
         }
 
-        $sheet->getColumnDimension('A')->setWidth(10);
-        $sheet->getColumnDimension('B')->setWidth(26);
-        $sheet->getColumnDimension('C')->setWidth(22);
+        $sheet->getColumnDimension('A')->setWidth(26);
+        $sheet->getColumnDimension('B')->setWidth(38);
+        $sheet->getColumnDimension('C')->setWidth(50);
         $sheet->getColumnDimension('D')->setWidth(55);
-        $sheet->getColumnDimension('E')->setWidth(45);
     }
 
     /**
@@ -985,8 +1001,12 @@ class StageTemplateService
 
     protected function buildEvaluationsSheet(Spreadsheet $spreadsheet, string $stage, array $students, array $options = []): void
     {
-        $evalSheet = $spreadsheet->getActiveSheet();
-        $evalSheet->setTitle('Student Evaluations');
+        $this->buildEvaluationsSheetContent($spreadsheet->getActiveSheet(), $stage, $students, $options, 'Student Evaluations');
+    }
+
+    public function buildEvaluationsSheetContent(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $evalSheet, string $stage, array $students, array $options = [], string $title = 'Student Evaluations'): void
+    {
+        $evalSheet->setTitle($title);
 
         $columns  = $this->getStageColumns($stage);
         $sections = $this->getStageSections($stage);
@@ -999,43 +1019,38 @@ class StageTemplateService
             }
         }
 
-        // Row 1: Category Super-Headers
+        // Row 1: Fixed Part Headings on EVERY column so heading never scrolls off or disappears
         foreach ($sections as $sec) {
-            $startCol = $this->indexToColumnLetter($sec['start']);
-            $endCol   = $this->indexToColumnLetter($sec['end']);
-            $range    = "{$startCol}1:{$endCol}1";
-
-            $evalSheet->mergeCells($range);
-            $evalSheet->setCellValue("{$startCol}1", $sec['title']);
-            $evalSheet->getStyle($range)->applyFromArray([
-                'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 10],
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $sec['bg']]],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFFFFFFF']]],
-            ]);
+            $secBg = $sec['bg'] ?? 'FF1E293B';
+            for ($cIdx = $sec['start']; $cIdx <= $sec['end']; $cIdx++) {
+                $colLetter = $this->indexToColumnLetter($cIdx);
+                $evalSheet->setCellValue("{$colLetter}1", $sec['title']);
+                $evalSheet->getStyle("{$colLetter}1")->applyFromArray([
+                    'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 10],
+                    'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $secBg]],
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => false],
+                    'borders'   => [
+                        'top'    => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFFFFFFF']],
+                        'bottom' => ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['argb' => 'FFFFFFFF']],
+                        'left'   => ($cIdx === $sec['start']) ? ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['argb' => 'FFFFFFFF']] : ['borderStyle' => Border::BORDER_NONE],
+                        'right'  => ($cIdx === $sec['end']) ? ['borderStyle' => Border::BORDER_MEDIUM, 'color' => ['argb' => 'FFFFFFFF']] : ['borderStyle' => Border::BORDER_NONE],
+                    ],
+                ]);
+            }
         }
         $evalSheet->getRowDimension(1)->setRowHeight(32);
 
-        // Row 2: Field Names (Prominently prefixed with Part heading) & Row 3: Guidance Notes
+        // Row 2: Field Names & Row 3: Guidance Notes
         foreach ($columns as $idx => $col) {
             $colLetter = $this->indexToColumnLetter($idx);
             $isObt    = str_ends_with($col['key'], '_obt');
             $isLocked = in_array($col['type'], ['locked', 'calc']);
 
-            $sec = $colToSection[$idx] ?? null;
-            $prefix = $sec ? self::getSectionShortPrefix($sec['title']) : '';
-
-            $baseLabel = $isObt ? '✏️ ' . $col['label'] : $col['label'];
-            // Affix section prefix to Row 2 for all assessment parts so headings are fixed across all columns
-            if (!empty($prefix) && $idx >= 4 && !str_starts_with($baseLabel, '[')) {
-                $label = "{$prefix}\n{$baseLabel}";
-            } else {
-                $label = $baseLabel;
-            }
+            $label = $isObt ? '✏️ ' . $col['label'] : $col['label'];
 
             $evalSheet->setCellValue("{$colLetter}2", $label);
             $evalSheet->setCellValue("{$colLetter}3", $col['note'] ?? '');
-            $colWidth = max($col['width'], 22);
+            $colWidth = max($col['width'], 20);
             $evalSheet->getColumnDimension($colLetter)->setWidth($colWidth);
 
             $headerBg    = $isObt ? 'FFFEF08A' : ($isLocked ? 'FFE2E8F0' : 'FF1E293B');
@@ -1055,7 +1070,7 @@ class StageTemplateService
                 'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
             ]);
         }
-        $evalSheet->getRowDimension(2)->setRowHeight(42);
+        $evalSheet->getRowDimension(2)->setRowHeight(32);
         $evalSheet->getRowDimension(3)->setRowHeight(24);
 
         // Rows 4 onwards: Real Enrolled Students (or Starter Sample Students if none synced yet)
@@ -1146,7 +1161,7 @@ class StageTemplateService
         $evalSheet->getStyle($evalDataRange)->setConditionalStyles([$blankRule]);
 
         // Configure Outline & Focus Mode:
-        $evalSheet->setShowSummaryRight(false);
+        $evalSheet->setShowSummaryRight(true);
         $evalSheet->setShowSummaryBelow(false);
 
         // 1. Locked Left Side Focus Mode:
@@ -1162,12 +1177,12 @@ class StageTemplateService
         // 2. Part Outlines: Group assessment sections so teachers can complete one part then collapse it and go next
         foreach ($sections as $sec) {
             if ($sec['start'] >= 4 && $sec['end'] > $sec['start']) {
-                $startLtr = $this->indexToColumnLetter($sec['start']);
-                $evalSheet->getColumnDimension($startLtr)->setOutlineLevel(0)->setVisible(true);
-                for ($c = $sec['start'] + 1; $c <= $sec['end']; $c++) {
+                for ($c = $sec['start']; $c < $sec['end']; $c++) {
                     $cLtr = $this->indexToColumnLetter($c);
                     $evalSheet->getColumnDimension($cLtr)->setOutlineLevel(1)->setVisible(true)->setCollapsed(false);
                 }
+                $endLtr = $this->indexToColumnLetter($sec['end']);
+                $evalSheet->getColumnDimension($endLtr)->setOutlineLevel(0)->setVisible(true);
             }
         }
 
@@ -1580,7 +1595,7 @@ class StageTemplateService
 
         foreach ($months as $mIdx => $m) {
             $w = $defaultWorkMap[$m] ?? 20;
-            $p = max(0, $w - ($sIdx % 3 == 0 ? 1 : 2));
+            $p = $autoFill ? max(0, $w - ($sIdx % 3 == 0 ? 1 : 2)) : '';
 
             $wCol = $this->indexToColumnLetter($colOffset + ($mIdx * 2));
             $pCol = $this->indexToColumnLetter($colOffset + ($mIdx * 2) + 1);
@@ -1600,9 +1615,9 @@ class StageTemplateService
         $vals[] = $wSumFormula;
         $vals[] = $pSumFormula;
         $vals[] = "=IF({$wTotalCol}{$rowNum}>0, ROUND(({$pTotalCol}{$rowNum}/{$wTotalCol}{$rowNum})*100, 1) & \"%\", \"\")";
-        $vals[] = 14 + ($sIdx % 5);
-        $vals[] = 'Brief seasonal viral cold / domestic family engagement';
-        $vals[] = 'Reading';
+        $vals[] = $autoFill ? (14 + ($sIdx % 5)) : '';
+        $vals[] = $autoFill ? 'Brief seasonal viral cold / domestic family engagement' : '';
+        $vals[] = $autoFill ? 'Reading' : '';
 
         // Stage-Specific Fillers
         $remainingCount = count($columns) - count($vals);
@@ -1610,6 +1625,17 @@ class StageTemplateService
             $colDef = $columns[count($vals)];
             $k = $colDef['key'];
             $type = $colDef['type'];
+
+            if (! $autoFill) {
+                if ($type === 'calc') {
+                    $vals[] = '';
+                } elseif (str_ends_with($k, '_max')) {
+                    $vals[] = 50;
+                } else {
+                    $vals[] = '';
+                }
+                continue;
+            }
 
             if (array_key_exists($k, $actMap)) {
                 $vals[] = $actMap[$k];

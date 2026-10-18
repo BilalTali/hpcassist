@@ -141,7 +141,33 @@ class StageController extends Controller
 
         try {
             $ss = \PhpOffice\PhpSpreadsheet\IOFactory::load($destPath);
-            $ws = $ss->getSheetByName('Student Evaluations') ?? $ss->getActiveSheet();
+            
+            $s1 = $ss->getSheetByName('Manual Entry (Blank)');
+            $s2 = $ss->getSheetByName('Pre-Filled (Auto-Fill)');
+            $legacy = $ss->getSheetByName('Student Evaluations');
+
+            $ws = null;
+            if ($s1 && $s2) {
+                $hasS1Data = false;
+                $maxR1 = $s1->getHighestDataRow();
+                for ($r = 4; $r <= min(15, $maxR1); $r++) {
+                    $sampleVal1 = trim((string)$s1->getCell('N' . $r)->getValue());  // Apr Present Days
+                    $sampleVal2 = trim((string)$s1->getCell('AQ' . $r)->getValue());
+                    if ($sampleVal1 !== '' || $sampleVal2 !== '') {
+                        $hasS1Data = true;
+                        break;
+                    }
+                }
+                $activeTitle = $ss->getActiveSheet()->getTitle();
+                if ($activeTitle === 'Pre-Filled (Auto-Fill)' || ! $hasS1Data) {
+                    $ws = $s2;
+                } else {
+                    $ws = $s1;
+                }
+            } else {
+                $ws = $s1 ?? $s2 ?? $legacy ?? $ss->getActiveSheet();
+            }
+
             $maxRow = $ws->getHighestDataRow();
 
             $columns = $this->stageService->getStageColumns($stage);

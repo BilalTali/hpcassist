@@ -2248,18 +2248,67 @@
         return 'https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage';
     }
 
+    function getFieldLabel(el) {
+        let text = '';
+        if (el.labels && el.labels.length) {
+            for (let l of el.labels) text += ' ' + (l.innerText || '');
+        }
+        const container = el.closest('div, li, tr, td, .form-group, .input-box, .card, fieldset');
+        if (container) {
+            const labels = container.querySelectorAll('label, p, span, h4, h5, h6, strong');
+            for (let lbl of labels) {
+                text += ' ' + (lbl.innerText || '');
+            }
+        }
+        text += ' ' + (el.placeholder || '') + ' ' + (el.name || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('aria-label') || '');
+        return text.toLowerCase();
+    }
+
     async function clickContinueBtn() {
         await sleep(600);
-        const btns = Array.from(document.querySelectorAll('button'));
-        const continueBtn = btns.find(b => {
-            const t = (b.innerText || '').trim().toLowerCase();
-            return t === 'continue' || t === 'next' || t.includes('save as draft');
+        const candidates = Array.from(document.querySelectorAll('button, a[role="button"], input[type="button"], input[type="submit"], .btn'));
+
+        // Priority 1: Exact text matches for Continue / Next (NEVER Draft!)
+        let continueBtn = candidates.find(b => {
+            const t = (b.innerText || b.value || '').trim().toLowerCase();
+            return (t === 'continue' || t === 'next' || t === 'save & continue' || t === 'save and continue' || t === 'save & next') && !t.includes('draft');
         });
+
+        // Priority 2: Text contains 'continue' and strictly does NOT contain 'draft'
+        if (!continueBtn) {
+            continueBtn = candidates.find(b => {
+                const t = (b.innerText || b.value || '').trim().toLowerCase();
+                return t.includes('continue') && !t.includes('draft') && !t.includes('back');
+            });
+        }
+
+        // Priority 3: Text contains 'next' and does NOT contain 'draft'
+        if (!continueBtn) {
+            continueBtn = candidates.find(b => {
+                const t = (b.innerText || b.value || '').trim().toLowerCase();
+                return t.includes('next') && !t.includes('draft') && !t.includes('page') && !t.includes('back');
+            });
+        }
+
         if (continueBtn) {
+            logStatus('Advancing: Clicking Continue...');
+            try {
+                continueBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch(e) {}
+            await sleep(400);
+
+            const pk = Object.keys(continueBtn).find(k => k.startsWith('__reactProps'));
+            if (pk && typeof continueBtn[pk]?.onClick === 'function') {
+                try { continueBtn[pk].onClick({ stopPropagation: () => {}, preventDefault: () => {} }); } catch(e) {}
+            }
+            continueBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+            continueBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
             continueBtn.click();
-            await sleep(2500);
+            await sleep(2200);
             return true;
         }
+
+        console.warn('[HPC Assist] Continue button not found on page.');
         return false;
     }
 
@@ -2322,62 +2371,139 @@
     }
 
     async function fillPartA2(s) {
-        logStatus(`[Part-A2] Filling All About Me for ${s.name}...`);
-        const url = location.href.toLowerCase();
-        const isPrep = url.includes('preparatory') || (s.stage && s.stage.includes('prep')) || (s.grade && ['Grade 3', 'Grade 4', 'Grade 5', '3', '4', '5'].includes(s.grade));
+        logStatus(`[Part-A2] Filling All About Me & Self-Reflection for ${s.name}...`);
 
-        let orderedA2 = [];
-        if (isPrep) {
-            orderedA2 = [
-                s.live_with        || 'My parents, siblings, and grandparents',
-                s.fav_dish         || s.fav_food || 'Rajma and Rice',
-                s.fav_game         || 'Kho-Kho and Kabaddi',
-                s.free_time        || 'Reading storybooks and sketching',
-                s.do_well          || 'Solving math puzzles and drawing',
-                s.want_to_improve  || s.do_better || 'Neat cursive handwriting and spelling',
-                s.responsible      || 'most times',
-                s.proud_of         || s.feel_proud || 'Helping my classmate with reading',
-                s.goal_acad        || 'Read 15 storybooks in English and Urdu',
-                s.goal_step        || 'Read 2 pages every evening before bed',
-                s.good_deed        || 'Shared my lunch with a friend who forgot hers'
-            ];
-        } else {
-            orderedA2 = [
-                s.live_with     || 'Family',
-                s.stay_at       || 'Sugin, Budgam',
-                s.free_time     || 'Reading books and drawing',
-                s.do_well       || 'Learning new skills and actively participating',
-                s.responsible   || 'most times',
-                s.do_better     || s.could_improve || 'Time management in exams',
-                s.care_others   || s.care_about || 'Helping peers with notes',
-                s.feel_proud    || 'Solving challenging problems independently',
-                s.friend_name   || s.student_name || 'Ayaan Ahmad',
-                s.friend_age    || s.student_age || '12',
-                s.acad_goal     || s.academic_goal || 'Score above 90% in Mathematics and Science',
-                s.acad_goal_why || s.goal_importance || 'Builds solid foundation for pursuing higher studies in Engineering',
-                s.acad_step1    || s.goal_step1 || 'Dedicate 45 minutes daily to numerical problem solving and formula revision',
-                s.acad_step2    || s.goal_step2 || 'Clarify doubts with subject teachers immediately and practice weekly mock tests',
-                s.pers_goal_why || 'Keeps mind alert, improves stamina, and enhances daily concentration',
-                s.pers_step1    || 'Wake up at 6:00 AM every morning and do 30 minutes of yoga and jogging',
-                s.pers_step2    || 'Read at least 15 pages of non-academic literature before bedtime',
-                s.pers_goal     || s.personal_goal || 'Develop regular physical exercise and disciplined reading routine',
-                s.sch_learn1    || s.learnt_school || 'Laws of reflection and refraction in science laboratory',
-                s.sch_learn2    || 'Formulating and solving linear equations in single variable',
-                s.sch_learn3    || 'Constitutional preamble and fundamental rights in Social Science',
-                s.out_learn1    || s.learnt_outside || 'Organic kitchen gardening, composting, and soil preparation',
-                s.out_learn2    || 'Bicycle maintenance, tire inflation, and chain lubrication',
-                s.out_learn3    || 'Basic household budgeting and grocery calculation',
-                s.help_with     || s.teacher_help || 'Hands-on science experiments and advanced mathematical puzzles',
-                s.teacher_know  || 'I am enthusiastic about collaborative group projects and active discussions'
-            ];
-        }
+        // Context-aware rules map covering both Preparatory "Hand of Self-Reflection" and Middle Stage fields
+        const rules = [
+            // The Hand / Self-reflection Questions (Preparatory & Middle)
+            {
+                keys: ["don't like", "dont like", "do not like", "dislike", "not like", "no like"],
+                val: s.dont_like || 'Fighting, shouting, and loud noises'
+            },
+            {
+                keys: ["like to", "things i like", "i like", "love to"],
+                val: s.like_to || s.free_time || 'Reading storybooks, drawing nature, and playing outdoors'
+            },
+            {
+                keys: ["no good at", "not good at", "am not good", "struggle with", "cannot do"],
+                val: s.not_good_at || s.want_to_improve || 'Neat cursive handwriting and spelling long words'
+            },
+            {
+                keys: ["good at", "really well", "do well", "i am good"],
+                val: s.do_well || s.good_at || 'Solving arithmetic puzzles and reciting poems'
+            },
+            {
+                keys: ["live with", "stay with", "living with"],
+                val: s.live_with || 'My parents, siblings, and grandparents'
+            },
+            {
+                keys: ["dish", "food", "favourite food", "favorite food"],
+                val: s.fav_dish || s.fav_food || 'Dal Chawal and fresh seasonal fruits'
+            },
+            {
+                keys: ["game", "toy", "favourite game", "favorite game", "traditional game"],
+                val: s.fav_game || s.fav_toy || 'Kho-Kho and Badminton'
+            },
+            {
+                keys: ["free time", "in my free time", "leisure"],
+                val: s.free_time || 'Reading storybooks and sketching'
+            },
+            {
+                keys: ["want to improve", "improve in", "could improve", "do better", "improve"],
+                val: s.want_to_improve || s.do_better || 'Neat cursive handwriting and fast mental math'
+            },
+            {
+                keys: ["proud of", "feel proud", "proud"],
+                val: s.proud_of || s.feel_proud || 'Helping classmates and completing my assignments'
+            },
+            {
+                keys: ["learning goal", "academic goal", "goal this year", "goal"],
+                val: s.goal_acad || s.acad_goal || 'Read 15 storybooks in English and Urdu'
+            },
+            {
+                keys: ["steps i will take", "action step", "goal_step", "steps"],
+                val: s.goal_step || s.acad_step1 || 'Read 2 pages every evening before bed'
+            },
+            {
+                keys: ["kind deed", "good deed", "deed i did", "deed"],
+                val: s.good_deed || 'Shared my lunch with a friend who forgot hers'
+            },
+            {
+                keys: ["stay at", "address", "location"],
+                val: s.stay_at || 'Sugin, Budgam'
+            },
+            {
+                keys: ["friend name", "friend"],
+                val: s.friend_name || s.peer1_name || 'Ayaan Ahmad'
+            },
+            {
+                keys: ["friend age", "age"],
+                val: String(s.friend_age || '10')
+            },
+            {
+                keys: ["help with", "teacher help", "help"],
+                val: s.help_with || s.teacher_help || 'Advanced math puzzles and science experiments'
+            },
+            {
+                keys: ["teacher know", "about me"],
+                val: s.teacher_know || 'I am enthusiastic about collaborative group projects'
+            },
+            {
+                keys: ["care about", "care others"],
+                val: s.care_others || 'Helping peers with notes and sharing resources'
+            },
+            {
+                keys: ["sch_learn", "learnt in school", "learnt at school"],
+                val: s.sch_learn1 || 'Basic arithmetic formulas and regional folktales'
+            },
+            {
+                keys: ["out_learn", "outside school", "learnt outside"],
+                val: s.out_learn1 || 'Organic kitchen gardening and cycling'
+            }
+        ];
 
-        const elements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]), textarea, select'));
-        orderedA2.forEach((val, idx) => {
-            if (elements[idx + 1]) {
-                setNativeValue(elements[idx + 1], val);
-            } else if (elements[idx]) {
-                setNativeValue(elements[idx], val);
+        // 1. Fill Text Inputs and Textareas via Label Matching
+        const textElements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea'));
+        textElements.forEach(el => {
+            const lbl = getFieldLabel(el);
+            // Skip search bars or stage pickers
+            if (lbl.includes('search') || el.type === 'search') return;
+
+            const matchedRule = rules.find(r => r.keys.some(k => lbl.includes(k)));
+            if (matchedRule) {
+                setNativeValue(el, matchedRule.val);
+            } else if (!el.value || el.value.trim() === '') {
+                // Positional / fallback reflection if label did not directly match keywords
+                setNativeValue(el, 'Active and positive participation demonstrated throughout the year.');
+            }
+        });
+
+        // 2. Handle 'I am responsible' Select / Radio / Custom Dropdown
+        const selects = Array.from(document.querySelectorAll('select'));
+        selects.forEach(sel => {
+            const lbl = getFieldLabel(sel);
+            if (lbl.includes('responsible')) {
+                const targetVal = (s.responsible || 'all the time').toLowerCase();
+                const opt = Array.from(sel.options).find(o => o.text.toLowerCase().includes(targetVal) || o.value.toLowerCase().includes(targetVal)) || sel.options[1];
+                if (opt) {
+                    sel.value = opt.value;
+                    sel.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }
+        });
+
+        // 3. Handle Radio Groups in Part A2
+        const radioGroups = {};
+        document.querySelectorAll('input[type="radio"]').forEach(r => {
+            const name = r.name || 'group';
+            if (!radioGroups[name]) radioGroups[name] = [];
+            radioGroups[name].push(r);
+        });
+        Object.values(radioGroups).forEach(group => {
+            if (group.length > 0 && !group.some(r => r.checked)) {
+                const target = group.find(r => /all the time|always|yes|most times|1/i.test(r.value || r.id || '')) || group[0];
+                target.click();
+                target.dispatchEvent(new Event('change', { bubbles: true }));
             }
         });
 
@@ -2390,7 +2516,7 @@
         // 1. Peer Reviewer Names
         const p1Name = s.peer1_name || 'Ayaan Ahmad';
         const p2Name = s.peer2_name || 'Zaid Ahmad';
-        const textInputs = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"])'));
+        const textInputs = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])'));
         if (textInputs.length >= 2) {
             setNativeValue(textInputs[0], p1Name);
             setNativeValue(textInputs[1], p2Name);
@@ -2407,7 +2533,7 @@
         });
         Object.values(radioGroups).forEach(group => {
             if (group.length > 0 && !group.some(r => r.checked)) {
-                const target = group.find(r => /yes|always|positive|1|agree/i.test(r.value || r.id || '')) || group[0];
+                const target = group.find(r => /yes|always|positive|1|agree|proficient/i.test(r.value || r.id || '')) || group[0];
                 target.click();
                 target.dispatchEvent(new Event('change', { bubbles: true }));
             }
@@ -2467,7 +2593,7 @@
             s.parents_feel      || 'Immensely joyful, honored, and proud'
         ];
 
-        const elements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]), textarea, select'));
+        const elements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, select'));
         orderedA3.forEach((val, idx) => {
             if (elements[idx + 1]) {
                 setNativeValue(elements[idx + 1], val);
@@ -2581,7 +2707,7 @@
     }
 
     async function fillPartB(s) {
-        logStatus(`[Part-B] Filling Holistic Activities for ${s.name}...`);
+        logStatus(`[Part-B] Filling Holistic Activities & Assessments for ${s.name}...`);
         const actSubject = s.act_subject || 'Science';
         const actTitle = s.act_title || `${actSubject} Practical Project`;
         const actLevel = (s.act_level || 'proficient').toLowerCase();
@@ -2617,17 +2743,17 @@
             }
         }
 
-        // Tab 1: Activity Name
-        const nameInp = document.querySelector('.acivity-name-updates input');
+        // Tab 1: Activity Name & Types
+        const nameInp = document.querySelector('.acivity-name-updates input, input[placeholder*="Activity Name" i]');
         if (nameInp) setNativeValue(nameInp, actTitle);
         document.querySelectorAll('input[name^="activity_"]').forEach((cb, i) => {
             if (i < 2 && !cb.checked) cb.click();
         });
 
         // Tab 2: Subject & Competency
-        const tab2 = document.querySelectorAll('.activate-tab-pills div[role="button"]')[1];
-        if (tab2) {
-            tab2.click();
+        const tabPills = Array.from(document.querySelectorAll('.activate-tab-pills div[role="button"], .tab-pills [role="button"]'));
+        if (tabPills[1]) {
+            tabPills[1].click();
             await sleep(500);
         }
         const wrapper = document.querySelector('.scroller-cg-domain .custom-dropdown-wrapper');
@@ -2646,43 +2772,87 @@
             cpts[0].dispatchEvent(new Event('change', { bubbles: true }));
         }
 
-        // React Fiber state update for instant complete activity payload
-        const btn = document.querySelector('.hpc-finish-activity-btn');
-        if (btn) {
-            let f = btn[Object.keys(btn).find(k => k.startsWith('__reactFiber'))];
-            while (f && f.type?.name !== 'S') f = f.return;
-            let cur = f ? f.memoizedState : null;
-            while (cur) {
-                if (cur.memoizedState && typeof cur.memoizedState === 'object' && cur.memoizedState.cpt) {
-                    const prev = cur.memoizedState;
-                    const next = {
-                        ...prev,
-                        activity: prev.activity && prev.activity.length ? prev.activity : [1, 2],
-                        any_other: ['', '', ''],
-                        ast: [1, 2, 3],
-                        bar: [9],
-                        awr: ['Demonstrates good awareness', 'Demonstrates strong awareness', 'Demonstrates exceptional awareness', actAwr],
-                        sen: ['Shows sensitivity', 'Shows great sensitivity', 'Shows excellent sensitivity', actSen],
-                        cre: ['Displays creative thinking', 'Displays innovative creativity', 'Displays high creativity', actCre],
-                        desc: [actDesc, 'Achieved all learning objectives successfully.'],
-                        ml: [actLearnt, 'Developed practical confidence.', 'Collaborated actively.', actInteresting],
-                        slr: ['Student actively engaged throughout.', actPractice, 'Completed assignments joyfully.'],
-                        spt: [actSupportPlan, 'Continue encouragement.'],
-                        tf: ['2', '2', '2'],
-                        mpa: [0, 1],
-                        mps: [0, 1],
-                        mpc: [0, 1],
-                        ppa: [0],
-                        pps: [0],
-                        ppc: [0],
-                        pf: [actPeerName, '8', 'A', actPeerFeedback, 'Cooperative and helpful', 'Positive']
-                    };
-                    if (cur.queue && typeof cur.queue.dispatch === 'function') {
-                        cur.queue.dispatch(next);
+        // Tab 3: Assessment / Teacher Assessment
+        if (tabPills[2]) {
+            tabPills[2].click();
+            await sleep(500);
+            // Click options or rubrics
+            document.querySelectorAll('.appropriate-option-select li, ul.options-list li, .rubric-item button').forEach((el, i) => {
+                if (i < 3) el.click();
+            });
+        }
+
+        // Tab 4: Self Assessment (My Progress Grid*)
+        if (tabPills[3]) {
+            tabPills[3].click();
+            await sleep(500);
+            // Circle statements for Awareness, Sensitivity, Creativity
+            document.querySelectorAll('.progress-grid li, .statement-circle, [class*="progress" i] li, div[role="button"].statement').forEach((el, i) => {
+                if (i < 6) el.click();
+            });
+            const learningsTa = document.querySelector('textarea');
+            if (learningsTa && !learningsTa.value) {
+                setNativeValue(learningsTa, actLearnt || 'Learned celestial orbital distances and practical geometry');
+            }
+        }
+
+        // Tab 5: Peer Assessment (My Peer's Progress Grid)
+        if (tabPills[4]) {
+            tabPills[4].click();
+            await sleep(500);
+            document.querySelectorAll('.progress-grid li, .statement-circle, [class*="progress" i] li').forEach((el, i) => {
+                if (i < 6) el.click();
+            });
+            const peerInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"])');
+            if (peerInputs[0]) setNativeValue(peerInputs[0], actPeerName);
+        }
+
+        // React Fiber state update for guaranteed complete activity payload across ALL tabs
+        const candidateNodes = Array.from(document.querySelectorAll('.hpc-finish-activity-btn, input[name="cpt"], .activate-tab-pills, .scroller-container'));
+        let dispatched = false;
+        for (const node of candidateNodes) {
+            if (dispatched) break;
+            const fiberKey = Object.keys(node).find(k => k.startsWith('__reactFiber'));
+            if (!fiberKey) continue;
+            let fiber = node[fiberKey];
+            while (fiber) {
+                let hook = fiber.memoizedState;
+                while (hook) {
+                    if (hook.memoizedState && typeof hook.memoizedState === 'object' && ('cpt' in hook.memoizedState || 'activity' in hook.memoizedState || 'awr' in hook.memoizedState)) {
+                        const prev = hook.memoizedState;
+                        const next = {
+                            ...prev,
+                            activity: (prev.activity && prev.activity.length) ? prev.activity : [1, 2],
+                            any_other: ['', '', ''],
+                            ast: [1, 2, 3],
+                            bar: [9],
+                            awr: ['Demonstrates good awareness', 'Demonstrates strong awareness', 'Demonstrates exceptional awareness', actAwr],
+                            sen: ['Shows sensitivity', 'Shows great sensitivity', 'Shows excellent sensitivity', actSen],
+                            cre: ['Displays creative thinking', 'Displays innovative creativity', 'Displays high creativity', actCre],
+                            desc: [actDesc, 'Achieved all learning objectives successfully.'],
+                            ml: [actLearnt, 'Developed practical confidence.', 'Collaborated actively.', actInteresting],
+                            slr: ['Student actively engaged throughout.', actPractice, 'Completed assignments joyfully.'],
+                            spt: [actSupportPlan, 'Continue encouragement.'],
+                            tf: ['2', '2', '2'],
+                            mpa: [0, 1],
+                            mps: [0, 1],
+                            mpc: [0, 1],
+                            ppa: [0],
+                            pps: [0],
+                            ppc: [0],
+                            pf: [actPeerName, '8', 'A', actPeerFeedback, 'Cooperative and helpful', 'Positive']
+                        };
+                        if (hook.queue && typeof hook.queue.dispatch === 'function') {
+                            hook.queue.dispatch(next);
+                            console.log('[HPC Assist] Dispatched complete Activity state via React Fiber');
+                            dispatched = true;
+                            break;
+                        }
                     }
-                    break;
+                    hook = hook.next;
                 }
-                cur = cur.next;
+                if (dispatched) break;
+                fiber = fiber.return;
             }
         }
 
@@ -2695,7 +2865,7 @@
             await sleep(1000);
             const modal = document.querySelector('.modal, .fade.show, [role="dialog"]');
             if (modal) {
-                const mFinishBtn = Array.from(modal.querySelectorAll('button')).find(b => b.innerText.trim() === 'Finish');
+                const mFinishBtn = Array.from(modal.querySelectorAll('button')).find(b => b.innerText.trim() === 'Finish' || b.innerText.trim() === 'Yes' || b.innerText.trim() === 'Confirm');
                 if (mFinishBtn) mFinishBtn.click();
             }
         }
@@ -2780,6 +2950,55 @@
         }
     }
 
+    let teacherStepTimer = null;
+    let isTeacherStepBusy = false;
+
+    function scheduleTeacherEvaluationStep(delayMs = 1200) {
+        if (teacherStepTimer) clearTimeout(teacherStepTimer);
+        teacherStepTimer = setTimeout(async () => {
+            if (!isTeacherRunning || isTeacherStepBusy) return;
+            isTeacherStepBusy = true;
+            try {
+                const url = location.href.toLowerCase();
+                if (url.includes('/part-') || url.includes('/hpc-credit')) {
+                    await handleFormPartStep();
+                } else if (url.includes('-stage')) {
+                    await processNextTeacherStudent();
+                }
+            } catch(e) {
+                console.error('[HPC Assist] Error in evaluation step:', e);
+            } finally {
+                isTeacherStepBusy = false;
+            }
+        }, delayMs);
+    }
+
+    // SPA navigation watcher to auto-trigger teacher evaluation step on URL changes
+    try {
+        const _origPush = history.pushState;
+        history.pushState = function() {
+            _origPush.apply(this, arguments);
+            if (isTeacherRunning) scheduleTeacherEvaluationStep(1000);
+        };
+        const _origReplace = history.replaceState;
+        history.replaceState = function() {
+            _origReplace.apply(this, arguments);
+            if (isTeacherRunning) scheduleTeacherEvaluationStep(1000);
+        };
+        window.addEventListener('popstate', () => { if (isTeacherRunning) scheduleTeacherEvaluationStep(1000); });
+        window.addEventListener('hashchange', () => { if (isTeacherRunning) scheduleTeacherEvaluationStep(1000); });
+    } catch(e) {}
+
+    // Periodic safety interval: re-check every 3.5s while runner is active
+    setInterval(() => {
+        if (isTeacherRunning && !isTeacherStepBusy) {
+            const url = location.href.toLowerCase();
+            if (url.includes('/part-') || url.includes('/hpc-credit')) {
+                scheduleTeacherEvaluationStep(600);
+            }
+        }
+    }, 3500);
+
     async function handleFormPartStep(s) {
         if (!s) {
             try {
@@ -2794,11 +3013,13 @@
         if (url.includes('/part-a1') || (!url.includes('/part-') && document.querySelector('tbody tr:nth-child(1) td input'))) {
             await fillPartA1(s);
             await clickContinueBtn();
+            scheduleTeacherEvaluationStep(1500);
             return true;
         }
         if (url.includes('/part-a2')) {
             await fillPartA2(s);
             await clickContinueBtn();
+            scheduleTeacherEvaluationStep(1500);
             return true;
         }
         if (url.includes('/part-a3')) {
@@ -2809,21 +3030,25 @@
                 await fillPartA3(s);
             }
             await clickContinueBtn();
+            scheduleTeacherEvaluationStep(1500);
             return true;
         }
         if (url.includes('/part-a4')) {
             await fillPartA4(s);
             await clickContinueBtn();
+            scheduleTeacherEvaluationStep(1500);
             return true;
         }
         if (url.includes('/part-b')) {
             await fillPartB(s);
             await clickContinueBtn();
+            scheduleTeacherEvaluationStep(1500);
             return true;
         }
         if (url.includes('/part-c')) {
             await fillPartC(s);
             await clickContinueBtn();
+            scheduleTeacherEvaluationStep(1500);
             return true;
         }
         if (url.includes('/hpc-credit')) {
@@ -2954,6 +3179,7 @@
                 logStatus(`Opening evaluation form for ${s.name}...`);
                 localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
                 actionItem.click();
+                scheduleTeacherEvaluationStep(2500);
                 await sleep(3000);
                 return;
             }

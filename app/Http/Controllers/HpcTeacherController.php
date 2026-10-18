@@ -1253,6 +1253,20 @@ class HpcTeacherController extends Controller
         return response()->json(['ok' => true], 200, $cors);
     }
 
+    public function evaluationsLog(Request $request)
+    {
+        $cors = $this->getCorsHeaders($request);
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 200, $cors);
+        }
+        $msg = $request->input('message') ?? $request->input('msg') ?? 'Heartbeat';
+        $url = $request->input('url', '');
+        $time = now()->format('Y-m-d H:i:s');
+        $logLine = "[{$time}] [URL: {$url}] {$msg}\n";
+        @file_put_contents(storage_path('logs/extension_live.log'), $logLine, FILE_APPEND);
+        return response()->json(['ok' => true], 200, $cors);
+    }
+
     // ─── Discovery Trigger ────────────────────────────────────────────────────
 
     public function discover(Request $request)

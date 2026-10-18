@@ -883,6 +883,106 @@ class StageTemplateService
         ];
     }
 
+    public static function getSectionShortPrefix(string $sectionTitle): string
+    {
+        // Strip emojis and non-ascii decorative symbols
+        $clean = preg_replace('/[\x{1F600}-\x{1F64F}\x{1F300}-\x{1F5FF}\x{1F680}-\x{1F6FF}\x{2600}-\x{26FF}\x{2700}-\x{27BF}\x{1F900}-\x{1F9FF}\x{1F1E0}-\x{1F1FF}]/u', '', $sectionTitle);
+        $clean = trim($clean);
+
+        if (stripos($clean, 'Locked') !== false || stripos($clean, 'Identity') !== false) {
+            return '[Locked Identity]';
+        }
+        if (stripos($clean, 'Part A(2)') !== false || stripos($clean, 'Part-A2') !== false || stripos($clean, 'All About Me') !== false || stripos($clean, 'Surroundings') !== false || stripos($clean, 'Self-Evaluation') !== false) {
+            if (stripos($clean, 'Surroundings') !== false) return '[Part A(2) Me & Surroundings]';
+            if (stripos($clean, 'Self-Evaluation') !== false) return '[Part A(2) Self-Evaluation]';
+            return '[Part A(2) All About Me]';
+        }
+        if (stripos($clean, 'Part A(1)') !== false || stripos($clean, 'Part-A1') !== false || stripos($clean, 'Profile') !== false) {
+            return '[Part A(1) Profile & Attendance]';
+        }
+        if (stripos($clean, 'Part A(3)') !== false || stripos($clean, 'Ambition') !== false || stripos($clean, 'Peer') !== false || stripos($clean, 'Time Management') !== false) {
+            if (stripos($clean, 'Ambition') !== false) return '[Part A(3) Ambition Card]';
+            if (stripos($clean, 'Peer') !== false) return '[Part A(3) Peer & Parent Voice]';
+            if (stripos($clean, 'Time Management') !== false) return '[Part A(3) Time Management]';
+            return '[Part A(3)]';
+        }
+        if (stripos($clean, 'Part A(4)') !== false || stripos($clean, 'Parent') !== false || stripos($clean, 'Future Planning') !== false) {
+            if (stripos($clean, 'Future Planning') !== false) return '[Part A(4) Career Pathways]';
+            return '[Part A(4) Parent Partnership]';
+        }
+        if (stripos($clean, 'Part A(5') !== false || stripos($clean, 'Accomplishments') !== false || stripos($clean, 'Life Skills') !== false) {
+            return '[Part A(5 & 6) Life Skills]';
+        }
+        if (stripos($clean, 'Domain 1') !== false || stripos($clean, 'Physical Development') !== false) {
+            return '[Domain 1 Physical Dev]';
+        }
+        if (stripos($clean, 'Domain 2') !== false || stripos($clean, 'Socio-Emotional') !== false) {
+            return '[Domain 2 Socio-Emotional]';
+        }
+        if (stripos($clean, 'Domain 3') !== false || stripos($clean, 'Cognitive') !== false) {
+            return '[Domain 3 Cognitive Dev]';
+        }
+        if (stripos($clean, 'Domain 4') !== false || stripos($clean, 'Language & Literacy') !== false) {
+            return '[Domain 4 Language & Literacy]';
+        }
+        if (stripos($clean, 'Domain 5') !== false || stripos($clean, 'Aesthetic') !== false) {
+            return '[Domain 5 Aesthetic & Cultural]';
+        }
+        if (stripos($clean, 'Learning Habits') !== false) {
+            return '[Learning Habits & Self-Eval]';
+        }
+        if (stripos($clean, 'Activity 1') !== false) {
+            return '[Part B Activity 1]';
+        }
+        if (stripos($clean, 'Activity 2') !== false) {
+            return '[Part B Activity 2]';
+        }
+        if (stripos($clean, 'Language 1') !== false || stripos($clean, 'Language (R1)') !== false) {
+            return '[Part B Language 1]';
+        }
+        if (stripos($clean, 'Language 2') !== false || stripos($clean, 'Language (R2)') !== false) {
+            return '[Part B Language 2]';
+        }
+        if (stripos($clean, 'Mathematics') !== false) {
+            return '[Part B Mathematics]';
+        }
+        if (stripos($clean, 'World Around Us') !== false || stripos($clean, 'EVS') !== false) {
+            return '[Part B World Around Us / EVS]';
+        }
+        if (stripos($clean, 'Art Education') !== false || stripos($clean, 'Physical Well-being') !== false) {
+            return '[Part B Art & Physical Ed]';
+        }
+        if (stripos($clean, 'Vocational') !== false || stripos($clean, 'Work Pre-Skills') !== false) {
+            return '[Part B Vocational Exposure]';
+        }
+        if (stripos($clean, 'Group Project') !== false) {
+            return '[Part B Collaborative Project]';
+        }
+        if (stripos($clean, 'Problem-Based') !== false || stripos($clean, 'Inquiry') !== false) {
+            return '[Part C Problem Inquiry]';
+        }
+        if (stripos($clean, 'Classroom Interactions') !== false || stripos($clean, 'Debates') !== false) {
+            return '[Part D Classroom Interactions]';
+        }
+        if (stripos($clean, 'Disciplines & Competencies') !== false) {
+            return '[Part E Competencies]';
+        }
+        if (stripos($clean, 'Credit Marks') !== false || stripos($clean, 'HPC Credit') !== false) {
+            return '[Part D HPC Credit Marks]';
+        }
+        if (stripos($clean, 'Part C') !== false && stripos($clean, 'Marks') !== false) {
+            return '[Part C Competency & Marks]';
+        }
+        if (stripos($clean, 'Part C') !== false && stripos($clean, 'Curricular') !== false) {
+            return '[Part C Curricular Levels]';
+        }
+        if (stripos($clean, 'Declaration') !== false || stripos($clean, 'Remarks') !== false) {
+            return '[Final Declaration & Remarks]';
+        }
+
+        return '[' . substr($clean, 0, 24) . ']';
+    }
+
     protected function buildEvaluationsSheet(Spreadsheet $spreadsheet, string $stage, array $students, array $options = []): void
     {
         $evalSheet = $spreadsheet->getActiveSheet();
@@ -890,6 +990,14 @@ class StageTemplateService
 
         $columns  = $this->getStageColumns($stage);
         $sections = $this->getStageSections($stage);
+
+        // Map column indices to sections
+        $colToSection = [];
+        foreach ($sections as $sec) {
+            for ($i = $sec['start']; $i <= $sec['end']; $i++) {
+                $colToSection[$i] = $sec;
+            }
+        }
 
         // Row 1: Category Super-Headers
         foreach ($sections as $sec) {
@@ -906,18 +1014,29 @@ class StageTemplateService
                 'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFFFFFFF']]],
             ]);
         }
-        $evalSheet->getRowDimension(1)->setRowHeight(30);
+        $evalSheet->getRowDimension(1)->setRowHeight(32);
 
-        // Row 2: Field Names & Row 3: Guidance Notes
+        // Row 2: Field Names (Prominently prefixed with Part heading) & Row 3: Guidance Notes
         foreach ($columns as $idx => $col) {
             $colLetter = $this->indexToColumnLetter($idx);
             $isObt    = str_ends_with($col['key'], '_obt');
             $isLocked = in_array($col['type'], ['locked', 'calc']);
 
-            $label = $isObt ? '✏️ ' . $col['label'] : $col['label'];
+            $sec = $colToSection[$idx] ?? null;
+            $prefix = $sec ? self::getSectionShortPrefix($sec['title']) : '';
+
+            $baseLabel = $isObt ? '✏️ ' . $col['label'] : $col['label'];
+            // Affix section prefix to Row 2 for all assessment parts so headings are fixed across all columns
+            if (!empty($prefix) && $idx >= 4 && !str_starts_with($baseLabel, '[')) {
+                $label = "{$prefix}\n{$baseLabel}";
+            } else {
+                $label = $baseLabel;
+            }
+
             $evalSheet->setCellValue("{$colLetter}2", $label);
             $evalSheet->setCellValue("{$colLetter}3", $col['note'] ?? '');
-            $evalSheet->getColumnDimension($colLetter)->setWidth($col['width']);
+            $colWidth = max($col['width'], 22);
+            $evalSheet->getColumnDimension($colLetter)->setWidth($colWidth);
 
             $headerBg    = $isObt ? 'FFFEF08A' : ($isLocked ? 'FFE2E8F0' : 'FF1E293B');
             $headerColor = $isObt ? 'FF854D0E' : ($isLocked ? 'FF334155' : 'FFFFFFFF');
@@ -925,19 +1044,19 @@ class StageTemplateService
             $evalSheet->getStyle("{$colLetter}2")->applyFromArray([
                 'font'      => ['bold' => true, 'color' => ['argb' => $headerColor], 'size' => 9.5],
                 'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $headerBg]],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
                 'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFCBD5E1']]],
             ]);
 
             $evalSheet->getStyle("{$colLetter}3")->applyFromArray([
                 'font'      => ['italic' => true, 'color' => ['argb' => 'FF64748B'], 'size' => 8.5],
                 'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFF8FAFC']],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
                 'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
             ]);
         }
-        $evalSheet->getRowDimension(2)->setRowHeight(26);
-        $evalSheet->getRowDimension(3)->setRowHeight(20);
+        $evalSheet->getRowDimension(2)->setRowHeight(42);
+        $evalSheet->getRowDimension(3)->setRowHeight(24);
 
         // Rows 4 onwards: Real Enrolled Students (or Starter Sample Students if none synced yet)
         if (empty($students)) {
@@ -1025,6 +1144,35 @@ class StageTemplateService
         $blankRule->getStyle()->getFill()->getEndColor()->setARGB('FFFEE2E2');
 
         $evalSheet->getStyle($evalDataRange)->setConditionalStyles([$blankRule]);
+
+        // Configure Outline & Focus Mode:
+        $evalSheet->setShowSummaryRight(false);
+        $evalSheet->setShowSummaryBelow(false);
+
+        // 1. Locked Left Side Focus Mode:
+        // Columns A (APAAR ID), B (HPC Login ID), D (Status) collapsed under Outline Level 1.
+        // Column C (Student Name) is visible at Outline Level 0 with width 28.
+        // In the frozen left pane, ONLY Student Name is displayed, maximizing screen width for data entry!
+        // Teachers can click the [+] button above column headers anytime to show all identifiers.
+        $evalSheet->getColumnDimension('A')->setOutlineLevel(1)->setVisible(false)->setCollapsed(true);
+        $evalSheet->getColumnDimension('B')->setOutlineLevel(1)->setVisible(false)->setCollapsed(true);
+        $evalSheet->getColumnDimension('C')->setOutlineLevel(0)->setVisible(true)->setWidth(28);
+        $evalSheet->getColumnDimension('D')->setOutlineLevel(1)->setVisible(false)->setCollapsed(true);
+
+        // 2. Part Outlines: Group assessment sections so teachers can complete one part then collapse it and go next
+        foreach ($sections as $sec) {
+            if ($sec['start'] >= 4 && $sec['end'] > $sec['start']) {
+                $startLtr = $this->indexToColumnLetter($sec['start']);
+                $evalSheet->getColumnDimension($startLtr)->setOutlineLevel(0)->setVisible(true);
+                for ($c = $sec['start'] + 1; $c <= $sec['end']; $c++) {
+                    $cLtr = $this->indexToColumnLetter($c);
+                    $evalSheet->getColumnDimension($cLtr)->setOutlineLevel(1)->setVisible(true)->setCollapsed(false);
+                }
+            }
+        }
+
+        // Freeze pane at E4: Columns A, B, C, D and Rows 1, 2, 3 are frozen.
+        // Because A, B, and D are collapsed by default, ONLY Column C (Student Name) occupies screen width!
         $evalSheet->freezePane('E4');
     }
 

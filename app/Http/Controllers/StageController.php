@@ -266,6 +266,11 @@ class StageController extends Controller
                     'act_strength'           => $rowValues['act_strength'] ?? $rowValues['act_teach_strength'] ?? 'Collaboration',
                     'act_barriers'           => $rowValues['act_barriers'] ?? $rowValues['act_teach_barrier'] ?? 'None',
                     'act_support_plan'       => $rowValues['act_support_plan'] ?? 'Provide advanced learning challenges and continuous encouragement',
+                    // Hand of Self-Reflection (Preparatory & Middle)
+                    'dont_like'              => $rowValues['dont_like'] ?? 'Fighting, shouting, and loud noises',
+                    'like_to'                => $rowValues['like_to'] ?? $rowValues['free_time'] ?? 'Reading storybooks, drawing nature, and playing outdoors',
+                    'good_at'                => $rowValues['good_at'] ?? $rowValues['do_well'] ?? 'Solving arithmetic puzzles and reciting poems',
+                    'not_good_at'            => $rowValues['not_good_at'] ?? $rowValues['want_to_improve'] ?? 'Neat cursive handwriting and spelling long words',
                     'data'                   => $rowValues,
                 ]);
             }

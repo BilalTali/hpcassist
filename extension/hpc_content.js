@@ -121,9 +121,18 @@
     function setNativeValue(element, value) {
         if (!element) return;
         element.focus();
+        if (element.isContentEditable || element.getAttribute('contenteditable') === 'true' || element.getAttribute('role') === 'textbox') {
+            element.innerText = value;
+            element.textContent = value;
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+            element.dispatchEvent(new Event('blur', { bubbles: true }));
+            return;
+        }
         const proto = Object.getPrototypeOf(element);
         const set = Object.getOwnPropertyDescriptor(proto, 'value')?.set ||
-                    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
+                    Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
         if (set) {
             set.call(element, value);
         } else {
@@ -2249,18 +2258,25 @@
     }
 
     function getFieldLabel(el) {
-        let text = '';
+        let text = (el.placeholder || '') + ' ' + (el.name || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('aria-label') || '');
         if (el.labels && el.labels.length) {
             for (let l of el.labels) text += ' ' + (l.innerText || '');
         }
-        const container = el.closest('div, li, tr, td, .form-group, .input-box, .card, fieldset');
-        if (container) {
-            const labels = container.querySelectorAll('label, p, span, h4, h5, h6, strong');
+        // Inspect previous siblings
+        let prev = el.previousElementSibling;
+        for (let i = 0; i < 3 && prev; i++) {
+            text += ' ' + (prev.innerText || '');
+            prev = prev.previousElementSibling;
+        }
+        // Inspect ancestors up to 5 levels
+        let curr = el.parentElement;
+        for (let depth = 0; depth < 5 && curr && curr !== document.body; depth++) {
+            const labels = curr.querySelectorAll('label, p, span, h3, h4, h5, h6, strong, b');
             for (let lbl of labels) {
                 text += ' ' + (lbl.innerText || '');
             }
+            curr = curr.parentElement;
         }
-        text += ' ' + (el.placeholder || '') + ' ' + (el.name || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('aria-label') || '');
         return text.toLowerCase();
     }
 
@@ -2268,21 +2284,13 @@
         await sleep(600);
         const candidates = Array.from(document.querySelectorAll('button, a[role="button"], input[type="button"], input[type="submit"], .btn'));
 
-        // Priority 1: Exact text matches for Continue / Next (NEVER Draft!)
+        // Priority 1: Text contains 'continue' and strictly does NOT contain 'draft' or 'back'
         let continueBtn = candidates.find(b => {
             const t = (b.innerText || b.value || '').trim().toLowerCase();
-            return (t === 'continue' || t === 'next' || t === 'save & continue' || t === 'save and continue' || t === 'save & next') && !t.includes('draft');
+            return t.includes('continue') && !t.includes('draft') && !t.includes('back');
         });
 
-        // Priority 2: Text contains 'continue' and strictly does NOT contain 'draft'
-        if (!continueBtn) {
-            continueBtn = candidates.find(b => {
-                const t = (b.innerText || b.value || '').trim().toLowerCase();
-                return t.includes('continue') && !t.includes('draft') && !t.includes('back');
-            });
-        }
-
-        // Priority 3: Text contains 'next' and does NOT contain 'draft'
+        // Priority 2: Text contains 'next' and does NOT contain 'draft'
         if (!continueBtn) {
             continueBtn = candidates.find(b => {
                 const t = (b.innerText || b.value || '').trim().toLowerCase();
@@ -2297,14 +2305,42 @@
             } catch(e) {}
             await sleep(400);
 
-            const pk = Object.keys(continueBtn).find(k => k.startsWith('__reactProps'));
-            if (pk && typeof continueBtn[pk]?.onClick === 'function') {
-                try { continueBtn[pk].onClick({ stopPropagation: () => {}, preventDefault: () => {} }); } catch(e) {}
-            }
-            continueBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-            continueBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+            const initialUrl = location.href;
+
+            // Dispatch full sequence of realistic pointer and mouse events
+            continueBtn.focus();
+            continueBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
+            continueBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+            continueBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
+            continueBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
             continueBtn.click();
-            await sleep(2200);
+
+            // Monitor for SPA navigation
+            for (let step = 0; step < 8; step++) {
+                await sleep(600);
+                if (location.href !== initialUrl) {
+                    logStatus(`Advanced to: ${location.href}`);
+                    return true;
+                }
+                // Handle confirmation modal if one appeared
+                const modal = document.querySelector('.modal, .swal2-popup, [role="dialog"], .fade.show');
+                if (modal) {
+                    const confirmBtn = Array.from(modal.querySelectorAll('button')).find(b => 
+                        /proceed|continue|yes|ok|confirm/i.test((b.innerText || '').trim())
+                    );
+                    if (confirmBtn) {
+                        confirmBtn.click();
+                        await sleep(800);
+                    }
+                }
+            }
+
+            // Fallback click invocation if URL hasn't shifted yet
+            if (location.href === initialUrl && !continueBtn.disabled) {
+                try { HTMLElement.prototype.click.call(continueBtn); } catch(e) {}
+                await sleep(1500);
+            }
+
             return true;
         }
 
@@ -2375,14 +2411,9 @@
 
         // Context-aware rules map covering both Preparatory "Hand of Self-Reflection" and Middle Stage fields
         const rules = [
-            // The Hand / Self-reflection Questions (Preparatory & Middle)
             {
                 keys: ["don't like", "dont like", "do not like", "dislike", "not like", "no like"],
                 val: s.dont_like || 'Fighting, shouting, and loud noises'
-            },
-            {
-                keys: ["like to", "things i like", "i like", "love to"],
-                val: s.like_to || s.free_time || 'Reading storybooks, drawing nature, and playing outdoors'
             },
             {
                 keys: ["no good at", "not good at", "am not good", "struggle with", "cannot do"],
@@ -2391,6 +2422,14 @@
             {
                 keys: ["good at", "really well", "do well", "i am good"],
                 val: s.do_well || s.good_at || 'Solving arithmetic puzzles and reciting poems'
+            },
+            {
+                keys: ["like to", "things i like", "i like", "love to"],
+                val: s.like_to || s.free_time || 'Reading storybooks, drawing nature, and playing outdoors'
+            },
+            {
+                keys: ["want to improve", "improve in", "could improve", "do better", "improve my skill", "skill of"],
+                val: s.want_to_improve || s.do_better || 'Neat cursive handwriting and fast mental math'
             },
             {
                 keys: ["live with", "stay with", "living with"],
@@ -2407,10 +2446,6 @@
             {
                 keys: ["free time", "in my free time", "leisure"],
                 val: s.free_time || 'Reading storybooks and sketching'
-            },
-            {
-                keys: ["want to improve", "improve in", "could improve", "do better", "improve"],
-                val: s.want_to_improve || s.do_better || 'Neat cursive handwriting and fast mental math'
             },
             {
                 keys: ["proud of", "feel proud", "proud"],
@@ -2462,23 +2497,39 @@
             }
         ];
 
-        // 1. Fill Text Inputs and Textareas via Label Matching
-        const textElements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea'));
+        // 1. Direct prompt node matching for Hand of Self-Reflection
+        const allTextNodes = Array.from(document.querySelectorAll('label, p, span, div, h4, h5, h6, text'));
+        rules.forEach(rule => {
+            const matchedEl = allTextNodes.find(el => {
+                const t = (el.innerText || el.textContent || '').trim().toLowerCase();
+                return rule.keys.some(k => t.includes(k)) && t.length < 80 && el.children.length <= 1;
+            });
+            if (matchedEl) {
+                const container = matchedEl.closest('div, li, fieldset, tr') || matchedEl.parentElement;
+                const targetInput = container?.querySelector('input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]') ||
+                                    matchedEl.nextElementSibling?.querySelector('input, textarea, [contenteditable="true"]') ||
+                                    (matchedEl.nextElementSibling?.matches('input, textarea, [contenteditable="true"]') ? matchedEl.nextElementSibling : null);
+                if (targetInput) {
+                    setNativeValue(targetInput, rule.val);
+                }
+            }
+        });
+
+        // 2. Scan all inputs, textareas, and contenteditable elements
+        const textElements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, [contenteditable="true"], [role="textbox"]'));
         textElements.forEach(el => {
             const lbl = getFieldLabel(el);
-            // Skip search bars or stage pickers
             if (lbl.includes('search') || el.type === 'search') return;
 
             const matchedRule = rules.find(r => r.keys.some(k => lbl.includes(k)));
             if (matchedRule) {
                 setNativeValue(el, matchedRule.val);
             } else if (!el.value || el.value.trim() === '') {
-                // Positional / fallback reflection if label did not directly match keywords
                 setNativeValue(el, 'Active and positive participation demonstrated throughout the year.');
             }
         });
 
-        // 2. Handle 'I am responsible' Select / Radio / Custom Dropdown
+        // 3. Dropdowns (Responsible)
         const selects = Array.from(document.querySelectorAll('select'));
         selects.forEach(sel => {
             const lbl = getFieldLabel(sel);
@@ -2492,7 +2543,7 @@
             }
         });
 
-        // 3. Handle Radio Groups in Part A2
+        // 4. Radio groups in Part A2
         const radioGroups = {};
         document.querySelectorAll('input[type="radio"]').forEach(r => {
             const name = r.name || 'group';
@@ -2722,93 +2773,257 @@
         const actPeerFeedback = s.act_peer_feedback || 'Very supportive and collaborative teammate; explained difficult astronomical concepts clearly';
         const actSupportPlan = s.act_support_plan || 'Encourage participation in inter-school science competitions, provide advanced telescope observation sessions, and recommend for student mentorship roles';
 
-        // 1. If activity cards already exist on student card, click matching button
-        const actButtons = Array.from(document.querySelectorAll('.hpc-forms button')).filter(b => /^\d+\s*\n/.test(b.innerText.trim()));
-        if (actButtons.length > 0) {
-            const target = actButtons.find(b => b.innerText.toLowerCase().includes(actSubject.slice(0, 5).toLowerCase())) || actButtons[0];
-            if (target) target.click();
+        // Helper to locate any vertical tab button or pill by regular expression
+        const clickTabByRegex = async (regex) => {
+            const allElements = Array.from(document.querySelectorAll('button, div, li, a, span'));
+            const target = allElements.find(el => {
+                const txt = (el.innerText || '').trim();
+                return regex.test(txt) && txt.length < 50 && el.children.length <= 2;
+            });
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                target.click();
+                await sleep(600);
+                return true;
+            }
+            return false;
+        };
+
+        // 1. If an activity card already exists in the sidebar (e.g. Activity 1), ensure it's selected
+        const existingActBtns = Array.from(document.querySelectorAll('button, div[role="button"]')).filter(b => {
+            const t = (b.innerText || '').trim();
+            return /^\d+\s+/m.test(t) && (t.toLowerCase().includes('observation') || t.toLowerCase().includes('activity') || t.toLowerCase().includes('project') || t.length < 35);
+        });
+        if (existingActBtns.length > 0) {
+            existingActBtns[0].click();
             await sleep(500);
         }
 
-        // 2. Click "Add Activity" if present
-        const addBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Add Activity'));
-        if (addBtn) {
+        // 2. Click "Add Activity" if no activity is loaded or tabs not visible
+        const tabsVisible = Array.from(document.querySelectorAll('*')).some(el => /assessment rubric/i.test(el.innerText || ''));
+        const addBtn = Array.from(document.querySelectorAll('button')).find(b => /add activity/i.test(b.innerText || ''));
+        if (addBtn && !tabsVisible) {
             addBtn.click();
             await sleep(600);
-            const modal = document.querySelector('.quick-add-activity, .modal');
+            const modal = document.querySelector('.quick-add-activity, .modal, [role="dialog"]');
             if (modal) {
-                const contBtn = Array.from(modal.querySelectorAll('button')).find(b => b.innerText.trim() === 'Continue');
+                const contBtn = Array.from(modal.querySelectorAll('button')).find(b => /continue|next|save/i.test(b.innerText || ''));
                 if (contBtn) contBtn.click();
                 await sleep(800);
             }
         }
 
-        // Tab 1: Activity Name & Types
-        const nameInp = document.querySelector('.acivity-name-updates input, input[placeholder*="Activity Name" i]');
-        if (nameInp) setNativeValue(nameInp, actTitle);
-        document.querySelectorAll('input[name^="activity_"]').forEach((cb, i) => {
-            if (i < 2 && !cb.checked) cb.click();
-        });
-
-        // Tab 2: Subject & Competency
-        const tabPills = Array.from(document.querySelectorAll('.activate-tab-pills div[role="button"], .tab-pills [role="button"]'));
-        if (tabPills[1]) {
-            tabPills[1].click();
-            await sleep(500);
+        // ─────────────────────────────────────────────────────────────
+        // TAB 1: Activity Details
+        // ─────────────────────────────────────────────────────────────
+        await clickTabByRegex(/activity details/i);
+        const nameInp = document.querySelector('input[placeholder*="Activity Name" i], .acivity-name-updates input, input[name*="activity_name" i]');
+        if (nameInp && (!nameInp.value || nameInp.value.trim() === '')) {
+            setNativeValue(nameInp, actTitle);
         }
-        const wrapper = document.querySelector('.scroller-cg-domain .custom-dropdown-wrapper');
-        if (wrapper) wrapper.querySelector('.custom-dropdown-header')?.click();
+        document.querySelectorAll('input[type="checkbox"][name^="activity_"], input[type="checkbox"]').forEach((cb, i) => {
+            if (i < 2 && !cb.checked) {
+                cb.click();
+                cb.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
         await sleep(400);
 
-        const items = Array.from(document.querySelectorAll('.scroller-cg-domain .custom-dropdown-item, .custom-dropdown-item'));
-        const targetDomain = items.find(el => el.innerText.trim().toLowerCase().startsWith(actSubject.slice(0, 5).toLowerCase()));
-        if (targetDomain) targetDomain.click();
-        await sleep(600);
-
-        // Check first competency
-        const cpts = document.querySelectorAll('.scroller-container input[name="cpt"]');
-        if (cpts.length > 0 && !cpts[0].checked) {
+        // ─────────────────────────────────────────────────────────────
+        // TAB 2: Subject, CG & Competencies
+        // ─────────────────────────────────────────────────────────────
+        await clickTabByRegex(/subject.*competenc/i);
+        const wrapper = document.querySelector('.scroller-cg-domain .custom-dropdown-wrapper, .custom-dropdown-wrapper');
+        if (wrapper) {
+            const header = wrapper.querySelector('.custom-dropdown-header');
+            if (header) {
+                header.click();
+                await sleep(400);
+                const items = Array.from(document.querySelectorAll('.custom-dropdown-item'));
+                const targetDomain = items.find(el => el.innerText.trim().toLowerCase().includes(actSubject.slice(0, 4).toLowerCase())) || items[0];
+                if (targetDomain) targetDomain.click();
+                await sleep(500);
+            }
+        }
+        // Ensure first competency is checked
+        const cpts = document.querySelectorAll('input[name="cpt"], input[type="checkbox"][id*="cpt" i], .scroller-container input[type="checkbox"]');
+        if (cpts.length > 0 && !Array.from(cpts).some(c => c.checked)) {
             cpts[0].click();
             cpts[0].dispatchEvent(new Event('change', { bubbles: true }));
         }
+        await sleep(400);
 
-        // Tab 3: Assessment / Teacher Assessment
-        if (tabPills[2]) {
-            tabPills[2].click();
-            await sleep(500);
-            // Click options or rubrics
-            document.querySelectorAll('.appropriate-option-select li, ul.options-list li, .rubric-item button').forEach((el, i) => {
-                if (i < 3) el.click();
-            });
-        }
-
-        // Tab 4: Self Assessment (My Progress Grid*)
-        if (tabPills[3]) {
-            tabPills[3].click();
-            await sleep(500);
-            // Circle statements for Awareness, Sensitivity, Creativity
-            document.querySelectorAll('.progress-grid li, .statement-circle, [class*="progress" i] li, div[role="button"].statement').forEach((el, i) => {
-                if (i < 6) el.click();
-            });
-            const learningsTa = document.querySelector('textarea');
-            if (learningsTa && !learningsTa.value) {
-                setNativeValue(learningsTa, actLearnt || 'Learned celestial orbital distances and practical geometry');
+        // ─────────────────────────────────────────────────────────────
+        // TAB 3: Activity & Assessment Qs
+        // ─────────────────────────────────────────────────────────────
+        await clickTabByRegex(/activity.*assessment/i);
+        document.querySelectorAll('.appropriate-option-select li, ul.options-list li, .rubric-item button').forEach((el, i) => {
+            if (i < 3) el.click();
+        });
+        const tab3Radios = Array.from(document.querySelectorAll('input[type="radio"]'));
+        const t3Groups = {};
+        tab3Radios.forEach(r => {
+            const g = r.name || 't3';
+            if (!t3Groups[g]) t3Groups[g] = [];
+            t3Groups[g].push(r);
+        });
+        Object.values(t3Groups).forEach(grp => {
+            if (!grp.some(r => r.checked)) {
+                const target = grp[1] || grp[grp.length - 1] || grp[0];
+                target.click();
+                target.checked = true;
+                target.dispatchEvent(new Event('change', { bubbles: true }));
             }
-        }
+        });
+        document.querySelectorAll('textarea').forEach(ta => {
+            if (!ta.value || ta.value.trim() === '') {
+                setNativeValue(ta, actDesc);
+            }
+        });
+        await sleep(400);
 
-        // Tab 5: Peer Assessment (My Peer's Progress Grid)
-        if (tabPills[4]) {
-            tabPills[4].click();
-            await sleep(500);
-            document.querySelectorAll('.progress-grid li, .statement-circle, [class*="progress" i] li').forEach((el, i) => {
-                if (i < 6) el.click();
-            });
-            const peerInputs = document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"])');
-            if (peerInputs[0]) setNativeValue(peerInputs[0], actPeerName);
-        }
+        // ─────────────────────────────────────────────────────────────
+        // TAB 4: Assessment Rubric (Awareness, Sensitivity, Creativity Table)
+        // ─────────────────────────────────────────────────────────────
+        await clickTabByRegex(/assessment rubric/i);
+        await sleep(600);
 
-        // React Fiber state update for guaranteed complete activity payload across ALL tabs
-        const candidateNodes = Array.from(document.querySelectorAll('.hpc-finish-activity-btn, input[name="cpt"], .activate-tab-pills, .scroller-container'));
+        const rubricRows = Array.from(document.querySelectorAll('table tbody tr, table tr')).filter(tr => {
+            return !tr.querySelector('th') || tr.querySelectorAll('td').length >= 3;
+        });
+
+        rubricRows.forEach(row => {
+            const rowText = (row.innerText || '').toLowerCase();
+            const cells = Array.from(row.querySelectorAll('td'));
+            const radios = Array.from(row.querySelectorAll('input[type="radio"], input[type="checkbox"], .form-check-input, [role="radio"]'));
+
+            // Level index: 0=Beginner, 1=Proficient, 2=Advanced
+            let targetIdx = 1;
+            if (rowText.includes('awareness')) {
+                if (actAwr.includes('begin')) targetIdx = 0;
+                else if (actAwr.includes('adv')) targetIdx = 2;
+                else targetIdx = 1;
+            } else if (rowText.includes('sensitivity')) {
+                if (actSen.includes('begin')) targetIdx = 0;
+                else if (actSen.includes('adv')) targetIdx = 2;
+                else targetIdx = 1;
+            } else if (rowText.includes('creativity')) {
+                if (actCre.includes('begin')) targetIdx = 0;
+                else if (actCre.includes('adv')) targetIdx = 2;
+                else targetIdx = 1;
+            } else {
+                targetIdx = actLevel.includes('adv') ? 2 : (actLevel.includes('begin') ? 0 : 1);
+            }
+
+            if (radios.length > 0) {
+                const chosen = radios[targetIdx] || radios[radios.length - 1] || radios[0];
+                if (chosen) {
+                    chosen.click();
+                    chosen.checked = true;
+                    chosen.dispatchEvent(new Event('input', { bubbles: true }));
+                    chosen.dispatchEvent(new Event('change', { bubbles: true }));
+                    const parentLabel = chosen.closest('label, td, div');
+                    if (parentLabel && parentLabel !== chosen) {
+                        parentLabel.click();
+                    }
+                }
+            } else if (cells.length >= 4) {
+                const targetCell = cells[targetIdx + 1] || cells[2] || cells[1];
+                if (targetCell) {
+                    const clickTarget = targetCell.querySelector('input, label, [role="button"]') || targetCell;
+                    clickTarget.click();
+                }
+            }
+        });
+
+        // Also ensure all radio groups on Tab 4 have a selection
+        const tab4Radios = Array.from(document.querySelectorAll('input[type="radio"]'));
+        const t4Groups = {};
+        tab4Radios.forEach(r => {
+            const g = r.name || 't4';
+            if (!t4Groups[g]) t4Groups[g] = [];
+            t4Groups[g].push(r);
+        });
+        Object.values(t4Groups).forEach(grp => {
+            if (!grp.some(r => r.checked)) {
+                const target = grp[1] || grp[grp.length - 1] || grp[0];
+                target.click();
+                target.checked = true;
+                target.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+        await sleep(500);
+
+        // ─────────────────────────────────────────────────────────────
+        // TAB 5: Observational Notes
+        // ─────────────────────────────────────────────────────────────
+        await clickTabByRegex(/observational notes/i);
+        await sleep(500);
+        document.querySelectorAll('textarea').forEach((ta, idx) => {
+            const p = (ta.placeholder || '').toLowerCase();
+            let note = actDesc;
+            if (idx === 1 || p.includes('plan') || p.includes('support')) {
+                note = actSupportPlan;
+            }
+            if (!ta.value || ta.value.trim() === '') {
+                setNativeValue(ta, note);
+            }
+        });
+        document.querySelectorAll('input[type="text"]').forEach(inp => {
+            if (!inp.value || inp.value.trim() === '') {
+                setNativeValue(inp, 'Consistent curiosity and active engagement observed');
+            }
+        });
+        await sleep(400);
+
+        // ─────────────────────────────────────────────────────────────
+        // TAB 6: Self Assessment (Statements, Learnings, Radios)
+        // ─────────────────────────────────────────────────────────────
+        await clickTabByRegex(/self assessment/i);
+        await sleep(600);
+
+        // 1. Circle / Select all statement options (My Progress Grid)
+        document.querySelectorAll('.progress-grid li, .statement-circle, [class*="progress" i] li, div[role="button"].statement, [class*="statement" i], ul.options-list li, .appropriate-option-select li').forEach(el => {
+            el.click();
+            el.dispatchEvent(new Event('click', { bubbles: true }));
+        });
+
+        // 2. Select positive radio buttons on Tab 6
+        const selfRadios = Array.from(document.querySelectorAll('input[type="radio"]'));
+        const sGroups = {};
+        selfRadios.forEach(r => {
+            const g = r.name || 'self';
+            if (!sGroups[g]) sGroups[g] = [];
+            sGroups[g].push(r);
+        });
+        Object.values(sGroups).forEach(grp => {
+            if (!grp.some(r => r.checked)) {
+                const pos = grp.find(r => /yes|always|proficient|advanced|3|2/i.test(r.value || r.id || '')) || grp[grp.length - 1] || grp[0];
+                pos.click();
+                pos.checked = true;
+                pos.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+
+        // 3. Fill "What I learnt" / "My Learnings" textarea
+        document.querySelectorAll('textarea').forEach(ta => {
+            if (!ta.value || ta.value.trim() === '') {
+                setNativeValue(ta, actLearnt || 'Learned practical observation skills, plant germination stages, and working cooperatively with classmates.');
+            }
+        });
+
+        // 4. Fill any remaining text inputs
+        document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])').forEach(inp => {
+            if (!inp.value || inp.value.trim() === '') {
+                setNativeValue(inp, actInteresting || 'Observing seeds sprout and recording growth measurements');
+            }
+        });
+        await sleep(600);
+
+        // ─────────────────────────────────────────────────────────────
+        // React Fiber Safety Dispatch
+        // ─────────────────────────────────────────────────────────────
+        const candidateNodes = Array.from(document.querySelectorAll('button, input[name="cpt"], table, textarea'));
         let dispatched = false;
         for (const node of candidateNodes) {
             if (dispatched) break;
@@ -2858,15 +3073,33 @@
 
         await sleep(800);
 
-        // Finish Activity
-        const finishBtn = document.querySelector('.hpc-finish-activity-btn');
+        // ─────────────────────────────────────────────────────────────
+        // Click "Finish Activity"
+        // ─────────────────────────────────────────────────────────────
+        const finishBtns = Array.from(document.querySelectorAll('button, a[role="button"], .btn')).filter(b => {
+            const t = (b.innerText || '').trim().toLowerCase();
+            return t.includes('finish activity') || t.includes('complete activity');
+        });
+        const finishBtn = finishBtns[0] || document.querySelector('.hpc-finish-activity-btn');
         if (finishBtn && !finishBtn.disabled) {
+            logStatus('Completing Activity: Clicking Finish Activity...');
+            try {
+                finishBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch(e) {}
+            await sleep(400);
             finishBtn.click();
-            await sleep(1000);
-            const modal = document.querySelector('.modal, .fade.show, [role="dialog"]');
+            await sleep(1200);
+
+            // Confirm modal if shown ("Finish" / "Yes" / "Confirm")
+            const modal = document.querySelector('.modal, .swal2-popup, [role="dialog"], .fade.show');
             if (modal) {
-                const mFinishBtn = Array.from(modal.querySelectorAll('button')).find(b => b.innerText.trim() === 'Finish' || b.innerText.trim() === 'Yes' || b.innerText.trim() === 'Confirm');
-                if (mFinishBtn) mFinishBtn.click();
+                const confirmBtn = Array.from(modal.querySelectorAll('button')).find(b => 
+                    /finish|yes|confirm|proceed|ok|complete/i.test((b.innerText || '').trim())
+                );
+                if (confirmBtn) {
+                    confirmBtn.click();
+                    await sleep(1500);
+                }
             }
         }
 
@@ -3006,23 +3239,46 @@
                 if (raw) s = JSON.parse(raw);
             } catch(e) {}
         }
+        if (!s && teacherQueue && teacherQueue[teacherCurrentIndex]) {
+            s = teacherQueue[teacherCurrentIndex];
+        }
         if (!s) return false;
 
         const url = location.href.toLowerCase();
+        const pageText = (document.body?.innerText || '').toLowerCase();
+        const pageHeading = (document.querySelector('h1, h2, h3, h4, .page-title, .breadcrumb')?.innerText || '').toLowerCase();
 
-        if (url.includes('/part-a1') || (!url.includes('/part-') && document.querySelector('tbody tr:nth-child(1) td input'))) {
+        // ── PART A1 ──
+        const isPartA1 = url.includes('/part-a1') || url.includes('/part-a(1)') || url.includes('/part-a-1') ||
+                         pageHeading.includes('part - a(1)') || pageHeading.includes('part a(1)') || pageHeading.includes('part - a1') ||
+                         (!url.includes('/part-') && document.querySelector('tbody tr:nth-child(1) td input')) ||
+                         (document.querySelector('tbody tr:nth-child(1) td input') && !url.includes('/part-b') && !url.includes('/part-c') && !url.includes('/hpc-credit'));
+
+        if (isPartA1) {
             await fillPartA1(s);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;
         }
-        if (url.includes('/part-a2')) {
+
+        // ── PART A2 ──
+        const isPartA2 = url.includes('/part-a2') || url.includes('/part-a(2)') || url.includes('/part-a-2') ||
+                         pageHeading.includes('part - a(2)') || pageHeading.includes('part a(2)') || pageHeading.includes('part - a2') ||
+                         pageHeading.includes('all about me') || pageText.includes('hand of self-reflection') ||
+                         document.querySelector('[class*="hand" i], [id*="hand" i]');
+
+        if (isPartA2) {
             await fillPartA2(s);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;
         }
-        if (url.includes('/part-a3')) {
+
+        // ── PART A3 ──
+        const isPartA3 = url.includes('/part-a3') || url.includes('/part-a(3)') || url.includes('/part-a-3') ||
+                         pageHeading.includes('part - a(3)') || pageHeading.includes('part a(3)') || pageHeading.includes('part - a3');
+
+        if (isPartA3) {
             const isPrep = url.includes('preparatory') || (s && String(s.grade || s.class || s.stage || '').match(/^[345]|prep/i));
             if (isPrep) {
                 await fillPreparatoryPartA3(s);
@@ -3033,25 +3289,43 @@
             scheduleTeacherEvaluationStep(1500);
             return true;
         }
-        if (url.includes('/part-a4')) {
+
+        // ── PART A4 (Middle Stage Only) ──
+        const isPartA4 = url.includes('/part-a4') || url.includes('/part-a(4)') || url.includes('/part-a-4') ||
+                         pageHeading.includes('part - a(4)') || pageHeading.includes('part a(4)');
+
+        if (isPartA4) {
             await fillPartA4(s);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;
         }
-        if (url.includes('/part-b')) {
+
+        // ── PART B ──
+        const isPartB = url.includes('/part-b') || pageHeading.includes('part - b') || pageHeading.includes('part b') ||
+                        document.querySelector('.acivity-name-updates, [class*="activity" i]') && Array.from(document.querySelectorAll('*')).some(el => /assessment rubric/i.test(el.innerText || ''));
+
+        if (isPartB) {
             await fillPartB(s);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;
         }
-        if (url.includes('/part-c')) {
+
+        // ── PART C ──
+        const isPartC = url.includes('/part-c') || pageHeading.includes('part - c') || pageHeading.includes('part c');
+
+        if (isPartC) {
             await fillPartC(s);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;
         }
-        if (url.includes('/hpc-credit')) {
+
+        // ── HPC CREDIT ──
+        const isHpcCredit = url.includes('/hpc-credit') || url.includes('/credit') || pageHeading.includes('credit');
+
+        if (isHpcCredit) {
             await fillHpcCredit(s);
             logStatus(`🎉 Evaluated & submitted ${s.name} successfully!`);
             await reportTeacherProgress(teacherCurrentIndex + 1, teacherQueue.length, s.name, s.login_id, 'completed', 'HPC assessment and credit marks submitted successfully');

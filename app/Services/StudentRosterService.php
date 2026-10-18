@@ -79,7 +79,7 @@ class StudentRosterService
         $admissionNo = ! empty($data['admission_no']) ? trim((string) $data['admission_no']) : (! empty($data['admnNumber']) ? trim((string) $data['admnNumber']) : null);
         
         // Guard: School admission number must NEVER be an HPC Login ID (e.g. S3F44CB1E4), PEN, or APAAR
-        if (! empty($admissionNo) && (preg_match('/^S[0-9A-Z]{6,16}$/i', $admissionNo) || $admissionNo === $pen || $admissionNo === $apaar)) {
+        if (! empty($admissionNo) && ($admissionNo === $pen || $admissionNo === $apaar || (! empty($data['login_id']) && $admissionNo === $data['login_id']))) {
             $admissionNo = null;
         }
 

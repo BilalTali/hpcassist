@@ -980,7 +980,11 @@ class StageTemplateService
                 $colLetter = $this->indexToColumnLetter($cIdx);
                 $val = $starterRow[$cIdx] ?? '';
 
-                $evalSheet->setCellValue("{$colLetter}{$rowNum}", $val);
+                if (in_array($col['key'], ['admission_no', 'apaar_id', 'login_id'], true)) {
+                    $evalSheet->setCellValueExplicit("{$colLetter}{$rowNum}", (string)$val, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                } else {
+                    $evalSheet->setCellValue("{$colLetter}{$rowNum}", $val);
+                }
 
                 if (($col['type'] ?? '') === 'list' && !empty($col['options'])) {
                     $validation = $evalSheet->getCell("{$colLetter}{$rowNum}")->getDataValidation();
@@ -1130,7 +1134,10 @@ class StageTemplateService
             $data = json_decode(@file_get_contents($uf), true) ?: [];
             foreach ($data as $item) {
                 $adm = trim((string)($item['admnNumber'] ?? $item['admissionNo'] ?? $item['admission_no'] ?? ''));
-                if (empty($adm) || preg_match('/^S[0-9A-Z]{6,16}$/i', $adm)) continue;
+                if (empty($adm)) continue;
+                if (! empty($item['apaarId']) && $adm === trim((string)$item['apaarId'])) continue;
+                if (! empty($item['studentCodeNat']) && $adm === trim((string)$item['studentCodeNat'])) continue;
+
                 if (! empty($item['apaarId'])) $map['apaar:' . trim($item['apaarId'])] = $adm;
                 if (! empty($item['studentCodeNat'])) $map['pen:' . trim($item['studentCodeNat'])] = $adm;
                 if (! empty($item['studentName'])) {
@@ -1155,7 +1162,7 @@ class StageTemplateService
                     $pen   = trim((string)$sheet->getCell([3, $r])->getValue());
                     $name  = trim((string)$sheet->getCell([4, $r])->getValue());
                     $adm   = trim((string)$sheet->getCell([7, $r])->getValue());
-                    if (! empty($adm) && ! preg_match('/^S[0-9A-Z]{6,16}$/i', $adm)) {
+                    if (! empty($adm) && $adm !== $pen && $adm !== $apaar) {
                         if (! empty($apaar) && $apaar !== 'Not Generated') $map['apaar:' . $apaar] = $adm;
                         if (! empty($pen)) $map['pen:' . $pen] = $adm;
                         if (! empty($name)) {
@@ -1174,6 +1181,7 @@ class StageTemplateService
 
     /**
      * Robust resolution of a student's school admission number.
+     * Supports both pure integers (e.g. 309, 284) and alphanumeric strings (e.g. ADM-105, 2024/01, S-101).
      * Fetches exact uploaded/registered admission number. If student has none, returns empty string (no dummy values).
      */
     public function resolveAdmissionNumber(array $st, int $sIdx = 0): string
@@ -1182,7 +1190,7 @@ class StageTemplateService
         $apaarId = trim((string)($st['apaar_id'] ?? ''));
         $name    = trim((string)($st['name'] ?? ''));
 
-        // 1. Check direct keys on student
+        // 1. Check direct keys on student (integer or integer and string)
         $candidates = [
             $st['admission_no'] ?? null,
             $st['admnNumber'] ?? null,
@@ -1195,10 +1203,10 @@ class StageTemplateService
             if ($cand !== null && trim((string)$cand) !== '') {
                 $candStr = trim((string)$cand);
                 // Ensure candidate is not accidentally the HPC Login ID or APAAR ID
-                if ($candStr !== $loginId && $candStr !== $apaarId && ! ($loginId && $candStr === $loginId)) {
-                    if (! preg_match('/^S[0-9A-Z]{6,16}$/i', $candStr) || $candStr !== $loginId) {
-                        return $candStr;
-                    }
+                $isDuplicateId = (! empty($loginId) && strcasecmp($candStr, $loginId) === 0)
+                              || (! empty($apaarId) && strcasecmp($candStr, $apaarId) === 0);
+                if (! $isDuplicateId) {
+                    return $candStr;
                 }
             }
         }
@@ -1215,7 +1223,7 @@ class StageTemplateService
                     ->first();
                 if ($match && ! empty($match->admission_no)) {
                     $dbAdm = trim((string)$match->admission_no);
-                    if ($dbAdm !== $loginId && $dbAdm !== $apaarId && ! preg_match('/^S[0-9A-Z]{6,16}$/i', $dbAdm)) {
+                    if ($dbAdm !== '' && strcasecmp($dbAdm, $loginId) !== 0 && strcasecmp($dbAdm, $apaarId) !== 0) {
                         return $dbAdm;
                     }
                 }

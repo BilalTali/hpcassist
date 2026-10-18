@@ -521,10 +521,7 @@ class HpcAutomationService
             $penCode   = trim($raw['pen_code'] ?? '');
             $admNo     = trim($raw['admission_no'] ?? '');
 
-            if (preg_match('/^S[0-9A-Z]{6,16}$/i', $admNo) || $admNo === $hpcId || $admNo === $penCode || $admNo === $apaar) {
-                if (empty($hpcId)) {
-                    $hpcId = $admNo;
-                }
+            if ($admNo !== '' && ($admNo === $hpcId || $admNo === $penCode || $admNo === $apaar)) {
                 $admNo = '';
             }
 

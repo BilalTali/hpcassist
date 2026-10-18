@@ -164,7 +164,11 @@ class StageController extends Controller
                     $cLetter = $this->stageService->indexToColumnLetter($cIdx);
                     $cell = $ws->getCell("{$cLetter}{$r}");
                     $val = $cell->isFormula() ? $cell->getCalculatedValue() : $cell->getValue();
-                    $rowValues[$col['key']] = is_string($val) ? trim($val) : $val;
+                    if (in_array($col['key'], ['admission_no', 'apaar_id', 'login_id', 'roll_no'], true)) {
+                        $rowValues[$col['key']] = trim((string)$val);
+                    } else {
+                        $rowValues[$col['key']] = is_string($val) ? trim($val) : $val;
+                    }
                 }
 
                 $marks = [];
@@ -255,7 +259,7 @@ class StageController extends Controller
                     $cApaar = $cs['apaar_id'] ?? '';
                     $cName  = strtolower(trim($cs['name'] ?? ''));
                     foreach ($preview as $p) {
-                        $pAdm = trim($p['admission_no'] ?? '');
+                        $pAdm = trim((string)($p['admission_no'] ?? ''));
                         if (empty($pAdm)) continue;
                         if ((! empty($cLogin) && ($p['login_id'] ?? '') === $cLogin) ||
                             (! empty($cApaar) && ($p['apaar_id'] ?? '') === $cApaar) ||
@@ -361,7 +365,7 @@ class StageController extends Controller
                     });
                     if ($match) {
                         $dbAdm = $match->admission_no ? (string)$match->admission_no : '';
-                        if ($dbAdm !== ($s['login_id'] ?? '') && $dbAdm !== ($s['apaar_id'] ?? '') && ! preg_match('/^S[0-9A-Z]{6,16}$/i', $dbAdm)) {
+                        if ($dbAdm !== '' && strcasecmp($dbAdm, (string)($s['login_id'] ?? '')) !== 0 && strcasecmp($dbAdm, (string)($s['apaar_id'] ?? '')) !== 0) {
                             $s['admission_no'] = $dbAdm;
                         }
                         if (empty($s['grade']) && ! empty($match->grade)) $s['grade'] = $match->grade;

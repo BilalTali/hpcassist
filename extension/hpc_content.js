@@ -1364,8 +1364,8 @@
                         hpcId = t;
                         continue;
                     }
-                    // Admission No: short alphanumeric (strictly exclude HPC Login ID pattern)
-                    if (!admNo && /^[A-Z0-9]{2,12}$/i.test(t) && t !== apaar && !/^S[0-9A-Z]{6,16}$/i.test(t) && !/^(grade|class|pp)/i.test(t)) {
+                    // Admission No: integer or integer and string (strictly exclude HPC Login ID and APAAR)
+                    if (!admNo && /^[A-Z0-9\/-]{1,20}$/i.test(t) && t !== apaar && (!hpcId || t.toLowerCase() !== hpcId.toLowerCase()) && !/^(grade|class|pp)/i.test(t)) {
                         admNo = t;
                     }
                 }
@@ -1828,15 +1828,14 @@
 
     async function fillAdmissionNumber(student, knownFields = {}) {
         const admInput = findAdmissionInput(knownFields);
-        const admVal = String(
-            student.admission_no ?? 
-            student.admissionNo ?? 
-            student.admnNumber ?? 
-            ''
-        ).trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+        let admVal = String(
+            student.admission_no !== undefined && student.admission_no !== null ? student.admission_no : 
+            (student.admissionNo !== undefined && student.admissionNo !== null ? student.admissionNo : 
+            (student.admnNumber !== undefined && student.admnNumber !== null ? student.admnNumber : ''))
+        ).trim();
 
         // INTEGRITY GUARD: School Admission Number must NEVER be the student's HPC Login ID or APAAR ID!
-        if (/^S[0-9A-Z]{6,16}$/i.test(admVal) || admVal === (student.login_id || '') || admVal === (student.apaar_id || '')) {
+        if ((student.login_id && admVal.toLowerCase() === student.login_id.toLowerCase()) || (student.apaar_id && admVal === student.apaar_id)) {
             console.warn('[HPC Assist] Discarding invalid admission number matching HPC Login ID / APAAR ID:', admVal);
             return;
         }
@@ -1948,7 +1947,7 @@
             await sleep(200);
 
             // 8b. Re-verify School Admission Number in case dropdown re-renders wiped it
-            const expectedAdm = String(student.admission_no ?? student.admissionNo ?? student.admnNumber ?? '').trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+            const expectedAdm = String(student.admission_no ?? student.admissionNo ?? student.admnNumber ?? '').trim();
             if (expectedAdm) {
                 const curAdmInput = findAdmissionInput(fields);
                 if (curAdmInput && curAdmInput !== fields.firstName && curAdmInput.value !== expectedAdm) {
@@ -2266,9 +2265,9 @@
 
     async function fillPartA1(s) {
         logStatus(`[Part-A1] Filling Basic Profile & Attendance for ${s.name}...`);
-        // 1. Admission Number
-        let admVal = String(s.admission_no || '').trim();
-        if (/^S[0-9A-Z]{6,16}$/i.test(admVal) || admVal === (s.login_id || '') || admVal === (s.apaar_id || '')) {
+        // 1. Admission Number (can be integer or integer and string)
+        let admVal = String(s.admission_no !== undefined && s.admission_no !== null ? s.admission_no : '').trim();
+        if ((s.login_id && admVal.toLowerCase() === s.login_id.toLowerCase()) || (s.apaar_id && admVal === s.apaar_id)) {
             admVal = '';
         }
         const admContainer = Array.from(document.querySelectorAll('label')).find(l => l.innerText.includes('School Admission Number'))?.closest('div');

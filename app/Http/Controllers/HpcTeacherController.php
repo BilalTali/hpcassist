@@ -268,7 +268,7 @@ class HpcTeacherController extends Controller
 
             $admNo = $match?->admission_no ? (string)$match->admission_no : '';
             // Guard: School admission number must NEVER be HPC Login ID, APAAR ID, or PEN
-            if (preg_match('/^S[0-9A-Z]{6,16}$/i', $admNo) || $admNo === $loginId || $admNo === $apaarId || $admNo === ($match?->pen_code ?? '')) {
+            if ($admNo !== '' && ($admNo === $loginId || $admNo === $apaarId || $admNo === ($match?->pen_code ?? ''))) {
                 $admNo = '';
             }
             if (empty($admNo)) {
@@ -434,18 +434,18 @@ class HpcTeacherController extends Controller
                 });
                 if ($match) {
                     $dbAdm = $match->admission_no ? (string)$match->admission_no : '';
-                    if (preg_match('/^S[0-9A-Z]{6,16}$/i', $dbAdm) || $dbAdm === ($s['login_id'] ?? '') || $dbAdm === ($s['apaar_id'] ?? '') || $dbAdm === ($match->pen_code ?? '')) {
+                    if ($dbAdm !== '' && ($dbAdm === ($s['login_id'] ?? '') || $dbAdm === ($s['apaar_id'] ?? '') || $dbAdm === ($match->pen_code ?? ''))) {
                         $dbAdm = '';
                     }
                     $s['admission_no'] = $dbAdm ?: ($s['admission_no'] ?? '');
-                    if (preg_match('/^S[0-9A-Z]{6,16}$/i', (string)$s['admission_no']) || $s['admission_no'] === ($s['login_id'] ?? '')) {
+                    if ($s['admission_no'] === ($s['login_id'] ?? '') || $s['admission_no'] === ($s['apaar_id'] ?? '')) {
                         $s['admission_no'] = '';
                     }
                     if (empty($s['grade']) && ! empty($match->grade)) $s['grade'] = $match->grade;
                     if (empty($s['section']) && ! empty($match->section)) $s['section'] = $match->section;
                 } else {
                     $s['admission_no'] = $s['admission_no'] ?? '';
-                    if (preg_match('/^S[0-9A-Z]{6,16}$/i', (string)$s['admission_no']) || $s['admission_no'] === ($s['login_id'] ?? '')) {
+                    if ($s['admission_no'] === ($s['login_id'] ?? '') || $s['admission_no'] === ($s['apaar_id'] ?? '')) {
                         $s['admission_no'] = '';
                     }
                 }
@@ -640,7 +640,11 @@ class HpcTeacherController extends Controller
                 $colLetter = $this->indexToColumnLetter($cIdx);
                 $val = $starterRow[$cIdx] ?? '';
 
-                $evalSheet->setCellValue("{$colLetter}{$rowNum}", $val);
+                if (in_array($col['key'], ['admission_no', 'apaar_id', 'login_id'], true)) {
+                    $evalSheet->setCellValueExplicit("{$colLetter}{$rowNum}", (string)$val, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                } else {
+                    $evalSheet->setCellValue("{$colLetter}{$rowNum}", $val);
+                }
 
                 if ($col['type'] === 'list') {
                     $validation = $evalSheet->getCell("{$colLetter}{$rowNum}")->getDataValidation();
@@ -789,7 +793,11 @@ class HpcTeacherController extends Controller
                     $colLetter = $this->indexToColumnLetter($cIdx);
                     $cell = $ws->getCell("{$colLetter}{$r}");
                     $val = $cell->isFormula() ? $cell->getCalculatedValue() : $cell->getValue();
-                    $rowValues[$col['key']] = is_string($val) ? trim($val) : $val;
+                    if (in_array($col['key'], ['admission_no', 'apaar_id', 'login_id', 'roll_no'], true)) {
+                        $rowValues[$col['key']] = trim((string)$val);
+                    } else {
+                        $rowValues[$col['key']] = is_string($val) ? trim($val) : $val;
+                    }
                 }
 
                 $name    = (string)($rowValues['name'] ?? '');
@@ -915,7 +923,7 @@ class HpcTeacherController extends Controller
                 $cApaar = $cs['apaar_id'] ?? '';
                 $cName  = strtolower(trim($cs['name'] ?? ''));
                 foreach ($preview as $p) {
-                    $pAdm = trim($p['admission_no'] ?? '');
+                    $pAdm = trim((string)($p['admission_no'] ?? ''));
                     if (empty($pAdm)) continue;
                     if ((! empty($cLogin) && ($p['login_id'] ?? '') === $cLogin) ||
                         (! empty($cApaar) && ($p['apaar_id'] ?? '') === $cApaar) ||

@@ -214,7 +214,7 @@ JS;
             // Legacy save
             file_put_contents(storage_path('app/hpc/udise_students_' . $schoolId . '_raw.json'), json_encode($students, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
-            // Preload into Excel & preview.json
+            // Generate downloadable Excel template from UDISE data (no DB writes — user must upload for HPC)
             $hpc = app(HpcController::class);
             $hpc->preloadUdise(null, $school, $students);
 
@@ -227,8 +227,8 @@ JS;
             ]);
 
             $this->info("✅ School record updated to 'synced'!");
-            $this->info("📁 Excel file generated at: storage/app/hpc/schools/{$school->id}/students.xlsx");
-            $this->info("📁 Preview JSON generated at: storage/app/hpc/schools/{$school->id}/preview.json");
+            $this->info("📁 Excel template generated at: storage/app/hpc/schools/{$school->id}/students.xlsx");
+            $this->info("📋 Download the template, review it, and upload via Step 2 for HPC processing.");
         }
 
         return self::SUCCESS;

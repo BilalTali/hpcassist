@@ -44,7 +44,7 @@ class RegisteredUserController extends Controller
 
         $request->validate([
             'school_name'    => ['required', 'string', 'max:255'],
-            'udise_code'     => ['required', 'string', 'max:15'],
+            'udise_code'     => ['required', 'string', 'max:15', 'unique:schools,udise_code'],
             'principal_name' => ['required', 'string', 'max:255'],
             'phone'          => ['nullable', 'string', 'max:20'],
             'district'       => ['nullable', 'string', 'max:100'],
@@ -68,6 +68,8 @@ class RegisteredUserController extends Controller
             'state'          => 'Jammu & Kashmir',
             'is_active'      => true,
         ]);
+
+        $user->update(['school_id' => $school->id]);
 
         // Create initial default teacher (Principal / Head Incharge)
         Teacher::create([

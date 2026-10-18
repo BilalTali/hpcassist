@@ -4,6 +4,8 @@ use App\Http\Controllers\HpcController;
 use App\Http\Controllers\HpcTeacherController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SchoolManageController;
+use App\Http\Controllers\StageController;
+use App\Http\Controllers\StateController;
 use App\Http\Controllers\UdiseController;
 use Illuminate\Support\Facades\Route;
 
@@ -22,33 +24,100 @@ Route::get('/extension/download', [UdiseController::class, 'downloadExtension'])
 // Ingest: called by bridge page JS or extension after fetching students (CSRF-exempt via bootstrap/app.php)
 Route::match(['post','options'], '/udise/ingest', [UdiseController::class, 'ingest'])->name('udise.ingest');
 // HPC Portal Queue & Progress: called by extension or browser automation on PARAKH portal
-Route::match(['get', 'options'], '/hpc/students/queue', [HpcController::class, 'getStudentQueue'])->name('hpc.students.queue');
-Route::match(['post', 'options'], '/hpc/run/progress',   [HpcController::class, 'runProgress'])->name('hpc.run.progress');
+Route::match(['get', 'options'],  '/hpc/students/queue',             [HpcController::class, 'getStudentQueue'])->name('hpc.students.queue');
+Route::match(['get', 'options'],  '/hpc/schools/list',               [HpcController::class, 'getSchoolsList'])->name('hpc.schools.list');
+Route::match(['post', 'options'], '/hpc/run/progress',               [HpcController::class, 'runProgress'])->name('hpc.run.progress');
+// Extension-facing: receive students already on HPC portal (token-protected)
+Route::match(['post', 'options'], '/hpc/students/sync-from-portal',  [HpcController::class, 'syncFromPortal'])->name('hpc.students.sync_from_portal');
+// Extension-facing: Teacher 15-part evaluation queue & progress
+Route::match(['get', 'options'],  '/hpc/teacher/evaluations/queue',    [HpcTeacherController::class, 'evaluationsQueue'])->name('hpc.teacher.evaluations.queue');
+Route::match(['post', 'options'], '/hpc/teacher/evaluations/progress', [HpcTeacherController::class, 'evaluationsProgress'])->name('hpc.teacher.evaluations.progress');
+Route::match(['post', 'options'], '/hpc/teacher/sync-roster',          [HpcTeacherController::class, 'syncRoster'])->name('hpc.teacher.sync_roster');
+Route::get('/system/clear-view-cache', function () {
+    \Illuminate\Support\Facades\Artisan::call('view:clear');
+    \Illuminate\Support\Facades\Artisan::call('cache:clear');
+    return response()->json(['ok' => true, 'message' => 'Compiled views and cache cleared successfully']);
+});
 
 Route::middleware('auth')->group(function () {
     // ── School Central Dashboard ──────────────────────────────────────────────
     Route::get('/dashboard', function () {
         $user = \Illuminate\Support\Facades\Auth::user();
+        if ($user && $user->isTeacher()) {
+            return redirect()->route('hpc.teacher.dashboard');
+        }
+
         $school = $user ? $user->getEffectiveSchool() : null;
-        $teachers = $school ? $school->teachers()->orderBy('id')->get() : collect();
+
+        $teachers = $school ? $school->teachers()->orderBy('id')->get()->map(function($t) {
+            $u = $t->user ?: \App\Models\User::where('email', $t->email)->first();
+            return [
+                'id'          => $t->id,
+                'name'        => $t->name,
+                'designation' => $t->designation,
+                'email'       => $t->email,
+                'classes'     => $t->classes,
+                'mobile'      => $t->mobile,
+                'has_login'   => $u !== null && $u->isTeacher(),
+                'user_id'     => $u?->id,
+            ];
+        }) : collect();
 
         $hpcController = app(HpcController::class);
-        $preview = [];
-        $udiseCount = 0;
+        $preview       = [];  // Step 2: pending students (UDISE/Excel, not yet submitted)
+        $step3Students = [];  // Step 3: already confirmed on HPC portal
+        $udiseCount      = 0;
         $udiseApaarCount = 0;
+        $step3Count      = 0;
 
         if ($school) {
-            // 1. MySQL database is the sole primary source of truth for students
             if (\Illuminate\Support\Facades\Schema::hasTable('students')) {
-                $dbStudents = $school->students()->orderBy('id')->get();
-                if ($dbStudents->isNotEmpty()) {
-                    $preview = $dbStudents->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
+                // Step 2: UDISE + Excel students still pending (strictly for this school's UDISE)
+                $step2Query = $school->students()->forSchool($school)->step2()->orderBy('id');
+                $step2Students = $step2Query->get();
+                if ($step2Students->isNotEmpty()) {
+                    $preview = $step2Students->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
+                }
+
+                // Step 3: already on HPC (fetched or submitted)
+                $step3Students = $school->students()->forSchool($school)->step3()
+                    ->orderByDesc('hpc_submitted_at')
+                    ->orderByDesc('hpc_fetched_at')
+                    ->get()
+                    ->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))
+                    ->values()
+                    ->all();
+                $step3Count = count($step3Students);
+            }
+
+            // Fallback: If DB students table has no records for this school yet, but UDISE raw data exists
+            if (empty($preview)) {
+                $rawUdise = $hpcController->getUdiseStudents($school);
+                if (! empty($rawUdise)) {
+                    $gradeMap = $hpcController->getGradeMap();
+                    foreach ($rawUdise as $idx => $st) {
+                        $norm = $hpcController->normalizeUdiseStudent($st, $idx, $gradeMap);
+                        $preview[] = [
+                            'row'              => $idx + 1,
+                            'first_name'       => $norm['firstName'],
+                            'last_name'        => $norm['lastName'],
+                            'name'             => trim("{$norm['firstName']} {$norm['lastName']}"),
+                            'dob'              => $norm['dob'],
+                            'gender'           => $norm['gender'],
+                            'email'            => $norm['email'],
+                            'admission_no'     => $norm['admissionNo'],
+                            'pen_code'         => $norm['cleanPen'],
+                            'grade'            => $norm['grade'],
+                            'section'          => $norm['section'],
+                            'apaar_id'         => $norm['apaarId'],
+                            'errors'           => [],
+                        ];
+                    }
                 }
             }
 
-            // Exactly compute counts for this school
-            $udiseCount = count($preview);
-            $udiseApaarCount = count(array_filter($preview, fn($s) => ! empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12));
+            $udiseCount      = count($preview) ?: ($school->udise_students_count ?? 0);
+            $udiseApaarCount = count(array_filter($preview, fn($s) => ! empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12)) ?: ($school->udise_apaar_count ?? 0);
         }
 
         $udiseStudents = $school ? $hpcController->getUdiseStudents($school) : [];
@@ -77,20 +146,24 @@ Route::middleware('auth')->group(function () {
 
         $workingDays = \App\Models\SchoolWorkingDay::getDefault();
         $maxMarks    = \App\Models\SchoolMaxMark::getDefault();
+        $hpcGrades   = $school ? $school->students()->step3()->selectRaw('grade, count(*) as count')->groupBy('grade')->orderBy('grade')->get() : collect();
 
         return view('dashboard', compact(
             'school', 'teachers', 'udiseCount', 'udiseApaarCount', 'udiseStudents',
-            'preview', 'lastRun', 'hasFields', 'hasSchoolProfile', 'currentFormUrl',
-            'activeTeacher', 'hasTeacherProfile', 'schoolToken', 'workingDays', 'maxMarks'
+            'preview', 'step3Students', 'step3Count', 'lastRun', 'hasFields',
+            'hasSchoolProfile', 'currentFormUrl', 'activeTeacher', 'hasTeacherProfile',
+            'schoolToken', 'workingDays', 'maxMarks', 'hpcGrades'
         ));
     })->name('dashboard');
 
     // ── School & Multi-Teacher Management ─────────────────────────────────────
     Route::post('/school/update',               [SchoolManageController::class, 'updateSchool'])->name('school.update');
     Route::get('/school/teachers',              [SchoolManageController::class, 'getTeachers'])->name('school.teachers');
-    Route::post('/school/teachers',             [SchoolManageController::class, 'storeTeacher'])->name('school.teachers.store');
-    Route::post('/school/teachers/{id}/update', [SchoolManageController::class, 'updateTeacher'])->name('school.teachers.update');
-    Route::post('/school/teachers/{id}/delete', [SchoolManageController::class, 'deleteTeacher'])->name('school.teachers.delete');
+    Route::post('/school/teachers',                 [SchoolManageController::class, 'storeTeacher'])->name('school.teachers.store');
+    Route::post('/school/teachers/create-login',    [SchoolManageController::class, 'createTeacherLogin'])->name('school.teachers.create_login');
+    Route::post('/school/teachers/{id}/update',     [SchoolManageController::class, 'updateTeacher'])->name('school.teachers.update');
+    Route::post('/school/teachers/{id}/reset-pass', [SchoolManageController::class, 'resetTeacherPassword'])->name('school.teachers.reset_pass');
+    Route::post('/school/teachers/{id}/delete',     [SchoolManageController::class, 'deleteTeacher'])->name('school.teachers.delete');
     Route::post('/school/udise/skip',            [SchoolManageController::class, 'skipUdise'])->name('school.udise.skip');
     Route::post('/school/udise/reset',           [SchoolManageController::class, 'resetUdise'])->name('school.udise.reset');
     Route::post('/school/udise/sync-existing',   [SchoolManageController::class, 'syncExistingUdise'])->name('school.udise.sync_existing');
@@ -109,9 +182,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/hpc',           [HpcController::class, 'dashboard'])->name('hpc.dashboard');
     Route::get('/hpc/template/download',   [HpcController::class, 'downloadTemplate'])->name('hpc.template.download');
     Route::get('/hpc/template/download/udise', [HpcController::class, 'downloadTemplate'])->name('hpc.template.download_udise');
-    Route::post('/hpc/upload',             [HpcController::class, 'upload'])->name('hpc.upload');
-    Route::post('/hpc/run/start',          [HpcController::class, 'runStart'])->name('hpc.run.start');
     Route::get('/hpc/run/status',          [HpcController::class, 'runStatus'])->name('hpc.run.status');
+    Route::post('/hpc/run/start',          [HpcController::class, 'runStart'])->name('hpc.run.start');
     Route::post('/hpc/run/reset',          [HpcController::class, 'runReset'])->name('hpc.run.reset');
     Route::post('/hpc/session/end',        [HpcController::class, 'endSession'])->name('hpc.session.end');
     Route::post('/hpc/session/start',      [HpcController::class, 'startSession'])->name('hpc.session.start');
@@ -119,16 +191,33 @@ Route::middleware('auth')->group(function () {
     Route::post('/hpc/school/switch',      [HpcController::class, 'switchSchool'])->name('hpc.school.switch');
     Route::post('/hpc/school/add',         [HpcController::class, 'addSchool'])->name('hpc.school.add');
     Route::post('/hpc/school/delete',      [HpcController::class, 'deleteSchool'])->name('hpc.school.delete');
-    Route::post('/hpc/students/preload-udise', [HpcController::class, 'preloadUdise'])->name('hpc.students.preload_udise');
-    Route::post('/hpc/students/save',          [HpcController::class, 'saveStudent'])->name('hpc.students.save');
-    Route::post('/hpc/students/delete',        [HpcController::class, 'deleteStudent'])->name('hpc.students.delete');
-    Route::post('/hpc/students/clear-all',     [HpcController::class, 'clearAllStudents'])->name('hpc.students.clear_all');
-    Route::post('/hpc/students/update-all',    [HpcController::class, 'updateAllStudents'])->name('hpc.students.update_all');
+
+    // Student mutation routes: rate-limited to 30 requests/minute per user (Fix 1.5)
+    Route::middleware('throttle:30,1')->group(function () {
+        Route::post('/hpc/upload',                    [HpcController::class, 'upload'])->name('hpc.upload');
+        Route::post('/hpc/students/preload-udise',    [HpcController::class, 'preloadUdise'])->name('hpc.students.preload_udise');
+        Route::post('/hpc/students/save',             [HpcController::class, 'saveStudent'])->name('hpc.students.save');
+        Route::post('/hpc/students/delete',           [HpcController::class, 'deleteStudent'])->name('hpc.students.delete');
+        Route::post('/hpc/students/clear-all',        [HpcController::class, 'clearAllStudents'])->name('hpc.students.clear_all');
+        Route::post('/hpc/students/update-all',       [HpcController::class, 'updateAllStudents'])->name('hpc.students.update_all');
+    });
+
+    // Step 3: HPC-confirmed students list (auth-guarded, dashboard-facing)
+    Route::get('/hpc/students/step3',  [HpcController::class, 'getStep3Students'])->name('hpc.students.step3');
+
 
     // ── Teacher Assessment Portal Routes ──────────────────────────────────────
     Route::get('/dashboard/hpc/teacher',             [HpcTeacherController::class, 'dashboard'])->name('hpc.teacher.dashboard');
     Route::get('/hpc/teacher/template/download',     [HpcTeacherController::class, 'downloadTemplate'])->name('hpc.teacher.template.download');
     Route::post('/hpc/teacher/upload',               [HpcTeacherController::class, 'upload'])->name('hpc.teacher.upload');
+
+    // ── 4 Stages HPC Assessment Management & StateController Aliases ──────────
+    Route::get('/hpc/stage',                         [StageController::class, 'index'])->name('hpc.stage.index');
+    Route::get('/hpc/stage/template/download',       [StageController::class, 'downloadTemplate'])->name('hpc.stage.template.download');
+    Route::post('/hpc/stage/upload',                 [StageController::class, 'upload'])->name('hpc.stage.upload');
+    Route::get('/hpc/state',                         [StateController::class, 'index'])->name('hpc.state.index');
+    Route::get('/hpc/state/template/download',       [StateController::class, 'downloadTemplate'])->name('hpc.state.template.download');
+    Route::post('/hpc/state/upload',                 [StateController::class, 'upload'])->name('hpc.state.upload');
     Route::post('/hpc/teacher/discover',             [HpcTeacherController::class, 'discover'])->name('hpc.teacher.discover');
     Route::post('/hpc/teacher/run/start',            [HpcTeacherController::class, 'runStart'])->name('hpc.teacher.run.start');
     Route::get('/hpc/teacher/run/status',            [HpcTeacherController::class, 'runStatus'])->name('hpc.teacher.run.status');

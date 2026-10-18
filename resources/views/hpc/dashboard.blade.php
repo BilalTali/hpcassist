@@ -672,12 +672,20 @@
 
         async function startSession() {
             try {
+                if (window.__HPC_CONFIG) {
+                    window.postMessage({ type: 'HPC_ACTIVE_SCHOOL_SYNC', config: window.__HPC_CONFIG }, '*');
+                    document.dispatchEvent(new CustomEvent('HPC_ACTIVE_SCHOOL_SYNC', { detail: window.__HPC_CONFIG }));
+                }
                 const res = await fetch("{{ route('hpc.session.start') }}", {
                     method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': CSRF }
+                    headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' }
                 });
                 const data = await res.json();
-                alert(data.message || 'Chrome opened');
+                const schoolHash = '#hpc_school_id=' + encodeURIComponent("{{ $activeSchool['id'] ?? '' }}") + '&hpc_udise=' + encodeURIComponent("{{ $activeSchool['udise'] ?? '' }}");
+                if (data.url) {
+                    window.open(data.url + schoolHash, "_blank");
+                }
+                alert(data.message || 'Connected to HPC School session. Opening official portal.');
             } catch (err) {
                 alert('Failed to start session: ' + err.message);
             }
@@ -1368,5 +1376,32 @@
                 })
                 .catch(() => {});
         });
+    </script>
+
+    <div id="hpc-extension-bridge"
+         style="display:none;"
+         data-school-id="{{ is_array($activeSchool['id'] ?? null) ? '' : preg_replace('/^school_/', '', (string)($activeSchool['id'] ?? '')) }}"
+         data-school-name="{{ $activeSchool['name'] ?? '' }}"
+         data-udise-code="{{ $activeSchool['udise_code'] ?? ($activeSchool['udise'] ?? '') }}"
+         data-token="{{ $schoolToken ?? '' }}"
+         data-progress-token="{{ config('hpc.progress_token') }}"
+         data-server-url="{{ rtrim(config('app.url'), '/') }}"
+         data-role="school"></div>
+
+    <script>
+        window.__HPC_CONFIG = {
+            server_url: "{{ rtrim(config('app.url'), '/') }}",
+            school_id: {{ is_numeric($activeSchool['id'] ?? null) ? $activeSchool['id'] : (is_string($activeSchool['id'] ?? null) && preg_match('/^school_(\d+)$/', $activeSchool['id'], $m) ? $m[1] : 'null') }},
+            school_name: @json($activeSchool['name'] ?? ''),
+            udise_code: @json($activeSchool['udise_code'] ?? ($activeSchool['udise'] ?? '')),
+            token: @json($schoolToken ?? ''),
+            progress_token: "{{ config('hpc.progress_token') }}",
+            role: 'school'
+        };
+
+        try {
+            window.postMessage({ type: 'HPC_ACTIVE_SCHOOL_SYNC', config: window.__HPC_CONFIG }, '*');
+            document.dispatchEvent(new CustomEvent('HPC_ACTIVE_SCHOOL_SYNC', { detail: window.__HPC_CONFIG }));
+        } catch(e) {}
     </script>
 </x-app-layout>

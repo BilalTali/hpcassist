@@ -88,21 +88,34 @@ class SchoolMaxMark extends Model
     public static function getDefault(?string $stage = 'middle'): self
     {
         $stage = $stage ?: 'middle';
-        $record = self::where('stage', $stage)->first();
+        try {
+            $record = self::where('stage', $stage)->first();
 
-        if (! $record) {
-            $record = self::create(array_merge(
+            if (! $record) {
+                $record = self::create(array_merge(
+                    [
+                        'stage'         => $stage,
+                        'academic_year' => '2025-2026',
+                        'is_default'    => true,
+                        'remarks'       => ucfirst($stage) . ' Stage Curricular Max Marks'
+                    ],
+                    self::defaultMarks()
+                ));
+            }
+
+            return $record;
+        } catch (\Throwable $e) {
+            $fallback = new self(array_merge(
                 [
                     'stage'         => $stage,
                     'academic_year' => '2025-2026',
                     'is_default'    => true,
-                    'remarks'       => ucfirst($stage) . ' Stage Curricular Max Marks'
+                    'remarks'       => ucfirst($stage) . ' Stage Curricular Max Marks (In-Memory Fallback)'
                 ],
                 self::defaultMarks()
             ));
+            return $fallback;
         }
-
-        return $record;
     }
 
     public function toSubjectMap(): array

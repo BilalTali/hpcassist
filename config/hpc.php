@@ -39,4 +39,13 @@ return [
     // Teacher Profile Base Directory
     'teacher_profile_dir' => env('HPC_TEACHER_PROFILE_DIR', 'storage/app/hpc/teacher-profiles'),
 
+    // Shared secret token used by the Chrome extension to authenticate
+    // runProgress and getStudentQueue calls. Set in .env as HPC_PROGRESS_TOKEN.
+    'progress_token' => env('HPC_PROGRESS_TOKEN', ''),
+
+    // Chrome Extension ID used to lock CORS origin for queue/progress endpoints.
+    // Find this in chrome://extensions after loading the extension unpacked.
+    // Set in .env as HPC_EXTENSION_ID. Leave blank to allow app domain only.
+    'extension_id' => env('HPC_EXTENSION_ID', ''),
+
 ];

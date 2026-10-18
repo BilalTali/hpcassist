@@ -3,31 +3,45 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
-use PhpOffice\PhpSpreadsheet\Style\Border;
-use PhpOffice\PhpSpreadsheet\Style\Font;
-use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
-use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
-use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use App\Models\School;
 use App\Models\Student;
+use App\Services\StudentNormalizationService;
+use App\Services\StudentSpreadsheetService;
+use App\Services\StudentRosterService;
+use App\Services\HpcAutomationService;
 
 /**
  * Class HpcController
+ *
+ * Lightweight orchestrator controller for PARAKH HPC operations.
+ * Delegates core business domains to dedicated services:
+ *  - StudentNormalizationService: Grade mapping, name splitting, field validation
+ *  - StudentSpreadsheetService:   Excel template generation, styling, and parsing
+ *  - StudentRosterService:        UDISE & Excel storage, database upsert, deduplication
+ *  - HpcAutomationService:       Extension API queue, progress polling, session control
  *
  * @package App\Http\Controllers
  */
 class HpcController extends Controller
 {
+    public function __construct(
+        protected StudentNormalizationService $normalizer,
+        protected StudentSpreadsheetService $spreadsheetService,
+        protected StudentRosterService $rosterService,
+        protected HpcAutomationService $automationService,
+    ) {}
+
     // ─── Dashboard View ───────────────────────────────────────────────────────
 
     public function dashboard()
     {
-        $school       = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        /** @var School|null $school */
+        $school       = Auth::user()?->getEffectiveSchool();
         $fieldsFile   = storage_path('app/hpc/fields.json');
         $previewFile  = $this->getPreviewFile($school);
         $resultsFile  = $this->getSchoolStorageDir($school) . '/run_results.json';
@@ -40,10 +54,33 @@ class HpcController extends Controller
         $hasProfile = is_dir($profileDir) && count(scandir($profileDir)) > 2;
 
         $preview = [];
-        if ($school && $school->students()->exists()) {
-            $preview = $school->students()->orderBy('id')->get()->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
+        if ($school && $school->students()->forSchool($school)->exists()) {
+            $preview = $school->students()->forSchool($school)->orderBy('id')->get()->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
         } elseif (file_exists($previewFile)) {
             $preview = json_decode(file_get_contents($previewFile), true) ?? [];
+        } else {
+            $rawStudents = $school ? $this->getUdiseStudents($school) : [];
+            if (! empty($rawStudents)) {
+                $gradeMap = $this->getGradeMap();
+                foreach ($rawStudents as $idx => $st) {
+                    $norm = $this->normalizeUdiseStudent($st, $idx, $gradeMap);
+                    $preview[] = [
+                        'row'          => $idx + 1,
+                        'first_name'   => $norm['firstName'],
+                        'last_name'    => $norm['lastName'],
+                        'name'         => trim("{$norm['firstName']} {$norm['lastName']}"),
+                        'dob'          => $norm['dob'],
+                        'gender'       => $norm['gender'],
+                        'email'        => $norm['email'],
+                        'admission_no' => $norm['admissionNo'],
+                        'pen_code'     => $norm['cleanPen'],
+                        'grade'        => $norm['grade'],
+                        'section'      => $norm['section'],
+                        'apaar_id'     => $norm['apaarId'],
+                        'errors'       => [],
+                    ];
+                }
+            }
         }
 
         $lastRun = null;
@@ -55,17 +92,17 @@ class HpcController extends Controller
             ? trim(file_get_contents(storage_path('app/hpc/current_form.txt')))
             : config('hpc.add_student_url');
 
-        $udiseStudents   = $this->getUdiseStudents($school);
-        $udiseCount      = count($preview);
-        $udiseApaarCount = count(array_filter($preview, fn($s) => !empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12));
+        $udiseCount      = count($preview) ?: ($school?->udise_students_count ?? 0);
+        $udiseApaarCount = count(array_filter($preview, fn($s) => !empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12)) ?: ($school?->udise_apaar_count ?? 0);
+        $schoolToken     = $school ? substr(hash('sha256', $school->id . '_' . $school->udise_code . '_' . config('app.key')), 0, 32) : '';
 
         return view('hpc.dashboard', compact(
-            'hasFields', 'hasProfile', 'preview', 'lastRun', 'currentFormUrl',
-            'schoolsData', 'activeSchool', 'udiseCount', 'udiseApaarCount'
+            'school', 'hasFields', 'hasProfile', 'preview', 'lastRun', 'currentFormUrl',
+            'schoolsData', 'activeSchool', 'udiseCount', 'udiseApaarCount', 'schoolToken'
         ));
     }
 
-    // ─── Step 1: Download the Excel template (Populated from UDISE if available) ────────
+    // ─── Step 1: Download Excel Template ──────────────────────────────────────
 
     public function downloadTemplate(Request $request)
     {
@@ -76,18 +113,21 @@ class HpcController extends Controller
 
         $isForcedBlank = $request->query('blank') === '1';
 
-        $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        /** @var School|null $school */
+        $school = Auth::user()?->getEffectiveSchool();
         $udiseStudents = [];
 
         if ($wantsUdise && ! $isForcedBlank && $school) {
-            if ($school->students()->exists()) {
-                $udiseStudents = $school->students()->orderBy('id')->get()->map(fn($st) => [
-                    'first_name' => $st->first_name,
-                    'last_name'  => $st->last_name,
+            $scopedQuery = $school->students()->forSchool($school)->orderBy('id');
+            if ($scopedQuery->exists()) {
+                $udiseStudents = $scopedQuery->get()->map(fn($st) => [
+                    'first_name'   => $st->first_name,
+                    'last_name'    => $st->last_name,
                     'dob'          => $st->dob,
                     'gender'       => $st->getEffectiveGender(),
                     'email'        => $st->email,
-                    'admission_no' => $st->pen_code,
+                    'admission_no' => $st->admission_no ?? '',
+                    'pen_code'     => $st->pen_code ?? '',
                     'grade'        => $st->grade,
                     'section'      => $st->section,
                     'apaar_id'     => $st->apaar_id,
@@ -95,12 +135,18 @@ class HpcController extends Controller
             } else {
                 $udiseStudents = $this->getUdiseStudents($school);
             }
+
+            if (empty($udiseStudents)) {
+                $schoolName = $school->name ?: 'your school';
+                $udiseCode  = $school->udise_code ?: 'N/A';
+                return redirect()->to(route('dashboard') . '?step=2')->with('error', "⚠️ No UDISE+ students synced yet for {$schoolName} (UDISE: {$udiseCode}). Please open the UDISE+ portal and sync your students via the HPC Assist Chrome extension first, or download the Blank Template if filling manually.");
+            }
         }
 
         $sheet = $this->buildStudentSpreadsheet($udiseStudents);
 
         $udiseCode = $school?->udise_code ?? 'template';
-        $filename = (! empty($udiseStudents))
+        $filename  = (! empty($udiseStudents))
             ? "hpc_students_{$udiseCode}_from_udise.xlsx"
             : 'hpc_students_template.xlsx';
 
@@ -117,431 +163,46 @@ class HpcController extends Controller
 
     public function buildStudentSpreadsheet(array $udiseStudents = []): Spreadsheet
     {
-        $sheet = new Spreadsheet();
-        $ws    = $sheet->getActiveSheet();
-        $ws->setTitle('Students');
-
-        // Columns exposed in the template (matching PARAKH portal order 1-to-1)
-        $columns = [
-            ['key' => 'first_name',   'label' => 'First Name *',             'width' => 20, 'note' => 'First name from UDISE / records'],
-            ['key' => 'last_name',    'label' => 'Last Name',                 'width' => 20, 'note' => 'Last name / surname (optional)'],
-            ['key' => 'dob',          'label' => 'Date of Birth *',           'width' => 18, 'note' => 'DD/MM/YYYY e.g. 15/08/2012'],
-            ['key' => 'gender',       'label' => 'Gender *',                  'width' => 14, 'note' => 'Male / Female / Other'],
-            ['key' => 'email',        'label' => 'Email *',                   'width' => 32, 'note' => 'Valid email address'],
-            ['key' => 'admission_no', 'label' => 'School Admission Number',  'width' => 24, 'note' => 'School admission / roll number (optional)'],
-            ['key' => 'grade',        'label' => 'Grade *',                   'width' => 18, 'note' => 'Balvatika 1-3, Grade 1-8'],
-            ['key' => 'section',      'label' => 'Section *',                 'width' => 14, 'note' => 'Default: A'],
-            ['key' => 'apaar_id',     'label' => 'APAAR ID',                  'width' => 20, 'note' => '12-digit unmasked APAAR ID'],
-        ];
-
-        // ── Header row (Row 1) ────────────────────────────────────────────────
-        $headerStyle = [
-            'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF'], 'size' => 11],
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF4F46E5']],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE0E7FF']]],
-        ];
-
-        foreach ($columns as $i => $col) {
-            $letter = chr(65 + $i);
-            $ws->setCellValue("{$letter}1", $col['label']);
-            $ws->getColumnDimension($letter)->setWidth($col['width']);
-            $ws->getStyle("{$letter}1")->applyFromArray($headerStyle);
-        }
-        $ws->getRowDimension(1)->setRowHeight(28);
-
-        // ── Note row (Row 2 — light indigo, italic) ──────────────────────────
-        $noteStyle = [
-            'font'      => ['italic' => true, 'color' => ['argb' => 'FF4338CA'], 'size' => 9],
-            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFEEF2FF']],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE0E7FF']]],
-        ];
-
-        foreach ($columns as $i => $col) {
-            $letter = chr(65 + $i);
-            $ws->setCellValue("{$letter}2", $col['note']);
-            $ws->getStyle("{$letter}2")->applyFromArray($noteStyle);
-        }
-        $ws->getRowDimension(2)->setRowHeight(20);
-
-        $gradeMap  = $this->getGradeMap();
-        $totalRows = max(count($udiseStudents) + 2, 200);
-
-        if (! empty($udiseStudents)) {
-            // Populate UDISE Students starting from Row 3
-            foreach ($udiseStudents as $idx => $st) {
-                $r = $idx + 3;
-
-                if (isset($st['first_name'])) {
-                    $firstName   = trim($st['first_name']);
-                    $lastName    = trim($st['last_name'] ?? '');
-                    $dob         = trim($st['dob'] ?? '');
-                    $gender      = trim($st['gender'] ?? '');
-                    $email       = trim($st['email'] ?? '');
-                    $admissionNo = trim($st['admission_no'] ?? ($st['pen_code'] ?? ''));
-                    $grade       = trim($st['grade'] ?? 'Grade 6');
-                    $section     = trim($st['section'] ?? 'A');
-                    $apaarId     = trim((string)($st['apaar_id'] ?? ''));
-                } else {
-                    $rawName   = trim($st['studentName'] ?? '');
-                    $parts     = preg_split('/\s+/', $rawName);
-                    $firstName = $parts[0] ?? 'Student';
-                    $lastName  = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
-
-                    $dob = trim($st['dob'] ?? '');
-                    if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dob, $m)) {
-                        $dob = "{$m[3]}/{$m[2]}/{$m[1]}";
-                    }
-
-                    $rawGen = trim((string)($st['genderDesc'] ?? ($st['gender'] ?? '')));
-                    if ($rawGen === '1' || $rawGen === 1 || strtolower($rawGen) === 'male' || str_starts_with(strtolower($rawGen), 'm')) {
-                        $gender = 'Male';
-                    } elseif ($rawGen === '2' || $rawGen === 2 || strtolower($rawGen) === 'female' || str_starts_with(strtolower($rawGen), 'f')) {
-                        $gender = 'Female';
-                    } elseif ($rawGen === '3' || $rawGen === 3) {
-                        $gender = 'Other';
-                    } else {
-                        $gender = $rawGen;
-                    }
-
-                    $cleanPen    = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
-                    $admissionNo = ! empty($st['admnNumber']) ? trim((string)$st['admnNumber']) : (! empty($st['admission_no']) ? trim((string)$st['admission_no']) : $cleanPen);
-
-                    $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL) ? trim($st['email']) : '';
-                    if (empty($email) || str_contains(strtolower($email), 'gov.in')) {
-                        $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
-                        $email      = "{$cleanFirst}.{$cleanPen}@gmail.com";
-                    }
-
-                    $rawClass = trim($st['classDesc'] ?? '');
-                    $grade    = $gradeMap[$rawClass] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawClass)] ?? 'Grade 6');
-                    $section  = ! empty($st['sectionDesc']) ? trim($st['sectionDesc']) : 'A';
-                    $apaarId  = ! empty($st['apaarId']) ? (string) $st['apaarId'] : '';
-                }
-
-                if (empty($gender)) {
-                    $dummy = new Student(['first_name' => $firstName, 'last_name' => $lastName]);
-                    $gender = $dummy->getEffectiveGender();
-                }
-
-                $rowVals  = [$firstName, $lastName, $dob, $gender, $email, $admissionNo, $grade, $section, $apaarId];
-                $isApaar  = ! empty($apaarId);
-                $rowBg    = ($idx % 2 === 0) ? 'FFFFFFFF' : 'FFF8FAFC';
-
-                foreach ($rowVals as $cIdx => $val) {
-                    $colLetter = chr(65 + $cIdx);
-                    $ws->setCellValueExplicit("{$colLetter}{$r}", (string) $val, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-
-                    $cellBg = ($cIdx === 8 && $isApaar) ? 'FFCCFBF1' : $rowBg;
-                    $ws->getStyle("{$colLetter}{$r}")->applyFromArray([
-                        'font'      => [
-                            'size'  => 9.5,
-                            'bold'  => ($cIdx === 8 && $isApaar),
-                            'color' => ['argb' => ($cIdx === 8 && $isApaar) ? 'FF0F766E' : 'FF0F172A'],
-                        ],
-                        'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $cellBg]],
-                        'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
-                        'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
-                    ]);
-                }
-                $ws->getRowDimension($r)->setRowHeight(22);
-            }
-        } else {
-            // Sample row (Row 3)
-            $sample = ['Aarav', 'Sharma', '15/08/2012', 'Male', 'aarav.sharma@gmail.com', '', 'Grade 6', 'A', '123456789012'];
-            $sampleStyle = [
-                'font'      => ['color' => ['argb' => 'FF334155'], 'size' => 10],
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFF8FAFC']],
-                'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
-                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
-            ];
-            foreach ($sample as $i => $val) {
-                $letter = chr(65 + $i);
-                $ws->setCellValueExplicit("{$letter}3", $val, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $ws->getStyle("{$letter}3")->applyFromArray($sampleStyle);
-            }
-            $ws->getRowDimension(3)->setRowHeight(22);
-
-            $dataStyle = [
-                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFFFFF']],
-                'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
-            ];
-            $ws->getStyle("A4:I200")->applyFromArray($dataStyle);
-        }
-
-        // In-cell Dropdown Data Validation for Gender, Grade and Section
-        $genderFormula  = '"Male,Female,Other"';
-        $gradeFormula   = '"Balvatika 1,Balvatika 2,Balvatika 3,Grade 1,Grade 2,Grade 3,Grade 4,Grade 5,Grade 6,Grade 7,Grade 8"';
-        $sectionFormula = '"A,B,C,D,E,F,G,H"';
-
-        for ($r = 3; $r <= $totalRows; $r++) {
-            $genV = $ws->getCell("D{$r}")->getDataValidation();
-            $genV->setType(DataValidation::TYPE_LIST);
-            $genV->setErrorStyle(DataValidation::STYLE_INFORMATION);
-            $genV->setAllowBlank(false);
-            $genV->setShowDropDown(true);
-            $genV->setPromptTitle('Gender Selection');
-            $genV->setPrompt('Select Male, Female or Other');
-            $genV->setFormula1($genderFormula);
-
-            $gv = $ws->getCell("G{$r}")->getDataValidation();
-            $gv->setType(DataValidation::TYPE_LIST);
-            $gv->setErrorStyle(DataValidation::STYLE_INFORMATION);
-            $gv->setAllowBlank(false);
-            $gv->setShowDropDown(true);
-            $gv->setPromptTitle('Grade Selection');
-            $gv->setPrompt('Select Grade 1-8 or Balvatika 1-3');
-            $gv->setFormula1($gradeFormula);
-
-            $sv = $ws->getCell("H{$r}")->getDataValidation();
-            $sv->setType(DataValidation::TYPE_LIST);
-            $sv->setErrorStyle(DataValidation::STYLE_INFORMATION);
-            $sv->setAllowBlank(false);
-            $sv->setShowDropDown(true);
-            $sv->setPromptTitle('Section Selection');
-            $sv->setPrompt('Select Section');
-            $sv->setFormula1($sectionFormula);
-        }
-
-        $ws->freezePane('A3');
-
-        // Instructions Sheet
-        $info = $sheet->createSheet();
-        $info->setTitle('Instructions');
-        $info->setCellValue('A1', '🎓 HPC Student Entry Tool — Excel Guide & UDISE Field Mapping');
-        $info->getStyle('A1')->getFont()->setBold(true)->setSize(14);
-
-        $info->setCellValue('A3', 'HPC Template Field');
-        $info->setCellValue('B3', 'UDISE+ Source Column');
-        $info->setCellValue('C3', 'Description & Mapping Rules');
-        $info->getStyle('A3:C3')->getFont()->setBold(true);
-        $info->getStyle('A3:C3')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFEDE9FE');
-
-        $rows = [
-            ['First Name *',             'studentName (Word 1)', 'Student first name as per official UDISE / school records.'],
-            ['Last Name',                'studentName (Rest)',   'Student last name (optional or remaining parts of full name).'],
-            ['Date of Birth *',          'dob',                  'Format: DD/MM/YYYY (e.g. 15/08/2012).'],
-            ['Gender *',                 'genderDesc / gender',  'Student gender: Male, Female, or Other. Mandatory on PARAKH portal.'],
-            ['Email *',                  'email / auto-gen',     'Official student email (auto-generated using PEN if blank).'],
-            ['School Admission Number',  'studentCodeNat / roll','School admission number or student roll number (optional).'],
-            ['Grade *',                  'classDesc',            'Mapped from UDISE class (PP-1 -> Balvatika 1, I-VIII -> Grade 1-8).'],
-            ['Section *',                'sectionDesc',          'Defaulted to Section A.'],
-            ['APAAR ID',                 'apaarId',              'Unmasked 12-digit APAAR ID from UDISE SDMS.'],
-        ];
-
-        foreach ($rows as $ri => $row) {
-            $line = $ri + 4;
-            $info->setCellValue("A{$line}", $row[0]);
-            $info->setCellValue("B{$line}", $row[1]);
-            $info->setCellValue("C{$line}", $row[2]);
-        }
-
-        $info->getColumnDimension('A')->setWidth(26);
-        $info->getColumnDimension('B')->setWidth(24);
-        $info->getColumnDimension('C')->setWidth(60);
-
-        $sheet->setActiveSheetIndex(0);
-
-        return $sheet;
+        return $this->spreadsheetService->buildStudentSpreadsheet($udiseStudents);
     }
 
-    public function preloadUdise(?Request $request = null, $school = null, ?array $customStudents = null)
+    public function preloadUdise(?Request $request = null, $school = null, ?array $customStudents = null): array
     {
-        if (! $school && \Illuminate\Support\Facades\Auth::check()) {
-            $school = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
-        }
-
-        $udiseStudents = $customStudents ?? $this->getUdiseStudents($school);
-        if (empty($udiseStudents)) {
-            return response()->json([
-                'ok'    => false,
-                'error' => 'No UDISE student records found for this school.',
-            ], 404);
-        }
-
-        // 1. Generate and save students.xlsx in school storage
-        $spreadsheet = $this->buildStudentSpreadsheet($udiseStudents);
-        $dir = $this->getSchoolStorageDir($school);
-        @mkdir($dir, 0755, true);
-        $fullPath = $dir . '/students.xlsx';
-        $writer = new Xlsx($spreadsheet);
-        $writer->save($fullPath);
-
-        // 2. Generate preview.json for Step 2
-        $preview   = [];
-        $gradeMap  = $this->getGradeMap();
-
-        foreach ($udiseStudents as $idx => $st) {
-            $r = $idx + 3;
-
-            $rawName   = trim($st['studentName'] ?? '');
-            $parts     = preg_split('/\s+/', $rawName);
-            $firstName = $parts[0] ?? 'Student';
-            $lastName  = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
-
-            $dob = trim($st['dob'] ?? '');
-            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dob, $m)) {
-                $dob = "{$m[3]}/{$m[2]}/{$m[1]}";
-            }
-
-            $rawGen = trim((string)($st['genderDesc'] ?? ($st['gender'] ?? '')));
-            if ($rawGen === '1' || $rawGen === 1 || strtolower($rawGen) === 'male' || str_starts_with(strtolower($rawGen), 'm')) {
-                $gender = 'Male';
-            } elseif ($rawGen === '2' || $rawGen === 2 || strtolower($rawGen) === 'female' || str_starts_with(strtolower($rawGen), 'f')) {
-                $gender = 'Female';
-            } elseif ($rawGen === '3' || $rawGen === 3) {
-                $gender = 'Other';
-            } else {
-                $gender = $rawGen ?: 'Male';
-            }
-
-            $cleanPen    = preg_replace('/[^0-9]/', '', $st['studentCodeNat'] ?? ($idx + 1));
-            $admissionNo = ! empty($st['admnNumber']) ? trim((string)$st['admnNumber']) : (! empty($st['admission_no']) ? trim((string)$st['admission_no']) : $cleanPen);
-
-            $email = ! empty($st['email']) && filter_var($st['email'], FILTER_VALIDATE_EMAIL) ? trim($st['email']) : '';
-            if (empty($email) || str_contains(strtolower($email), 'gov.in')) {
-                $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
-                $email      = "{$cleanFirst}.{$cleanPen}@gmail.com";
-            }
-
-            $rawClass = trim($st['classDesc'] ?? '');
-            $grade    = $gradeMap[$rawClass] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawClass)] ?? 'Grade 6');
-            $section  = ! empty($st['sectionDesc']) ? trim($st['sectionDesc']) : 'A';
-            $apaarId  = ! empty($st['apaarId']) ? (string) $st['apaarId'] : '';
-
-            $preview[] = [
-                'row'              => $r,
-                'first_name'       => $firstName,
-                'last_name'        => $lastName,
-                'name'             => trim("{$firstName} {$lastName}"),
-                'dob'              => $dob,
-                'gender'           => $gender,
-                'email'            => $email,
-                'admission_no'     => $admissionNo,
-                'pen_code'         => $cleanPen,
-                'udise_student_id' => $st['studentId'] ?? null,
-                'grade'            => $grade,
-                'section'          => $section,
-                'apaar_id'         => $apaarId,
-                'errors'           => [],
-            ];
-        }
-
-        file_put_contents($this->getPreviewFile($school), json_encode($preview, JSON_PRETTY_PRINT));
-
-        if ($school) {
-            $syncedIds = [];
-            foreach ($preview as $pRow) {
-                $dbStudent = $this->upsertStudentToDatabase($school, $pRow, 'udise_sync');
-                $syncedIds[] = $dbStudent->id;
-            }
-
-            // Remove any stale udise_sync records for this school that do not belong to this newly synced roster
-            Student::where('school_id', $school->id)
-                ->where('source', 'udise_sync')
-                ->whereNotIn('id', $syncedIds)
-                ->delete();
-
-            $school->update([
-                'udise_students_count' => count($syncedIds),
-                'udise_apaar_count'    => Student::where('school_id', $school->id)->whereNotNull('apaar_id')->where('apaar_id', '!=', '')->count(),
-            ]);
-        }
-
-        return response()->json([
-            'ok'      => true,
-            'message' => 'Successfully loaded ' . count($preview) . ' students from UDISE with unmasked APAAR IDs into Step 2!',
-            'total'   => count($preview),
-            'valid'   => count($preview),
-            'invalid' => 0,
-            'errors'  => [],
-            'preview' => $preview,
-        ]);
+        return $this->rosterService->preloadUdise($school, $customStudents);
     }
 
     public function getSchoolStorageDir($school = null): string
     {
-        if (! $school && \Illuminate\Support\Facades\Auth::check()) {
-            $school = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
-        }
-
-        if ($school) {
-            $dir = storage_path('app/hpc/schools/' . $school->id);
-            if (! is_dir($dir)) {
-                @mkdir($dir, 0755, true);
-            }
-            return $dir;
-        }
-
-        return storage_path('app/hpc');
+        return $this->rosterService->getSchoolStorageDir($school);
     }
 
     public function getPreviewFile($school = null): string
     {
-        if (! $school && \Illuminate\Support\Facades\Auth::check()) {
-            $school = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
-        }
-
-        if ($school) {
-            $schoolDir = $this->getSchoolStorageDir($school);
-            return $schoolDir . '/preview.json';
-        }
-
-        return storage_path('app/hpc/preview.json');
+        return $this->rosterService->getPreviewFile($school);
     }
 
     public function getUdiseStudents($school = null): array
     {
-        if (! $school && \Illuminate\Support\Facades\Auth::check()) {
-            $school = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
-        }
-
-        if ($school) {
-            $schoolDir = $this->getSchoolStorageDir($school);
-            $schoolRaw = $schoolDir . '/udise_students_raw.json';
-            if (file_exists($schoolRaw)) {
-                return json_decode(file_get_contents($schoolRaw), true) ?: [];
-            }
-
-            return [];
-        }
-
-        return [];
+        return $this->rosterService->getUdiseStudents($school);
     }
 
     public function getGradeMap(): array
     {
-        return [
-            'PP-1'  => 'Balvatika 1',
-            'PP-2'  => 'Balvatika 2',
-            'PP-3'  => 'Balvatika 3',
-            'I'     => 'Grade 1',
-            'II'    => 'Grade 2',
-            'III'   => 'Grade 3',
-            'IV'    => 'Grade 4',
-            'V'     => 'Grade 5',
-            'VI'    => 'Grade 6',
-            'VII'   => 'Grade 7',
-            'VIII'  => 'Grade 8',
-            '1'     => 'Grade 1',
-            '2'     => 'Grade 2',
-            '3'     => 'Grade 3',
-            '4'     => 'Grade 4',
-            '5'     => 'Grade 5',
-            '6'     => 'Grade 6',
-            '7'     => 'Grade 7',
-            '8'     => 'Grade 8',
-        ];
+        return $this->normalizer->getGradeMap();
     }
 
-    // ─── Step 2: Upload & validate the filled Excel ───────────────────────────
+    public function normalizeGrade($rawGrade): string
+    {
+        return $this->normalizer->normalizeGrade($rawGrade);
+    }
+
+    // ─── Step 2: Upload & Validate Filled Excel ───────────────────────────────
 
     public function upload(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|max:10240',
+            'file'        => 'required|file|mimes:xlsx,xls,csv|max:10240',
+            'replace_all' => 'nullable|boolean',
         ]);
 
         $uploadedFile = $request->file('file');
@@ -557,212 +218,41 @@ class HpcController extends Controller
         $fullPath = $dir . '/students.xlsx';
         $uploadedFile->move($dir, 'students.xlsx');
 
-        $errors  = [];
-        $preview = [];
-
         try {
-            $ss  = \PhpOffice\PhpSpreadsheet\IOFactory::load($fullPath);
-            $ws  = $ss->getActiveSheet();
-            $max = $ws->getHighestDataRow();
-
-            // Universal header detection for UDISE+, new 9-col template, and legacy templates
-            $headerMap = [];
-            $headerRow = 0;
-            for ($testRow = 1; $testRow <= min(6, $max); $testRow++) {
-                $cells = [];
-                for ($col = 1; $col <= 40; $col++) {
-                    $ltr = Coordinate::stringFromColumnIndex($col);
-                    $val = strtolower(trim((string) $ws->getCell("{$ltr}{$testRow}")->getValue()));
-                    if ($val !== '') $cells[$val] = $ltr;
-                }
-                foreach ($cells as $k => $ltr) {
-                    if (str_contains($k, 'first') && str_contains($k, 'name')) $headerMap['first_name'] = $ltr;
-                    elseif (str_contains($k, 'last') && str_contains($k, 'name')) $headerMap['last_name'] = $ltr;
-                    elseif (str_contains($k, 'student') && str_contains($k, 'name')) $headerMap['name'] = $ltr;
-                    elseif (str_contains($k, 'name') && empty($headerMap['name']) && empty($headerMap['first_name'])) $headerMap['name'] = $ltr;
-                    elseif (str_contains($k, 'birth') || $k === 'dob') $headerMap['dob'] = $ltr;
-                    elseif (str_contains($k, 'gender') || str_contains($k, 'sex')) $headerMap['gender'] = $ltr;
-                    elseif (str_contains($k, 'email')) $headerMap['email'] = $ltr;
-                    elseif (str_contains($k, 'admission') || str_contains($k, 'admn') || str_contains($k, 'adm no') || str_contains($k, 'adm.') || str_contains($k, 'roll')) $headerMap['admission'] = $ltr;
-                    elseif (str_contains($k, 'grade') || str_contains($k, 'class')) $headerMap['grade'] = $ltr;
-                    elseif (str_contains($k, 'section')) $headerMap['section'] = $ltr;
-                    elseif (str_contains($k, 'apaar')) $headerMap['apaar'] = $ltr;
-                    elseif (str_contains($k, 'pen') || str_contains($k, 'permanent education')) $headerMap['pen'] = $ltr;
-                }
-                if (! empty($headerMap['name']) || ! empty($headerMap['first_name'])) {
-                    $headerRow = $testRow;
-                    break;
-                }
-            }
-
-            $startRow = $headerRow > 0 ? ($headerRow + 1) : 3;
-            // If row after header is a note row (e.g. Row 2 with italic instructions), skip it
-            $sampleTest = strtolower(trim((string)$ws->getCell("A{$startRow}")->getValue()));
-            if (str_contains($sampleTest, 'first name from') || str_contains($sampleTest, 'dd/mm/yyyy')) {
-                $startRow++;
-            }
-
-            $gradeMap = $this->getGradeMap();
-
-            for ($r = $startRow; $r <= $max; $r++) {
-                if ($headerRow > 0) {
-                    // Extract via identified headers
-                    if (! empty($headerMap['first_name'])) {
-                        $firstName = trim((string) $ws->getCell($headerMap['first_name'] . $r)->getValue());
-                        $lastName  = ! empty($headerMap['last_name']) ? trim((string) $ws->getCell($headerMap['last_name'] . $r)->getValue()) : '';
-                    } else {
-                        $fullName  = trim((string) $ws->getCell(($headerMap['name'] ?? 'A') . $r)->getValue());
-                        if ($fullName === '') continue;
-                        $parts     = preg_split('/\s+/', $fullName);
-                        $firstName = $parts[0] ?? 'Student';
-                        $lastName  = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
-                    }
-
-                    if ($firstName === '' && empty($lastName)) continue;
-
-                    // DOB
-                    $dobCell = ! empty($headerMap['dob']) ? $ws->getCell($headerMap['dob'] . $r) : null;
-                    if ($dobCell && ExcelDate::isDateTime($dobCell)) {
-                        $dob = ExcelDate::excelToDateTimeObject($dobCell->getValue())->format('d/m/Y');
-                    } else {
-                        $dob = $dobCell ? trim((string) $dobCell->getFormattedValue()) : '';
-                    }
-
-                    // Gender
-                    $gender = ! empty($headerMap['gender']) ? trim((string) $ws->getCell($headerMap['gender'] . $r)->getValue()) : '';
-
-                    // Admission No / PEN
-                    $pen = ! empty($headerMap['pen']) ? preg_replace('/[^0-9]/', '', (string)$ws->getCell($headerMap['pen'] . $r)->getValue()) : '';
-                    $admissionNo = ! empty($headerMap['admission']) ? trim((string)$ws->getCell($headerMap['admission'] . $r)->getValue()) : $pen;
-
-                    // Email
-                    $rawEmail = ! empty($headerMap['email']) ? trim((string)$ws->getCell($headerMap['email'] . $r)->getValue()) : '';
-                    if (empty($rawEmail) || str_contains(strtolower($rawEmail), 'gov.in') || ! filter_var($rawEmail, FILTER_VALIDATE_EMAIL)) {
-                        $cleanFirst = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $firstName)) ?: 'student';
-                        $cleanId    = $admissionNo ?: ($pen ?: (string)$r);
-                        $email      = "{$cleanFirst}.{$cleanId}@gmail.com";
-                    } else {
-                        $email = $rawEmail;
-                    }
-
-                    // Grade & Section
-                    $rawGrade = ! empty($headerMap['grade']) ? trim((string)$ws->getCell($headerMap['grade'] . $r)->getValue()) : 'Grade 6';
-                    $grade    = $gradeMap[$rawGrade] ?? ($gradeMap[preg_replace('/[^0-9IVX]/i', '', $rawGrade)] ?? 'Grade 6');
-                    $section  = ! empty($headerMap['section']) ? (trim((string)$ws->getCell($headerMap['section'] . $r)->getValue()) ?: 'A') : 'A';
-                    $apaarId  = ! empty($headerMap['apaar']) ? preg_replace('/[^0-9]/', '', (string)$ws->getCell($headerMap['apaar'] . $r)->getValue()) : '';
-
-                } else {
-                    // Positional fallback (default 9-col or 7-col layout)
-                    $firstName = trim((string) $ws->getCell("A{$r}")->getValue());
-                    $lastName  = trim((string) $ws->getCell("B{$r}")->getValue());
-
-                    $dobCell  = $ws->getCell("C{$r}");
-                    if (ExcelDate::isDateTime($dobCell)) {
-                        $dob = ExcelDate::excelToDateTimeObject($dobCell->getValue())->format('d/m/Y');
-                    } else {
-                        $dob = trim((string) $dobCell->getFormattedValue());
-                    }
-
-                    // Check if Col D is Gender or Email
-                    $valD = trim((string) $ws->getCell("D{$r}")->getValue());
-                    if (in_array(strtolower($valD), ['male', 'female', 'other', 'm', 'f', 'boy', 'girl'])) {
-                        // 9-col layout: A=First, B=Last, C=DOB, D=Gender, E=Email, F=Admission, G=Grade, H=Section, I=APAAR
-                        $gender      = $valD;
-                        $email       = trim((string) $ws->getCell("E{$r}")->getValue());
-                        $admissionNo = trim((string) $ws->getCell("F{$r}")->getValue());
-                        $grade       = trim((string) $ws->getCell("G{$r}")->getValue());
-                        $section     = trim((string) $ws->getCell("H{$r}")->getValue());
-                        $apaarId     = trim((string) $ws->getCell("I{$r}")->getValue());
-                    } else {
-                        // Legacy 7-col layout: A=First, B=Last, C=DOB, D=Email, E=Grade, F=Section, G=APAAR
-                        $gender      = '';
-                        $email       = $valD;
-                        $admissionNo = '';
-                        $grade       = trim((string) $ws->getCell("E{$r}")->getValue());
-                        $section     = trim((string) $ws->getCell("F{$r}")->getValue());
-                        $apaarId     = trim((string) $ws->getCell("G{$r}")->getValue());
-                    }
-
-                    if ($firstName === '' && $email === '' && $grade === '') {
-                        continue;
-                    }
-                }
-
-                if (empty($gender)) {
-                    $dummySt = new Student(['first_name' => $firstName, 'last_name' => $lastName]);
-                    $gender  = $dummySt->getEffectiveGender();
-                }
-
-                $rowErrors = [];
-                if ($firstName === '') {
-                    $rowErrors[] = 'First Name required';
-                }
-                if ($dob === '') {
-                    $rowErrors[] = 'Date of Birth required';
-                }
-                if ($email === '') {
-                    $rowErrors[] = 'Email required';
-                } elseif (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    $rowErrors[] = 'Email invalid';
-                }
-                if ($grade === '') {
-                    $rowErrors[] = 'Grade required';
-                }
-                if ($section === '') {
-                    $rowErrors[] = 'Section required';
-                }
-                if ($apaarId !== '' && (! ctype_digit($apaarId) || strlen($apaarId) !== 12)) {
-                    $rowErrors[] = 'APAAR ID must be exactly 12 digits';
-                }
-
-                $preview[] = [
-                    'row'          => count($preview) + 1,
-                    'first_name'   => $firstName,
-                    'last_name'    => $lastName,
-                    'name'         => trim("{$firstName} {$lastName}"),
-                    'gender'       => $gender,
-                    'dob'          => $dob,
-                    'email'        => $email,
-                    'admission_no' => $admissionNo,
-                    'grade'        => $grade,
-                    'section'      => $section,
-                    'apaar_id'     => $apaarId,
-                    'pen_code'     => $admissionNo,
-                    'errors'       => $rowErrors,
-                ];
-
-                if (! empty($rowErrors)) {
-                    $errors[] = "Row {$r} ({$firstName}): " . implode(', ', $rowErrors);
-                }
-            }
+            $parsed = $this->spreadsheetService->parseUploadedSpreadsheet($fullPath);
+            $preview = $parsed['preview'] ?? [];
+            $errors  = $parsed['errors'] ?? [];
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => 'Could not read Excel file: ' . $e->getMessage()]);
         }
 
-        // Save preview for the automation runner
-        file_put_contents($this->getPreviewFile(), json_encode($preview, JSON_PRETTY_PRINT));
-        $this->syncSpreadsheetFromPreview($preview);
+        /** @var School|null $schoolForFile */
+        $schoolForFile = Auth::check() ? Auth::user()->getEffectiveSchool() : null;
+        $this->writePreviewFile($this->getPreviewFile($schoolForFile), $preview);
+        $this->syncSpreadsheetFromPreview($preview, $schoolForFile);
 
-        if (\Illuminate\Support\Facades\Auth::check()) {
-            $userSchool = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
-            if ($userSchool) {
-                // By default, fresh spreadsheet upload replaces the roster so the dashboard exactly matches the file
-                $shouldReplace = ! $request->boolean('append') && ($request->boolean('replace_all', true) || $request->input('mode') !== 'append');
-                if ($shouldReplace) {
-                    Student::where('school_id', $userSchool->id)->delete();
-                }
-
-                foreach ($preview as $pRow) {
-                    $this->upsertStudentToDatabase($userSchool, $pRow, 'excel_upload');
-                }
-                $apaarCount = count(array_filter($preview, fn($s) => !empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12));
-                $userSchool->update([
-                    'udise_status'         => 'synced',
-                    'udise_synced_at'      => now(),
-                    'udise_students_count' => count($preview),
-                    'udise_apaar_count'    => $apaarCount,
-                ]);
+        if ($schoolForFile) {
+            $shouldReplace = $request->boolean('replace_all');
+            if ($shouldReplace) {
+                Student::where('school_id', $schoolForFile->id)
+                    ->where(function ($q) {
+                        $q->whereNull('hpc_submitted_at')
+                          ->where('source', '!=', Student::SOURCE_HPC);
+                    })
+                    ->delete();
             }
+
+            foreach ($preview as $pRow) {
+                $this->upsertStudentToDatabase($schoolForFile, $pRow, Student::SOURCE_EXCEL);
+            }
+
+            $apaarCount = count(array_filter($preview, fn($s) => !empty($s['apaar_id']) && strlen((string)$s['apaar_id']) === 12));
+            $schoolForFile->update([
+                'udise_status'         => 'synced',
+                'udise_synced_at'      => now(),
+                'udise_students_count' => count($preview),
+                'udise_apaar_count'    => $apaarCount,
+            ]);
         }
 
         if (! $request->expectsJson() && ! $request->ajax()) {
@@ -780,73 +270,34 @@ class HpcController extends Controller
         ]);
     }
 
-    // ─── Student CRUD & Column Corrections ───────────────────────────────────
-
     public function validateStudentRow(array $data, int $rowNum = 1): array
     {
-        $firstName = trim((string)($data['first_name'] ?? ''));
-        $lastName  = trim((string)($data['last_name'] ?? ''));
-        $dob       = trim((string)($data['dob'] ?? ''));
-        $email     = trim((string)($data['email'] ?? ''));
-        $grade     = trim((string)($data['grade'] ?? ''));
-        $section   = trim((string)($data['section'] ?? ''));
-        $apaarId   = trim((string)($data['apaar_id'] ?? ''));
-
-        $rowErrors = [];
-        if ($firstName === '') {
-            $rowErrors[] = 'First Name required';
-        }
-        if ($dob === '') {
-            $rowErrors[] = 'Date of Birth required';
-        } elseif (! preg_match('/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/', $dob)) {
-            $rowErrors[] = 'Date of Birth must be DD/MM/YYYY';
-        }
-
-        if ($email === '') {
-            $rowErrors[] = 'Email required';
-        } elseif (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $rowErrors[] = 'Email invalid';
-        }
-
-        if ($grade === '') {
-            $rowErrors[] = 'Grade required';
-        }
-        if ($section === '') {
-            $rowErrors[] = 'Section required';
-        }
-        if ($apaarId !== '' && (! ctype_digit($apaarId) || strlen($apaarId) !== 12)) {
-            $rowErrors[] = 'APAAR ID must be exactly 12 digits';
-        }
-
-        return [
-            'row'        => $rowNum,
-            'first_name' => $firstName,
-            'last_name'  => $lastName,
-            'name'       => trim("{$firstName} {$lastName}"),
-            'dob'        => $dob,
-            'email'      => $email,
-            'grade'      => $grade,
-            'section'    => $section,
-            'apaar_id'   => $apaarId,
-            'errors'     => $rowErrors,
-        ];
+        return $this->normalizer->validateStudentRow($data, $rowNum);
     }
 
-    public function syncSpreadsheetFromPreview(array $preview): void
+    public function syncSpreadsheetFromPreview(array $preview, $school = null): void
     {
-        try {
-            $sheet = $this->buildStudentSpreadsheet($preview);
-            $writer = new Xlsx($sheet);
-            $dir = $this->getSchoolStorageDir();
-            @mkdir($dir, 0755, true);
-            $writer->save($dir . '/students.xlsx');
-        } catch (\Throwable $e) {
-            \Log::warning('Could not sync students.xlsx: ' . $e->getMessage());
-        }
+        $this->spreadsheetService->syncSpreadsheetFromPreview($preview, $school);
     }
+
+    // ─── Student CRUD Actions ─────────────────────────────────────────────────
 
     public function saveStudent(Request $request)
     {
+        $request->validate([
+            'first_name'   => 'required|string|max:100',
+            'last_name'    => 'nullable|string|max:100',
+            'dob'          => 'required|string|max:20',
+            'email'        => 'required|email|max:200',
+            'gender'       => 'required|in:Male,Female,Other',
+            'grade'        => 'required|string|max:30',
+            'section'      => 'required|string|max:10',
+            'apaar_id'     => 'nullable|digits:12',
+            'admission_no' => 'nullable|string|max:50',
+            'pen_code'     => 'nullable|string|max:20',
+            'index'        => 'nullable|integer|min:0',
+        ]);
+
         $previewFile = $this->getPreviewFile();
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
 
@@ -854,14 +305,16 @@ class HpcController extends Controller
         $isEdit = ($index !== null && $index !== '' && (int)$index >= 0 && isset($preview[(int)$index]));
         $targetRow = $isEdit ? ((int)$index + 1) : (count($preview) + 1);
 
-        $validated = $this->validateStudentRow($request->all(), $targetRow);
+        $validated = $this->validateStudentRow($request->only([
+            'first_name', 'last_name', 'dob', 'email', 'gender',
+            'grade', 'section', 'apaar_id', 'admission_no', 'pen_code', 'id',
+        ]), $targetRow);
 
-        if (\Illuminate\Support\Facades\Auth::check()) {
-            $userSchool = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
-            if ($userSchool) {
-                $dbStudent = $this->upsertStudentToDatabase($userSchool, $validated, 'manual');
-                $validated['id'] = $dbStudent->id;
-            }
+        /** @var School|null $userSchool */
+        $userSchool = Auth::check() ? Auth::user()->getEffectiveSchool() : null;
+        if ($userSchool) {
+            $dbStudent = $this->upsertStudentToDatabase($userSchool, $validated, Student::SOURCE_MANUAL);
+            $validated['id'] = $dbStudent->id;
         }
 
         if ($isEdit) {
@@ -870,16 +323,15 @@ class HpcController extends Controller
             $preview[] = $validated;
         }
 
-        // Re-index rows
         foreach ($preview as $i => &$st) {
             $st['row'] = $i + 1;
         }
         unset($st);
 
-        file_put_contents($previewFile, json_encode($preview, JSON_PRETTY_PRINT));
+        $this->writePreviewFile($previewFile, $preview);
         $this->syncSpreadsheetFromPreview($preview);
 
-        $valid = count(array_filter($preview, fn($r) => empty($r['errors'])));
+        $valid   = count(array_filter($preview, fn($r) => empty($r['errors'])));
         $invalid = count($preview) - $valid;
 
         return response()->json([
@@ -894,9 +346,8 @@ class HpcController extends Controller
 
     public function deleteStudent(Request $request)
     {
-        $userSchool = \Illuminate\Support\Facades\Auth::check()
-            ? \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool()
-            : null;
+        /** @var School|null $userSchool */
+        $userSchool = Auth::check() ? Auth::user()->getEffectiveSchool() : null;
 
         $previewFile = $this->getPreviewFile($userSchool);
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
@@ -932,10 +383,10 @@ class HpcController extends Controller
         }
         unset($st);
 
-        file_put_contents($previewFile, json_encode($preview, JSON_PRETTY_PRINT));
+        $this->writePreviewFile($previewFile, $preview);
         $this->syncSpreadsheetFromPreview($preview);
 
-        $valid = count(array_filter($preview, fn($r) => empty($r['errors'])));
+        $valid   = count(array_filter($preview, fn($r) => empty($r['errors'])));
         $invalid = count($preview) - $valid;
 
         return response()->json([
@@ -950,9 +401,8 @@ class HpcController extends Controller
 
     public function clearAllStudents(Request $request)
     {
-        $userSchool = \Illuminate\Support\Facades\Auth::check()
-            ? \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool()
-            : null;
+        /** @var School|null $userSchool */
+        $userSchool = Auth::check() ? Auth::user()->getEffectiveSchool() : null;
 
         if ($userSchool) {
             Student::where('school_id', $userSchool->id)->delete();
@@ -961,8 +411,8 @@ class HpcController extends Controller
                 'udise_apaar_count'    => 0,
             ]);
             $previewFile = $this->getPreviewFile($userSchool);
-            if (file_exists($previewFile)) {
-                @unlink($previewFile);
+            if (file_exists($previewFile) && ! unlink($previewFile)) {
+                Log::warning("[HPC] Could not delete preview file: {$previewFile}");
             }
             $this->syncSpreadsheetFromPreview([]);
         }
@@ -982,6 +432,16 @@ class HpcController extends Controller
 
     public function updateAllStudents(Request $request)
     {
+        $request->validate([
+            'students'              => 'required|array|max:2000',
+            'students.*.first_name' => 'required|string|max:100',
+            'students.*.email'      => 'required|email|max:200',
+            'students.*.gender'     => 'required|in:Male,Female,Other',
+            'students.*.grade'      => 'required|string|max:30',
+            'students.*.section'    => 'required|string|max:10',
+            'students.*.apaar_id'   => 'nullable|digits:12',
+        ]);
+
         $items = $request->input('students', []);
         $preview = [];
         foreach ($items as $i => $item) {
@@ -989,19 +449,18 @@ class HpcController extends Controller
         }
 
         $previewFile = $this->getPreviewFile();
-        file_put_contents($previewFile, json_encode($preview, JSON_PRETTY_PRINT));
+        $this->writePreviewFile($previewFile, $preview);
         $this->syncSpreadsheetFromPreview($preview);
 
-        if (\Illuminate\Support\Facades\Auth::check()) {
-            $userSchool = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
-            if ($userSchool) {
-                foreach ($preview as $pRow) {
-                    $this->upsertStudentToDatabase($userSchool, $pRow, 'bulk_update');
-                }
+        /** @var School|null $userSchool */
+        $userSchool = Auth::check() ? Auth::user()->getEffectiveSchool() : null;
+        if ($userSchool) {
+            foreach ($preview as $pRow) {
+                $this->upsertStudentToDatabase($userSchool, $pRow, 'bulk_update');
             }
         }
 
-        $valid = count(array_filter($preview, fn($r) => empty($r['errors'])));
+        $valid   = count(array_filter($preview, fn($r) => empty($r['errors'])));
         $invalid = count($preview) - $valid;
 
         return response()->json([
@@ -1014,305 +473,77 @@ class HpcController extends Controller
         ]);
     }
 
-    /**
-     * Upsert a student record into the MySQL database with deduplication.
-     * Matches by 12-digit unmasked APAAR ID, PEN code, or Name + DOB + Grade.
-     */
     public function upsertStudentToDatabase(School $school, array $data, string $source = 'udise_sync'): Student
     {
-        $apaar = ! empty($data['apaar_id']) ? preg_replace('/[^0-9]/', '', (string) $data['apaar_id']) : null;
-        $pen   = ! empty($data['admission_no']) ? trim((string) $data['admission_no']) : (! empty($data['admnNumber']) ? trim((string) $data['admnNumber']) : (! empty($data['pen_code']) ? trim((string) $data['pen_code']) : (! empty($data['studentCodeNat']) ? trim((string) $data['studentCodeNat']) : null)));
-        $firstName = trim($data['first_name'] ?? '');
-        $lastName  = trim($data['last_name'] ?? '');
-        $name      = trim($data['name'] ?? trim("{$firstName} {$lastName}"));
-        $dob       = trim($data['dob'] ?? '');
-        $grade     = trim($data['grade'] ?? 'Grade 6');
-        $section   = trim($data['section'] ?? 'A');
-        $email     = trim($data['email'] ?? '');
-
-        $student = null;
-
-        // 1. Match by Name + DOB first (ensures students with different names never overwrite each other)
-        if (! empty($name) && ! empty($dob)) {
-            $student = Student::where('school_id', $school->id)
-                ->where('name', $name)
-                ->where('dob', $dob)
-                ->first();
-        }
-
-        // 2. Match by 12-digit APAAR ID if present (only if name is actually similar >= 70%)
-        if (! $student && $apaar && strlen($apaar) === 12) {
-            $existing = Student::where('school_id', $school->id)->where('apaar_id', $apaar)->first();
-            if ($existing) {
-                similar_text(strtolower($existing->name), strtolower($name), $simPct);
-                if (empty($name) || soundex($existing->first_name) === soundex($firstName) || $simPct >= 70) {
-                    $student = $existing;
-                }
-            }
-        }
-
-        // 3. Match by PEN code if APAAR did not match (only if name is actually similar >= 70%)
-        if (! $student && ! empty($pen)) {
-            $existing = Student::where('school_id', $school->id)->where('pen_code', $pen)->first();
-            if ($existing) {
-                similar_text(strtolower($existing->name), strtolower($name), $simPct);
-                if (empty($name) || soundex($existing->first_name) === soundex($firstName) || $simPct >= 70) {
-                    $student = $existing;
-                }
-            }
-        }
-
-        $errors = $data['errors'] ?? [];
-        $status = ! empty($errors) ? 'failed' : 'success';
-        $defaultRemark = $source === 'udise_sync' ? 'Synced from UDISE+ SDMS' : ($source === 'excel_upload' ? 'Imported from Excel spreadsheet' : 'Saved via School Portal');
-        $remark = ! empty($errors) ? null : ($data['remark'] ?? $defaultRemark);
-        $failureReason = ! empty($errors) ? implode(', ', (array) $errors) : null;
-
-        $payload = [
-            'school_id'        => $school->id,
-            'first_name'       => $firstName ?: 'Student',
-            'last_name'        => $lastName,
-            'name'             => $name ?: 'Student',
-            'dob'              => $dob,
-            'email'            => $email,
-            'grade'            => $grade,
-            'section'          => $section ?: 'A',
-            'apaar_id'         => $apaar,
-            'pen_code'         => $pen,
-            'udise_student_id' => $data['udise_student_id'] ?? ($data['studentId'] ?? null),
-            'gender'           => $data['gender'] ?? ($data['genderDesc'] ?? null),
-            'source'           => $source,
-            'status'           => $status,
-            'remark'           => $remark,
-            'failure_reason'   => $failureReason,
-        ];
-
-        if ($student) {
-            $student->update($payload);
-            return $student;
-        }
-
-        return Student::create($payload);
+        return $this->rosterService->upsertStudentToDatabase($school, $data, $source);
     }
 
-    /**
-     * Remove student record from MySQL database.
-     */
     public function deleteStudentFromDatabase(School $school, array $studentData): void
     {
-        $query = Student::where('school_id', $school->id);
-
-        if (! empty($studentData['id'])) {
-            $query->where('id', $studentData['id'])->delete();
-            return;
-        }
-
-        $apaar = ! empty($studentData['apaar_id']) ? preg_replace('/[^0-9]/', '', (string) $studentData['apaar_id']) : null;
-        $pen   = ! empty($studentData['pen_code']) ? trim((string) $studentData['pen_code']) : null;
-
-        if ($apaar && strlen($apaar) === 12) {
-            $query->where('apaar_id', $apaar)->delete();
-        } elseif ($pen) {
-            $query->where('pen_code', $pen)->delete();
-        } else {
-            $name = trim($studentData['name'] ?? trim(($studentData['first_name'] ?? '') . ' ' . ($studentData['last_name'] ?? '')));
-            $dob  = trim($studentData['dob'] ?? '');
-            if (! empty($name) && ! empty($dob)) {
-                $query->where('name', $name)->where('dob', $dob)->delete();
-            }
-        }
+        $this->rosterService->deleteStudentFromDatabase($school, $studentData);
     }
 
+    public function normalizeUdiseStudent(array $st, int $idx, array $gradeMap): array
+    {
+        return $this->normalizer->normalizeUdiseStudent($st, $idx, $gradeMap);
+    }
 
-    // ─── Step 3: Start Automation ────────────────────────────────────────────
+    private function writePreviewFile(string $path, array $data): void
+    {
+        $this->rosterService->writePreviewFile($path, $data);
+    }
+
+    // ─── HPC Automation & Extension Endpoints ─────────────────────────────────
 
     public function runStart(Request $request)
     {
-        $school      = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
-        $previewFile = $this->getPreviewFile($school);
-
-        $allStudents = [];
-        if (file_exists($previewFile)) {
-            $allStudents = json_decode(file_get_contents($previewFile), true) ?? [];
-        } elseif ($school && $school->students()->exists()) {
-            $allStudents = $school->students()->orderBy('id')->get()->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
-            @mkdir(dirname($previewFile), 0755, true);
-            file_put_contents($previewFile, json_encode($allStudents, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-        }
-
-        if (empty($allStudents)) {
-            return response()->json(['ok' => false, 'error' => 'No student data found. Please upload an Excel file or sync from UDISE first.']);
-        }
-
-        $validStudents = array_values(array_filter($allStudents, fn($s) => empty($s['errors'])));
-
-        if (empty($validStudents)) {
-            return response()->json(['ok' => false, 'error' => 'All rows have validation errors. Please fix and re-upload.']);
-        }
-
-        $total = count($validStudents);
-
-        // Initialize run_results.json
-        $resultsFile = $this->getSchoolStorageDir($school) . '/run_results.json';
-        $init = [
-            'started'    => true,
-            'running'    => true,
-            'done'       => false,
-            'login_wait' => false,
-            'total'      => $total,
-            'current'    => 0,
-            'processed'  => 0,
-            'results'    => [],
-            'started_at' => now()->toIso8601String(),
-            'message'    => "Queue ready: {$total} students queued for submission.",
-        ];
-        file_put_contents($resultsFile, json_encode($init, JSON_PRETTY_PRINT));
-
-        // Launch hpc:run command in the background if CLI execution is supported on this server
-        $artisan     = base_path('artisan');
-        $schoolArg   = $school ? "--school={$school->id}" : "";
-        $logFile     = storage_path('logs/hpc_run.log');
-        $php         = PHP_BINARY;
-        $launchedCli = false;
-
-        if (function_exists('exec')) {
-            @exec("nohup {$php} {$artisan} hpc:run {$schoolArg} > {$logFile} 2>&1 &");
-            $launchedCli = true;
-        }
-
-        return response()->json([
-            'ok'           => true,
-            'total'        => $total,
-            'launched_cli' => $launchedCli,
-            'students'     => $validStudents,
-            'add_url'      => config('hpc.add_student_url', 'https://hpc.parakh.ncert.gov.in/en/students/add'),
-            'message'      => $launchedCli ? 'Background server automation started.' : 'Student queue ready for browser-assisted submission.',
-        ]);
+        $school = Auth::user()?->getEffectiveSchool();
+        return response()->json($this->automationService->runStart($school));
     }
 
-    public function runProgress(Request $request)
+    public function runProgress(Request $request): JsonResponse
     {
-        $schoolId = $request->input('school_id');
-        $school   = $schoolId ? School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
-        if (! $school && $request->filled('udise_code')) {
-            $school = School::where('udise_code', $request->input('udise_code'))->first();
-        }
-        if (! $school) {
-            $school = School::whereHas('students')->latest()->first() ?? School::first();
-        }
-
-        $resultsFile = $this->getSchoolStorageDir($school) . '/run_results.json';
-
-        $current = (int) $request->input('current', 0);
-        $total   = (int) $request->input('total', 0);
-        $name    = (string) $request->input('name', '');
-        $status  = (string) $request->input('status', 'success');
-        $message = (string) $request->input('message', '');
-        $done    = (bool) $request->input('done', false);
-
-        $data = file_exists($resultsFile) ? (json_decode(file_get_contents($resultsFile), true) ?? []) : [];
-        $data['started']   = true;
-        $data['running']   = ! $done;
-        $data['done']      = $done;
-        $data['current']   = $current;
-        $data['processed'] = $current;
-        if ($total > 0) {
-            $data['total'] = $total;
-        }
-        $data['message']   = $message ?: ($done ? 'Automation Completed! All students submitted.' : "Submitting {$name} ({$current}/{$total})...");
-
-        if ($name) {
-            $data['results'] = $data['results'] ?? [];
-            $data['results'][] = [
-                'name'    => $name,
-                'status'  => $status,
-                'message' => $message,
-                'time'    => now()->toIso8601String(),
-            ];
-        }
-
-        file_put_contents($resultsFile, json_encode($data, JSON_PRETTY_PRINT));
-
-        return response()->json(['ok' => true], 200, [
-            'Access-Control-Allow-Origin'  => '*',
-            'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers' => '*',
-        ]);
+        return $this->automationService->runProgress($request);
     }
 
-    public function getStudentQueue(Request $request)
+    public function getStudentQueue(Request $request): JsonResponse
     {
-        $schoolId = $request->input('school_id');
-        $school   = $schoolId ? School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
-        if (! $school && $request->filled('udise_code')) {
-            $school = School::where('udise_code', $request->input('udise_code'))->first();
-        }
-        if (! $school) {
-            $school = School::whereHas('students')->latest()->first() ?? School::first();
-        }
-
-        if (! $school) {
-            return response()->json(['ok' => false, 'error' => 'School not found.'], 404);
-        }
-
-        $previewFile = $this->getPreviewFile($school);
-        $students    = [];
-        if ($school->students()->exists()) {
-            $students = $school->students()->orderBy('id')->get()->map(fn($st, $idx) => $st->toPreviewArray($idx + 1))->values()->all();
-        } elseif (file_exists($previewFile)) {
-            $students = json_decode(file_get_contents($previewFile), true) ?? [];
-        }
-
-        $valid = array_values(array_filter($students, fn($s) => empty($s['errors'])));
-
-        return response()->json([
-            'ok'          => true,
-            'school_id'   => $school->id,
-            'school_name' => $school->name,
-            'total'       => count($valid),
-            'students'    => $valid,
-            'add_url'     => config('hpc.add_student_url', 'https://hpc.parakh.ncert.gov.in/en/students/add'),
-        ], 200, [
-            'Access-Control-Allow-Origin'  => '*',
-            'Access-Control-Allow-Methods' => 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers' => '*',
-        ]);
+        return $this->automationService->getStudentQueue($request);
     }
 
-    // ─── Step 4: Poll run progress & results ──────────────────────────────────
-
-    public function runStatus()
+    public function getSchoolsList(Request $request): JsonResponse
     {
-        $file = $this->getSchoolStorageDir() . '/run_results.json';
-        if (! file_exists($file)) {
-            return response()->json(['started' => false, 'results' => []]);
-        }
-
-        $data = json_decode(file_get_contents($file), true) ?? [];
-        return response()->json($data);
+        return $this->automationService->getSchoolsList($request);
     }
 
-    // ─── Reset run results ───────────────────────────────────────────────────
-
-    public function runReset()
+    private function getAllowedCorsOrigin(): string
     {
-        $file = $this->getSchoolStorageDir() . '/run_results.json';
-        if (file_exists($file)) {
-            unlink($file);
-        }
-        return response()->json(['ok' => true]);
+        return $this->automationService->getAllowedCorsOrigin();
     }
 
-    // ─── School Profile Management ───────────────────────────────────────────
+    public function runStatus(): JsonResponse
+    {
+        $school = Auth::user()?->getEffectiveSchool();
+        return response()->json($this->automationService->runStatus($school));
+    }
+
+    public function runReset(): JsonResponse
+    {
+        $school = Auth::user()?->getEffectiveSchool();
+        $this->automationService->runReset($school);
+        return response()->json(['ok' => true, 'message' => 'Run reset successfully.']);
+    }
+
+    // ─── School Profile Management ────────────────────────────────────────────
 
     public function getSchoolsData(): array
     {
-        if (\Illuminate\Support\Facades\Auth::check()) {
-            $user = \Illuminate\Support\Facades\Auth::user();
-            $dbSchool = $user->getEffectiveSchool();
+        if (Auth::check()) {
+            /** @var School|null $dbSchool */
+            $dbSchool = Auth::user()->getEffectiveSchool();
             if ($dbSchool) {
                 return [
-                    'active' => 'school_' . $dbSchool->id,
+                    'active'  => 'school_' . $dbSchool->id,
                     'schools' => [
                         [
                             'id'    => 'school_' . $dbSchool->id,
@@ -1333,7 +564,7 @@ class HpcController extends Controller
             }
         }
         $default = [
-            'active' => 'default',
+            'active'  => 'default',
             'schools' => [
                 [
                     'id'   => 'default',
@@ -1360,25 +591,10 @@ class HpcController extends Controller
 
     public function getActiveProfileDir($school = null): string
     {
-        if (! $school && \Illuminate\Support\Facades\Auth::check()) {
-            $school = \Illuminate\Support\Facades\Auth::user()->getEffectiveSchool();
-        }
-
-        if ($school) {
-            $dir = storage_path('app/hpc/schools/' . $school->id . '/chrome-profile');
-            // If school is #1 and legacy chrome-profile exists, preserve compatibility
-            if (! is_dir($dir) && $school->id === 1 && is_dir(storage_path('app/hpc/chrome-profile'))) {
-                return storage_path('app/hpc/chrome-profile');
-            }
-            return $dir;
-        }
-
-        $active = $this->getActiveSchool();
-        $dir = $active['dir'] ?? 'chrome-profile';
-        return storage_path('app/hpc/' . $dir);
+        return $this->automationService->getActiveProfileDir($school);
     }
 
-    public function switchSchool(Request $request)
+    public function switchSchool(Request $request): JsonResponse
     {
         $schoolId = trim((string) $request->input('id'));
         $data = $this->getSchoolsData();
@@ -1393,7 +609,6 @@ class HpcController extends Controller
             return response()->json(['ok' => false, 'error' => 'School profile not found.']);
         }
 
-        // Close running Chrome instances if supported
         if (function_exists('exec')) {
             @exec("pkill -f 'storage/app/hpc' 2>/dev/null");
             @exec("pkill -f 'drivers/chromedriver' 2>/dev/null");
@@ -1405,7 +620,7 @@ class HpcController extends Controller
         return response()->json(['ok' => true, 'message' => 'Switched active school successfully.']);
     }
 
-    public function addSchool(Request $request)
+    public function addSchool(Request $request): JsonResponse
     {
         $name = trim((string) $request->input('name'));
         if ($name === '') {
@@ -1426,7 +641,6 @@ class HpcController extends Controller
         @mkdir(storage_path('app/hpc/' . $dir), 0777, true);
         file_put_contents(storage_path('app/hpc/schools.json'), json_encode($data, JSON_PRETTY_PRINT));
 
-        // Close running Chrome if supported
         if (function_exists('exec')) {
             @exec("pkill -f 'storage/app/hpc' 2>/dev/null");
             @exec("pkill -f 'drivers/chromedriver' 2>/dev/null");
@@ -1435,7 +649,7 @@ class HpcController extends Controller
         return response()->json(['ok' => true, 'id' => $id, 'name' => $name, 'message' => "School '{$name}' added and selected."]);
     }
 
-    public function deleteSchool(Request $request)
+    public function deleteSchool(Request $request): JsonResponse
     {
         $id = trim((string) $request->input('id'));
         if ($id === 'default') {
@@ -1473,93 +687,60 @@ class HpcController extends Controller
         return response()->json(['ok' => true, 'message' => 'School profile deleted.']);
     }
 
-    // ─── Session Management: End Session & Start Fresh ───────────────────────
+    // ─── Session Management ───────────────────────────────────────────────────
 
-    public function endSession()
+    public function endSession(): JsonResponse
     {
-        $profileDir = $this->getActiveProfileDir();
-
-        // Kill Chrome processes associated with active profile or chromedriver
-        if (function_exists('exec')) {
-            @exec("pkill -f 'storage/app/hpc' 2>/dev/null");
-            @exec("pkill -f 'drivers/chromedriver' 2>/dev/null");
-        }
-
-        // Delete active profile directory to wipe cookies/cache for this school
-        if (is_dir($profileDir)) {
-            if (function_exists('exec')) {
-                @exec("rm -rf " . escapeshellarg($profileDir));
-            } else {
-                $files = glob($profileDir . '/*');
-                foreach ($files as $f) { if (is_file($f)) @unlink($f); }
-                @rmdir($profileDir);
-            }
-        }
-
-        return response()->json(['ok' => true, 'message' => 'Session ended for the active school profile. You can log in with new credentials.']);
+        $school = Auth::user()?->getEffectiveSchool();
+        return response()->json($this->automationService->endSession($school));
     }
 
-    public function startSession()
+    public function startSession(): JsonResponse
     {
-        $loginUrl   = config('hpc.login_url', 'https://hpc.parakh.ncert.gov.in/en/login');
-        $profileDir = $this->getActiveProfileDir();
-        @mkdir($profileDir, 0777, true);
-        @file_put_contents($profileDir . '/session_active.txt', now()->toIso8601String());
-
-        // Open visible Chrome with this school's profile in background if supported
-        if (function_exists('exec')) {
-            $macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-            if (file_exists($macChrome)) {
-                @exec("nohup '{$macChrome}' --user-data-dir=" . escapeshellarg($profileDir) . " " . escapeshellarg($loginUrl) . " > /dev/null 2>&1 &");
-            }
-        }
-
-        $active = $this->getActiveSchool();
-        return response()->json([
-            'ok'      => true,
-            'url'     => $loginUrl,
-            'message' => "HPC School session connected for {$active['name']}. Please log into the portal.",
-        ]);
+        $school = Auth::user()?->getEffectiveSchool();
+        return response()->json($this->automationService->startSession($school));
     }
 
-    // ─── Dynamic Form Discovery: Fetch fields of any URL ─────────────────────
+    // ─── Form Discovery & Portal Sync ─────────────────────────────────────────
 
-    public function discoverForm(Request $request)
+    public function discoverForm(Request $request): JsonResponse
     {
-        $url = trim($request->input('url') ?: config('hpc.add_student_url'));
-        if (! filter_var($url, FILTER_VALIDATE_URL)) {
-            return response()->json(['ok' => false, 'error' => 'Please provide a valid form URL (e.g. https://hpc.parakh.ncert.gov.in/en/students/add).']);
+        return $this->automationService->discoverForm($request);
+    }
+
+    public function syncFromPortal(Request $request): JsonResponse
+    {
+        return $this->automationService->syncFromPortal($request);
+    }
+
+    public function getStep3Students(Request $request): JsonResponse
+    {
+        /** @var School|null $school */
+        $school = Auth::user()?->getEffectiveSchool();
+        if (! $school) {
+            return response()->json(['ok' => false, 'error' => 'School not found.'], 404);
         }
 
-        // Save active form URL
-        file_put_contents(storage_path('app/hpc/current_form.txt'), $url);
+        $perPage = max(1, (int) $request->input('per_page', 50));
+        $page    = max(1, (int) $request->input('page', 1));
 
-        $artisan = base_path('artisan');
-        $php     = PHP_BINARY;
-        $cmd     = escapeshellcmd("{$php} {$artisan} hpc:discover --skip-login --url=" . escapeshellarg($url));
+        $query = $school->students()->forSchool($school)->step3()
+            ->orderByDesc('hpc_submitted_at')
+            ->orderByDesc('hpc_fetched_at');
 
-        $output   = [];
-        $exitCode = 0;
-        if (function_exists('exec')) {
-            exec($cmd . ' 2>&1', $output, $exitCode);
-        }
-
-        $fieldsFile = storage_path('app/hpc/fields.json');
-        if (! file_exists($fieldsFile)) {
-            $msg = ! function_exists('exec') 
-                ? 'CLI command execution is disabled on this server environment. Using default form field mappings.' 
-                : 'Discovery did not generate fields. Output: ' . implode("\n", $output);
-            return response()->json(['ok' => false, 'error' => $msg]);
-        }
-
-        $fieldsData = json_decode(file_get_contents($fieldsFile), true);
-        $fieldsList = $fieldsData['fields'] ?? [];
+        $total    = $query->count();
+        $students = $query->forPage($page, $perPage)
+            ->get()
+            ->map(fn ($st, $idx) => $st->toPreviewArray(($page - 1) * $perPage + $idx + 1))
+            ->values()
+            ->all();
 
         return response()->json([
-            'ok'     => true,
-            'url'    => $url,
-            'total'  => count($fieldsList),
-            'fields' => $fieldsList,
+            'ok'       => true,
+            'total'    => $total,
+            'page'     => $page,
+            'per_page' => $perPage,
+            'students' => $students,
         ]);
     }
 }

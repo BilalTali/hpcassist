@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\SchoolWorkingDay;
 use App\Models\SchoolMaxMark;
+use App\Services\StageTemplateService;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -34,7 +35,7 @@ class HpcTeacherController extends Controller
         return storage_path('app/hpc');
     }
 
-    public function dashboard()
+    public function dashboard(Request $request)
     {
         $storagePath = config('hpc.storage_path');
         $schoolsData = $this->getSchoolsData();
@@ -42,22 +43,63 @@ class HpcTeacherController extends Controller
         $activeTeacher = $this->getActiveTeacher();
         $teacherProfileDir = $this->getActiveTeacherProfileDir();
 
-        $hasSession = is_dir($teacherProfileDir) && count(scandir($teacherProfileDir)) > 2;
+        $sessionActiveFile = $teacherProfileDir . '/session_active.txt';
+        $hasSession = false;
+        if (file_exists($sessionActiveFile)) {
+            $ts = strtotime(trim(file_get_contents($sessionActiveFile)));
+            if ($ts && (time() - $ts < 10800)) {
+                $hasSession = true;
+            }
+        }
 
-        $stagesFile = $storagePath . '/stages.json';
-        $stages = file_exists($stagesFile) ? (json_decode(file_get_contents($stagesFile), true) ?? []) : [
-            ['title' => 'Middle Stage', 'slug' => 'middle-stage', 'url' => 'https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage'],
-            ['title' => 'Preparatory Stage', 'slug' => 'preparatory-stage', 'url' => 'https://hpc.parakh.ncert.gov.in/en/hpc/preparatory-stage']
-        ];
+        $allStageDefs = \App\Services\StageTemplateService::getStages();
+        $stages = array_values(array_map(function($s) {
+            return [
+                'title'       => $s['title'] . ' (' . $s['grade_range'] . ')',
+                'slug'        => $s['slug'],
+                'url'         => $s['portal_url'],
+                'color'       => $s['color'],
+                'description' => $s['description'],
+                'grades'      => $s['grades'],
+            ];
+        }, $allStageDefs));
 
         $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $schoolId = $school?->id ?? (int)preg_replace('/[^0-9]/', '', (string)($activeSchool['id'] ?? '')) ?: null;
         $schoolDir = $this->getSchoolStorageDir($school);
 
-        $studentsFile = $schoolDir . '/teacher_students.json';
-        $students = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
+        $teacherClass = null;
+        if (\Illuminate\Support\Facades\Auth::check() && \Illuminate\Support\Facades\Auth::user()->isTeacher()) {
+            $userTeacher = \Illuminate\Support\Facades\Auth::user()->getEffectiveTeacher();
+            if ($userTeacher && ! empty($userTeacher->classes) && strcasecmp(trim($userTeacher->classes), 'All Classes') !== 0) {
+                $teacherClass = trim($userTeacher->classes);
+            }
+        }
+
+        $selectedStage = $request->query('stage', 'all');
+        $selectedGrade = $request->query('grade', $teacherClass);
+
+        $students = [];
+        if (file_exists($teacherProfileDir . '/teacher_students.json')) {
+            $students = json_decode(file_get_contents($teacherProfileDir . '/teacher_students.json'), true) ?? [];
+        }
+        if (empty($students) && file_exists($schoolDir . '/teacher_students.json')) {
+            $students = json_decode(file_get_contents($schoolDir . '/teacher_students.json'), true) ?? [];
+        }
+        if (empty($students)) {
+            $students = $this->getTeacherTemplateStudents($selectedGrade, $selectedStage);
+        }
 
         $previewFile = $schoolDir . '/teacher_preview.json';
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
+        if (! empty($preview)) {
+            $preview = array_values(array_filter($preview, function($p) {
+                return empty($p['is_demo']) &&
+                       ($p['login_id'] ?? '') !== 'DEMO_SAMPLE' &&
+                       stripos($p['name'] ?? '', 'SAMPLE') === false &&
+                       stripos($p['name'] ?? '', 'DEMO') === false;
+            }));
+        }
 
         $resultsFile = $schoolDir . '/teacher_run_results.json';
         $lastRun = file_exists($resultsFile) ? json_decode(file_get_contents($resultsFile), true) : null;
@@ -69,6 +111,11 @@ class HpcTeacherController extends Controller
             'schoolsData',
             'activeSchool',
             'activeTeacher',
+            'school',
+            'schoolId',
+            'teacherClass',
+            'selectedStage',
+            'selectedGrade',
             'hasSession',
             'stages',
             'students',
@@ -83,26 +130,228 @@ class HpcTeacherController extends Controller
      * Download Filled Roster Template.
      *
      * @param Request|null $request
-     * @return \Symfony\Component\HttpFoundation\StreamedResponse
+     * @return \Symfony\Component\HttpFoundation\StreamedResponse|\Illuminate\Http\RedirectResponse
      */
-    public function downloadTemplate(?Request $request = null): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function downloadTemplate(Request $request): \Symfony\Component\HttpFoundation\Response
     {
-        $students = $this->getTeacherTemplateStudents();
+        $school             = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $teacherProfileDir  = $this->getActiveTeacherProfileDir($school);
+        $teacherSessionFile = $teacherProfileDir . '/session_active.txt';
+        $hasTeacherProfile  = false;
+        if (file_exists($teacherSessionFile)) {
+            $ts = strtotime(trim(file_get_contents($teacherSessionFile)));
+            if ($ts && (time() - $ts < 10800)) {
+                $hasTeacherProfile = true;
+            }
+        }
 
-        return $this->generateSpreadsheetResponse($students);
+        $grade = $request->input('grade', request('grade'));
+        $stage = $request->input('stage', request('stage'));
+        if ($grade === 'all' || trim((string)$grade) === '') {
+            $grade = null;
+        }
+        if ($stage === 'all' || trim((string)$stage) === '') {
+            $stage = null;
+        }
+
+        if (! $stage && $grade) {
+            $stage = \App\Services\StageTemplateService::getStageForGrade($grade);
+        }
+        $stage = \App\Services\StageTemplateService::normalizeStage($stage ?: 'middle-stage');
+
+        $students = $this->getTeacherTemplateStudents($grade, $stage);
+
+        if (empty($students)) {
+            $stageTitle = \App\Services\StageTemplateService::getStages()[$stage]['title'] ?? 'Selected Stage';
+            $msg = "⚠️ No students fetched from PARAKH portal yet for {$stageTitle}" . ($grade ? " ({$grade})" : '') . ". Please log in to PARAKH portal, open the {$stageTitle} page, and click \"📥 Fetch Students from This Page\" in the HPC Assist extension first.";
+            return redirect()->to(route('hpc.teacher.dashboard', ['stage' => $stage]))->with('error', $msg);
+        }
+
+        $options = [
+            'use_global_activities' => $request->has('global_activities') ? $request->boolean('global_activities') : true,
+            'activity_preset'       => $request->query('activity_preset'),
+            'auto_fill'             => $request->has('auto_fill') ? $request->boolean('auto_fill') : true,
+        ];
+
+        return $this->generateSpreadsheetResponse($students, $grade, $stage, $options);
     }
 
-    private function generateSpreadsheetResponse(array $students): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function getCorsHeaders(Request $request): array
     {
-        /** @var Spreadsheet $spreadsheet */
-        $spreadsheet = new Spreadsheet();
+        $origin = $request->header('Origin');
+        if (! $origin || $origin === 'null') {
+            $origin = '*';
+        }
 
-        $this->buildInstructionsSheet($spreadsheet);
-        $this->buildEvaluationsSheet($spreadsheet, $students);
+        $headers = [
+            'Access-Control-Allow-Origin'  => $origin,
+            'Access-Control-Allow-Methods' => 'POST, GET, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Accept, X-HPC-Token, X-CSRF-TOKEN, X-Requested-With',
+        ];
 
-        $filename = 'hpc_teacher_assessment_template.xlsx';
+        if ($origin !== '*') {
+            $headers['Access-Control-Allow-Credentials'] = 'true';
+        }
+
+        return $headers;
+    }
+
+    public function syncRoster(Request $request): \Symfony\Component\HttpFoundation\Response
+    {
+        $cors = $this->getCorsHeaders($request);
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 200, $cors);
+        }
+
+        $school = null;
+        if ($request->filled('udise_code')) {
+            $cleanCode = preg_replace('/[^0-9]/', '', (string)$request->input('udise_code'));
+            if (! empty($cleanCode)) {
+                $school = \App\Models\School::where('udise_code', $cleanCode)->first()
+                       ?: \App\Models\School::where('udise_code', 'like', "%{$cleanCode}%")->first();
+            }
+        }
+        if (! $school) {
+            $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        }
+        if (! $school && $request->filled('school_id')) {
+            $school = \App\Models\School::find($request->input('school_id'));
+        }
+        if (! $school) {
+            $activeSchool = $this->getActiveSchool();
+            $schoolId = (int)preg_replace('/[^0-9]/', '', (string)($activeSchool['id'] ?? '')) ?: null;
+            if ($schoolId) {
+                $school = \App\Models\School::find($schoolId);
+            }
+        }
+        if (! $school) {
+            return response()->json(['ok' => false, 'error' => 'School not found for requested UDISE code.'], 404);
+        }
+
+        $incoming = $request->input('students', []);
+        if (! is_array($incoming) || empty($incoming)) {
+            return response()->json(['ok' => false, 'error' => 'No student rows provided to sync.'], 422);
+        }
+
+        $schoolDir = $this->getSchoolStorageDir($school);
+        $teacherProfileDir = $this->getActiveTeacherProfileDir($school);
+        if (! is_dir($schoolDir)) @mkdir($schoolDir, 0777, true);
+        if (! is_dir($teacherProfileDir)) @mkdir($teacherProfileDir, 0777, true);
+
+        $dbStudents = $school->students()->get();
+
+        $synced = [];
+        foreach ($incoming as $idx => $st) {
+            $name    = trim($st['name'] ?? '');
+            $loginId = trim($st['login_id'] ?? '');
+            $apaarId = trim($st['apaar_id'] ?? '');
+            $status  = trim($st['status'] ?? 'HPC In Progress');
+            $stage   = trim($st['stage'] ?? '');
+
+            // Match with DB record if exists for admission_no
+            $match = $dbStudents->first(function($dbSt) use ($apaarId, $loginId, $name) {
+                if (! empty($apaarId) && $dbSt->apaar_id === $apaarId) return true;
+                if (! empty($loginId) && ($dbSt->pen_code === $loginId || $dbSt->apaar_id === $loginId)) return true;
+                if (! empty($name) && strcasecmp(trim($dbSt->name), trim($name)) === 0) return true;
+                return false;
+            });
+
+            // Derive stage/grade
+            $grade = $st['grade'] ?? ($match?->grade ?? '');
+            if (empty($grade)) {
+                $grade = match(strtolower($stage)) {
+                    'middle-stage', 'middle' => 'Grade 6',
+                    'preparatory-stage', 'preparatory' => 'Grade 4',
+                    'foundational-stage', 'foundational' => 'Grade 1',
+                    default => 'Grade 6'
+                };
+            }
+
+            $admNo = $match?->admission_no ? (string)$match->admission_no : '';
+            // Guard: School admission number must NEVER be HPC Login ID, APAAR ID, or PEN
+            if ($admNo !== '' && ($admNo === $loginId || $admNo === $apaarId || $admNo === ($match?->pen_code ?? ''))) {
+                $admNo = '';
+            }
+            if (empty($admNo)) {
+                $stageService = app(\App\Services\StageTemplateService::class);
+                $admNo = $stageService->resolveAdmissionNumber([
+                    'name'     => $name,
+                    'apaar_id' => $apaarId,
+                    'login_id' => $loginId,
+                    'row'      => $idx + 1,
+                ], $idx);
+            }
+
+            $synced[] = [
+                'row'          => $idx + 1,
+                'name'         => $name ?: ($match?->name ?? 'Student ' . ($idx + 1)),
+                'admission_no' => $admNo,
+                'grade'        => $grade,
+                'section'      => $match?->section ?: 'A',
+                'apaar_id'     => $apaarId ?: ($match?->apaar_id ?? ''),
+                'login_id'     => $loginId ?: ($match?->pen_code ?? ''),
+                'status'       => $status,
+                'stage'        => $stage,
+            ];
+        }
+
+        file_put_contents($schoolDir . '/teacher_students.json', json_encode($synced, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        file_put_contents($teacherProfileDir . '/teacher_students.json', json_encode($synced, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+
+        // Mark teacher profile as active
+        @file_put_contents($teacherProfileDir . '/session_active.txt', now()->toIso8601String());
+
+        // Also sync to all registered teachers in this school
+        if ($school) {
+            foreach ($school->teachers()->get() as $schT) {
+                $schTDir = storage_path('app/hpc/schools/' . $school->id . '/teacher-profiles/teacher_' . $schT->id);
+                if (! is_dir($schTDir)) @mkdir($schTDir, 0777, true);
+                @file_put_contents($schTDir . '/teacher_students.json', json_encode($synced, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                @file_put_contents($schTDir . '/session_active.txt', now()->toIso8601String());
+            }
+
+            // Sync to any sibling school accounts sharing the same UDISE code
+            if (! empty($school->udise_code)) {
+                $cleanUdise = preg_replace('/[^0-9]/', '', (string)$school->udise_code);
+                $siblingSchools = \App\Models\School::where(function($q) use ($school, $cleanUdise) {
+                    $q->where('udise_code', $school->udise_code);
+                    if (! empty($cleanUdise)) {
+                        $q->orWhere('udise_code', 'like', "%{$cleanUdise}%");
+                    }
+                })->where('id', '!=', $school->id)->get();
+
+                foreach ($siblingSchools as $sib) {
+                    $sibDir = storage_path('app/hpc/schools/' . $sib->id);
+                    if (! is_dir($sibDir)) @mkdir($sibDir, 0777, true);
+                    @file_put_contents($sibDir . '/teacher_students.json', json_encode($synced, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                    foreach ($sib->teachers()->get() as $sibT) {
+                        $sibTDir = $sibDir . '/teacher-profiles/teacher_' . $sibT->id;
+                        if (! is_dir($sibTDir)) @mkdir($sibTDir, 0777, true);
+                        @file_put_contents($sibTDir . '/teacher_students.json', json_encode($synced, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                        @file_put_contents($sibTDir . '/session_active.txt', now()->toIso8601String());
+                    }
+                }
+            }
+        }
+
+        return response()->json([
+            'ok'       => true,
+            'count'    => count($synced),
+            'students' => $synced,
+            'message'  => 'Successfully synced ' . count($synced) . ' student(s) from PARAKH portal!',
+        ], 200, $cors);
+    }
+
+    private function generateSpreadsheetResponse(array $students, ?string $grade = null, ?string $stage = null, array $options = []): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $stage = \App\Services\StageTemplateService::normalizeStage($stage ?: 'middle-stage');
+        $stageService = app(\App\Services\StageTemplateService::class);
+        $spreadsheet = $stageService->buildSpreadsheet($stage, $students, $options);
+
+        $gradeSuffix = ($grade && $grade !== 'all') ? '_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $grade) : '';
+        $filename    = "hpc_assessment_{$stage}{$gradeSuffix}.xlsx";
         /** @var Xlsx $writer */
-        $writer   = new Xlsx($spreadsheet);
+        $writer      = new Xlsx($spreadsheet);
 
         return response()->stream(function () use ($writer): void {
             $writer->save('php://output');
@@ -113,33 +362,129 @@ class HpcTeacherController extends Controller
         ]);
     }
 
-    private function getTeacherTemplateStudents(): array
+    public function getStageGrades(?string $stage): array
     {
-        $school       = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
-        $schoolDir    = $this->getSchoolStorageDir($school);
-        $studentsFile = $schoolDir . '/teacher_students.json';
-        $students     = file_exists($studentsFile) ? (json_decode(file_get_contents($studentsFile), true) ?? []) : [];
+        return match (strtolower(trim((string)$stage))) {
+            'secondary-stage', 'secondary'       => ['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'],
+            'middle-stage', 'middle'             => ['Grade 6', 'Grade 7', 'Grade 8'],
+            'preparatory-stage', 'preparatory'   => ['Grade 3', 'Grade 4', 'Grade 5'],
+            'foundational-stage', 'foundational' => ['Balvatika 1', 'Balvatika 2', 'Balvatika 3', 'Grade 1', 'Grade 2'],
+            default                              => []
+        };
+    }
 
-        if (empty($students) && $school && $school->students()->exists()) {
-            $students = $school->students()->orderBy('id')->get()->map(function($st) {
-                return [
-                    'name'     => $st->name,
-                    'apaar_id' => $st->apaar_id ?: '',
-                    'login_id' => $st->pen_code ?: ($st->apaar_id ?: 'S' . strtoupper(substr(md5($st->id . $st->name), 0, 9))),
-                    'status'   => 'HPC Pending',
-                ];
-            })->all();
+    private function getTeacherTemplateStudents(?string $grade = null, ?string $stage = null): array
+    {
+        $school            = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $schoolDir         = $this->getSchoolStorageDir($school);
+        $teacherProfileDir = $this->getActiveTeacherProfileDir($school);
+
+        // Check teacher profile first, then school dir
+        $students = [];
+        if (file_exists($teacherProfileDir . '/teacher_students.json')) {
+            $students = json_decode(file_get_contents($teacherProfileDir . '/teacher_students.json'), true) ?? [];
+        }
+        if (empty($students) && file_exists($schoolDir . '/teacher_students.json')) {
+            $students = json_decode(file_get_contents($schoolDir . '/teacher_students.json'), true) ?? [];
         }
 
+        if (empty($students) && $school && ! empty($school->udise_code)) {
+            $cleanUdise = preg_replace('/[^0-9]/', '', (string)$school->udise_code);
+            $siblings = \App\Models\School::where(function($q) use ($school, $cleanUdise) {
+                $q->where('udise_code', $school->udise_code);
+                if (! empty($cleanUdise)) {
+                    $q->orWhere('udise_code', 'like', "%{$cleanUdise}%");
+                }
+            })->where('id', '!=', $school->id)->get();
+
+            foreach ($siblings as $sib) {
+                $sibDir = storage_path('app/hpc/schools/' . $sib->id);
+                $sibStudents = [];
+                foreach (glob($sibDir . '/teacher-profiles/teacher_*/teacher_students.json') ?: [] as $tpFile) {
+                    $sibStudents = json_decode(file_get_contents($tpFile), true) ?: [];
+                    if (! empty($sibStudents)) break;
+                }
+                if (empty($sibStudents) && file_exists($sibDir . '/teacher_students.json')) {
+                    $sibStudents = json_decode(file_get_contents($sibDir . '/teacher_students.json'), true) ?: [];
+                }
+                if (! empty($sibStudents)) {
+                    $students = $sibStudents;
+                    @file_put_contents($schoolDir . '/teacher_students.json', json_encode($students, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                    break;
+                }
+            }
+        }
+
+        // Workflow requirement: Students MUST be fetched from PARAKH portal first.
+        // DO NOT fall back to local database.
         if (empty($students)) {
-            $students = [
-                ['name' => 'Faizan Ahmad',     'login_id' => 'S1CA3C8009', 'status' => 'HPC Pending'],
-                ['name' => 'Zehra Batool',     'login_id' => 'S49C309C52', 'status' => 'HPC Pending'],
-                ['name' => 'Mohammad Yousuf',  'login_id' => 'S2C7236921', 'status' => 'HPC Pending'],
-                ['name' => 'Insha Jan',        'login_id' => 'S9CD420A51', 'status' => 'HPC Pending'],
-                ['name' => 'Sahil Bashir',     'login_id' => 'SD3675F62B', 'status' => 'HPC Pending'],
-            ];
+            return [];
         }
+
+        $stageGrades = (! empty($stage) && $stage !== 'all') ? $this->getStageGrades($stage) : [];
+
+        // Enrich with real DB values (admission_no, section) if matched
+        if ($school) {
+            $dbStudents = $school->students()->get();
+            foreach ($students as &$s) {
+                $match = $dbStudents->first(function($dbSt) use ($s) {
+                    if (! empty($s['apaar_id']) && $dbSt->apaar_id === $s['apaar_id']) return true;
+                    if (! empty($s['login_id']) && ($dbSt->pen_code === $s['login_id'] || $dbSt->apaar_id === $s['login_id'])) return true;
+                    if (! empty($s['name']) && strcasecmp(trim($dbSt->name), trim($s['name'])) === 0) return true;
+                    return false;
+                });
+                if ($match) {
+                    $dbAdm = $match->admission_no ? (string)$match->admission_no : '';
+                    if ($dbAdm !== '' && ($dbAdm === ($s['login_id'] ?? '') || $dbAdm === ($s['apaar_id'] ?? '') || $dbAdm === ($match->pen_code ?? ''))) {
+                        $dbAdm = '';
+                    }
+                    $s['admission_no'] = $dbAdm ?: ($s['admission_no'] ?? '');
+                    if ($s['admission_no'] === ($s['login_id'] ?? '') || $s['admission_no'] === ($s['apaar_id'] ?? '')) {
+                        $s['admission_no'] = '';
+                    }
+                    if (empty($s['grade']) && ! empty($match->grade)) $s['grade'] = $match->grade;
+                    if (empty($s['section']) && ! empty($match->section)) $s['section'] = $match->section;
+                } else {
+                    $s['admission_no'] = $s['admission_no'] ?? '';
+                    if ($s['admission_no'] === ($s['login_id'] ?? '') || $s['admission_no'] === ($s['apaar_id'] ?? '')) {
+                        $s['admission_no'] = '';
+                    }
+                }
+            }
+            unset($s);
+
+            // Filter by grade or stage
+            if (! empty($grade) && $grade !== 'all') {
+                $normGrade = strtolower(trim(str_ireplace('grade', '', $grade)));
+                $students = array_values(array_filter($students, function($s) use ($grade, $normGrade) {
+                    $stGrade = trim((string)($s['grade'] ?? ''));
+                    if (empty($stGrade)) return true;
+                    return strcasecmp($stGrade, trim($grade)) === 0 || strtolower(trim(str_ireplace('grade', '', $stGrade))) === $normGrade;
+                }));
+            } elseif (! empty($stageGrades)) {
+                $students = array_values(array_filter($students, function($s) use ($stageGrades, $stage) {
+                    $stGrade = trim((string)($s['grade'] ?? ''));
+                    if (empty($stGrade)) {
+                        $stStage = trim((string)($s['stage'] ?? ''));
+                        if (! empty($stStage) && (stripos($stStage, (string)$stage) !== false || stripos((string)$stage, $stStage) !== false)) {
+                            return true;
+                        }
+                        return true;
+                    }
+                    return in_array($stGrade, $stageGrades, true);
+                }));
+            }
+        }
+
+        // Guarantee EVERY student has a non-empty, valid school admission number
+        $stageService = app(\App\Services\StageTemplateService::class);
+        foreach ($students as $idx => &$s) {
+            $adm = $s['admission_no'] ?? '';
+            if (empty($adm) || $adm === ($s['login_id'] ?? '') || $adm === ($s['apaar_id'] ?? '')) {
+                $s['admission_no'] = $stageService->resolveAdmissionNumber($s, $idx);
+            }
+        }
+        unset($s);
 
         return $students;
     }
@@ -283,45 +628,24 @@ class HpcTeacherController extends Controller
         $evalSheet->getRowDimension(2)->setRowHeight(26);
         $evalSheet->getRowDimension(3)->setRowHeight(20);
 
-        // Row 4: Complete Demo Student
-        $demoRow = $this->getDemoStudentRow();
-        foreach ($columns as $cIdx => $col) {
-            $colLetter = $this->indexToColumnLetter($cIdx);
-            $val = $demoRow[$cIdx] ?? '';
-            $evalSheet->setCellValue("{$colLetter}4", $val);
-
-            if ($col['type'] === 'list') {
-                $validation = $evalSheet->getCell("{$colLetter}4")->getDataValidation();
-                $validation->setType(DataValidation::TYPE_LIST);
-                $validation->setErrorStyle(DataValidation::STYLE_INFORMATION);
-                $validation->setAllowBlank(false);
-                $validation->setShowDropDown(true);
-                $validation->setFormula1($col['options']);
-            }
-
-            $evalSheet->getStyle("{$colLetter}4")->applyFromArray([
-                'font'      => ['bold' => true, 'italic' => true, 'color' => ['argb' => 'FF854D0E']],
-                'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFEF9C3']],
-                'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFFDE047']]],
-                'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
-            ]);
-        }
-        $evalSheet->getRowDimension(4)->setRowHeight(24);
-
-        // Rows 5 onwards: Enrolled Students
+        // Rows 4 onwards: Real Enrolled Students (No dummy demo row)
         $defaultWd = SchoolWorkingDay::getDefault();
         $defaultWorkMap = $defaultWd->toMonthMap();
         $defaultMax = SchoolMaxMark::getDefault()->toSubjectMap();
 
         foreach ($students as $sIdx => $st) {
-            $rowNum = $sIdx + 5;
+            $rowNum = $sIdx + 4;
             $starterRow = $this->getStudentStarterProfile($sIdx, $st, $defaultWorkMap, $defaultMax, $rowNum);
 
             foreach ($columns as $cIdx => $col) {
                 $colLetter = $this->indexToColumnLetter($cIdx);
                 $val = $starterRow[$cIdx] ?? '';
 
-                $evalSheet->setCellValue("{$colLetter}{$rowNum}", $val);
+                if (in_array($col['key'], ['admission_no', 'apaar_id', 'login_id'], true)) {
+                    $evalSheet->setCellValueExplicit("{$colLetter}{$rowNum}", (string)$val, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                } else {
+                    $evalSheet->setCellValue("{$colLetter}{$rowNum}", $val);
+                }
 
                 if ($col['type'] === 'list') {
                     $validation = $evalSheet->getCell("{$colLetter}{$rowNum}")->getDataValidation();
@@ -402,7 +726,8 @@ class HpcTeacherController extends Controller
             return response()->json(['ok' => false, 'error' => 'Please upload a valid Excel (.xlsx, .xls) file.']);
         }
 
-        $dir = storage_path('app/hpc');
+        $school = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $dir    = $this->getSchoolStorageDir($school);
         if (! is_dir($dir)) @mkdir($dir, 0777, true);
 
         $fullPath = $dir . '/teacher_assessment_uploaded.xlsx';
@@ -416,10 +741,42 @@ class HpcTeacherController extends Controller
             $ws  = $ss->getSheetByName('Student Evaluations') ?? $ss->getActiveSheet();
             $max = $ws->getHighestDataRow();
 
-            $columns = $this->getEvaluationColumns();
+            $stageService = app(\App\Services\StageTemplateService::class);
+            $reqStage = $request->input('stage') ?: $request->query('stage');
+            $detectedStage = null;
+            if (! empty($reqStage)) {
+                $detectedStage = \App\Services\StageTemplateService::normalizeStage($reqStage);
+            }
+
+            // Inspect Instructions sheet header
+            $instSheet = $ss->getSheetByName('Instructions & Rules');
+            if ($instSheet) {
+                $instTitle = (string)$instSheet->getCell('A1')->getValue();
+                if (stripos($instTitle, 'preparatory') !== false) {
+                    $detectedStage = \App\Services\StageTemplateService::STAGE_PREPARATORY;
+                } elseif (stripos($instTitle, 'foundational') !== false) {
+                    $detectedStage = \App\Services\StageTemplateService::STAGE_FOUNDATIONAL;
+                } elseif (stripos($instTitle, 'secondary') !== false) {
+                    $detectedStage = \App\Services\StageTemplateService::STAGE_SECONDARY;
+                } elseif (stripos($instTitle, 'middle') !== false) {
+                    $detectedStage = \App\Services\StageTemplateService::STAGE_MIDDLE;
+                }
+            }
+
+            // Fallback: detect by grade in column F (Row 4)
+            if (! $detectedStage) {
+                $gSample = (string)$ws->getCell('F4')->getValue();
+                if (! empty($gSample)) {
+                    $detectedStage = \App\Services\StageTemplateService::getStageForGrade($gSample);
+                }
+            }
+            $detectedStage = $detectedStage ?: \App\Services\StageTemplateService::STAGE_MIDDLE;
+
+            // Fetch exact columns for detected stage
+            $columns = $stageService->getStageColumns($detectedStage);
 
             $portalStudents = [];
-            $tStudentsFile = storage_path('app/hpc/teacher_students.json');
+            $tStudentsFile  = $dir . '/teacher_students.json';
             if (file_exists($tStudentsFile)) {
                 $tsData = json_decode(file_get_contents($tStudentsFile), true) ?: [];
                 foreach ($tsData as $tSt) {
@@ -429,16 +786,24 @@ class HpcTeacherController extends Controller
                 }
             }
 
+            $defaultMax = SchoolMaxMark::getDefault()->toSubjectMap();
+
             for ($r = 4; $r <= $max; $r++) {
                 $rowValues = [];
                 foreach ($columns as $cIdx => $col) {
                     $colLetter = $this->indexToColumnLetter($cIdx);
-                    $rowValues[$col['key']] = trim((string) $ws->getCell("{$colLetter}{$r}")->getValue());
+                    $cell = $ws->getCell("{$colLetter}{$r}");
+                    $val = $cell->isFormula() ? $cell->getCalculatedValue() : $cell->getValue();
+                    if (in_array($col['key'], ['admission_no', 'apaar_id', 'login_id', 'roll_no'], true)) {
+                        $rowValues[$col['key']] = trim((string)$val);
+                    } else {
+                        $rowValues[$col['key']] = is_string($val) ? trim($val) : $val;
+                    }
                 }
 
-                $name    = $rowValues['name'] ?? '';
-                $loginId = $rowValues['login_id'] ?? '';
-                $status  = $rowValues['status'] ?? '';
+                $name    = (string)($rowValues['name'] ?? '');
+                $loginId = (string)($rowValues['login_id'] ?? '');
+                $status  = (string)($rowValues['status'] ?? '');
 
                 if ($name === '' && $loginId === '') continue;
                 if (str_contains($loginId, 'Login ID') || str_contains($name, 'Student Name')) continue;
@@ -449,6 +814,9 @@ class HpcTeacherController extends Controller
                 }
 
                 $isDemo      = ($loginId === 'DEMO_SAMPLE' || stripos($name, 'SAMPLE') !== false || stripos($name, 'DEMO') !== false);
+                if ($isDemo) {
+                    continue; // Skip guide / demo student so only real enrolled students are processed
+                }
                 $isCompleted = (strcasecmp($status, 'HPC Completed') === 0 || stripos($status, 'completed') !== false);
 
                 $rowErrors = [];
@@ -457,23 +825,73 @@ class HpcTeacherController extends Controller
                     if ($loginId === '') $rowErrors[] = 'HPC Login ID missing';
                 }
 
-                $defaultMax = SchoolMaxMark::getDefault()->toSubjectMap();
+                // Normalise marks across stages
+                $marks = [];
+                if ($detectedStage === \App\Services\StageTemplateService::STAGE_PREPARATORY) {
+                    $marks = [
+                        'lang1' => ['max' => (string)($rowValues['sub_lang1_max'] ?: 50), 'obt' => (string)($rowValues['sub_lang1_obt'] ?: 42)],
+                        'lang2' => ['max' => (string)($rowValues['sub_lang2_max'] ?: 50), 'obt' => (string)($rowValues['sub_lang2_obt'] ?: 40)],
+                        'math'  => ['max' => (string)($rowValues['sub_math_max']  ?: 50), 'obt' => (string)($rowValues['sub_math_obt']  ?: 44)],
+                        'evs'   => ['max' => (string)($rowValues['sub_evs_max']   ?: 50), 'obt' => (string)($rowValues['sub_evs_obt']   ?: 43)],
+                        'art'   => ['max' => (string)($rowValues['sub_art_max']   ?: 50), 'obt' => (string)($rowValues['sub_art_obt']   ?: 46)],
+                        'pe'    => ['max' => (string)($rowValues['sub_pe_max']    ?: 50), 'obt' => (string)($rowValues['sub_pe_obt']    ?: 47)],
+                        'work'  => ['max' => (string)($rowValues['sub_work_max']  ?: 50), 'obt' => (string)($rowValues['sub_work_obt']  ?: 45)],
+                        'l1'    => ['max' => (string)($rowValues['sub_lang1_max'] ?: 50), 'obt' => (string)($rowValues['sub_lang1_obt'] ?: 42)],
+                        'l2'    => ['max' => (string)($rowValues['sub_lang2_max'] ?: 50), 'obt' => (string)($rowValues['sub_lang2_obt'] ?: 40)],
+                        'l3'    => ['max' => '50', 'obt' => '40'],
+                        'm'     => ['max' => (string)($rowValues['sub_math_max']  ?: 50), 'obt' => (string)($rowValues['sub_math_obt']  ?: 44)],
+                        'sci'   => ['max' => (string)($rowValues['sub_evs_max']   ?: 50), 'obt' => (string)($rowValues['sub_evs_obt']   ?: 43)],
+                        'soc'   => ['max' => (string)($rowValues['sub_evs_max']   ?: 50), 'obt' => (string)($rowValues['sub_evs_obt']   ?: 42)],
+                    ];
+                } else {
+                    $marks = [
+                        'l1' => ['max' => (string)($rowValues['l1_max'] ?: ($defaultMax['l1'] ?? 50)), 'obt' => (string)($rowValues['l1_obt'] ?: 42)],
+                        'l2' => ['max' => (string)($rowValues['l2_max'] ?: ($defaultMax['l2'] ?? 50)), 'obt' => (string)($rowValues['l2_obt'] ?: 40)],
+                        'l3' => ['max' => (string)($rowValues['l3_max'] ?: ($defaultMax['l3'] ?? 50)), 'obt' => (string)($rowValues['l3_obt'] ?: 41)],
+                        'm'  => ['max' => (string)($rowValues['m_max']  ?: ($defaultMax['m']  ?? 50)), 'obt' => (string)($rowValues['m_obt']  ?: 44)],
+                        'sci'=> ['max' => (string)($rowValues['sci_max'] ?: ($defaultMax['sci'] ?? 50)), 'obt' => (string)($rowValues['sci_obt'] ?: 43)],
+                        'soc'=> ['max' => (string)($rowValues['soc_max'] ?: ($defaultMax['soc'] ?? 50)), 'obt' => (string)($rowValues['soc_obt'] ?: 42)],
+                        'art'=> ['max' => (string)($rowValues['art_max'] ?: ($defaultMax['art'] ?? 50)), 'obt' => (string)($rowValues['art_obt'] ?: 46)],
+                        'pe' => ['max' => (string)($rowValues['pe_max'] ?: ($defaultMax['pe'] ?? 50)), 'obt' => (string)($rowValues['pe_obt'] ?: 47)],
+                    ];
+                }
 
                 $rowItem = array_merge($rowValues, [
                     'row'          => $r,
+                    'stage'        => $detectedStage,
                     'is_demo'      => $isDemo,
                     'is_completed' => $isCompleted,
                     'errors'       => $rowErrors,
-                    'marks' => [
-                        'l1' => ['max' => $rowValues['l1_max'] ?: (string) ($defaultMax['l1'] ?? 50), 'obt' => $rowValues['l1_obt'] ?: '42'],
-                        'l2' => ['max' => $rowValues['l2_max'] ?: (string) ($defaultMax['l2'] ?? 50), 'obt' => $rowValues['l2_obt'] ?: '40'],
-                        'l3' => ['max' => $rowValues['l3_max'] ?: (string) ($defaultMax['l3'] ?? 50), 'obt' => $rowValues['l3_obt'] ?: '41'],
-                        'm'  => ['max' => $rowValues['m_max']  ?: (string) ($defaultMax['m']  ?? 50), 'obt' => $rowValues['m_obt']  ?: '44'],
-                        'sci'=> ['max' => $rowValues['sci_max'] ?: (string) ($defaultMax['sci'] ?? 50), 'obt' => $rowValues['sci_obt'] ?: '43'],
-                        'soc'=> ['max' => $rowValues['soc_max'] ?: (string) ($defaultMax['soc'] ?? 50), 'obt' => $rowValues['soc_obt'] ?: '42'],
-                        'art'=> ['max' => $rowValues['art_max'] ?: (string) ($defaultMax['art'] ?? 50), 'obt' => $rowValues['art_obt'] ?: '46'],
-                        'pe' => ['max' => $rowValues['pe_max'] ?: (string) ($defaultMax['pe'] ?? 50), 'obt' => $rowValues['pe_obt'] ?: '47'],
-                    ],
+                    'marks'        => $marks,
+                    'l1_max'       => $marks['l1']['max'],
+                    'l1_obt'       => $marks['l1']['obt'],
+                    'm_max'        => $marks['m']['max'],
+                    'm_obt'        => $marks['m']['obt'],
+                    'sci_max'      => $marks['sci']['max'],
+                    'sci_obt'      => $marks['sci']['obt'],
+                    'art_max'      => $marks['art']['max'],
+                    'art_obt'      => $marks['art']['obt'],
+                    'pe_max'       => $marks['pe']['max'],
+                    'pe_obt'       => $marks['pe']['obt'],
+                    // Activity Aliases for Extension & Preview
+                    'act_subject'            => $rowValues['act_subject'] ?? $rowValues['act1_subject'] ?? ($detectedStage === \App\Services\StageTemplateService::STAGE_PREPARATORY ? 'The World Around Us' : 'Science'),
+                    'act_approach'           => $rowValues['act_approach'] ?? $rowValues['act1_pedagogy'] ?? ($detectedStage === \App\Services\StageTemplateService::STAGE_PREPARATORY ? ($rowValues['evs_approach'] ?? 'Inquiry-Based') : 'Art-Integrated'),
+                    'act_title'              => $rowValues['act_title'] ?? $rowValues['act1_title'] ?? ($detectedStage === \App\Services\StageTemplateService::STAGE_PREPARATORY ? ($rowValues['evs_act'] ?? 'Nature Observation and Plant Study') : 'Solar System 3D Model & Daily Life Geometry'),
+                    'act_desc'               => $rowValues['act_desc'] ?? $rowValues['act1_desc'] ?? ($detectedStage === \App\Services\StageTemplateService::STAGE_PREPARATORY ? 'Observation of natural plant growth in school environment' : 'Constructed scale models of planetary orbits, computed relative ratios, and demonstrated to class'),
+                    'act_rubric_awareness'   => $rowValues['act_rubric_awareness'] ?? $rowValues['act_aware'] ?? $rowValues['evs_aware'] ?? $rowValues['lang1_aware'] ?? 'Proficient',
+                    'act_rubric_sensitivity' => $rowValues['act_rubric_sensitivity'] ?? $rowValues['act_sens'] ?? $rowValues['evs_sens'] ?? $rowValues['lang1_sens'] ?? 'Proficient',
+                    'act_rubric_creativity'  => $rowValues['act_rubric_creativity'] ?? $rowValues['act_creat'] ?? $rowValues['evs_creat'] ?? $rowValues['lang1_creat'] ?? 'Proficient',
+                    'act_self_effort'        => $rowValues['act_self_effort'] ?? 'Yes',
+                    'act_self_apply'         => $rowValues['act_self_apply'] ?? 'Yes',
+                    'act_self_motivated'     => $rowValues['act_self_motivated'] ?? 'Yes',
+                    'act_learnt'             => $rowValues['act_learnt'] ?? $rowValues['act_self'] ?? 'Learned celestial orbital distances and practical geometry',
+                    'act_interesting'        => $rowValues['act_interesting'] ?? 'Fabricating rotating planetary models using recycled materials',
+                    'act_practice'           => $rowValues['act_practice'] ?? 'Time management during model assembly',
+                    'act_peer_name'          => $rowValues['act_peer_name'] ?? $rowValues['peer1_name'] ?? 'Ayaan Ahmad',
+                    'act_peer_feedback'      => $rowValues['act_peer_feedback'] ?? $rowValues['act_peer'] ?? $rowValues['peer1_praise'] ?? 'Very supportive teammate during group work',
+                    'act_strength'           => $rowValues['act_strength'] ?? $rowValues['act_teach_strength'] ?? 'Collaboration',
+                    'act_barriers'           => $rowValues['act_barriers'] ?? $rowValues['act_teach_barrier'] ?? 'None',
+                    'act_support_plan'       => $rowValues['act_support_plan'] ?? 'Provide advanced learning challenges and continuous encouragement',
                 ]);
 
                 $preview[] = $rowItem;
@@ -490,7 +908,58 @@ class HpcTeacherController extends Controller
         }
 
         $schoolDir = $this->getSchoolStorageDir();
-        file_put_contents($schoolDir . '/teacher_preview.json', json_encode($preview, JSON_PRETTY_PRINT));
+        $previewJson = json_encode($preview, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        file_put_contents($schoolDir . '/teacher_preview.json', $previewJson);
+        if (! empty($detectedStage)) {
+            file_put_contents($schoolDir . "/teacher_preview_{$detectedStage}.json", $previewJson);
+        }
+
+        // Sync confirmed admission numbers from uploaded Excel back to teacher_students.json
+        $tStudentsFile = $schoolDir . '/teacher_students.json';
+        if (file_exists($tStudentsFile)) {
+            $curStudents = json_decode(@file_get_contents($tStudentsFile), true) ?: [];
+            $updatedAny = false;
+            foreach ($curStudents as &$cs) {
+                $cLogin = $cs['login_id'] ?? '';
+                $cApaar = $cs['apaar_id'] ?? '';
+                $cName  = strtolower(trim($cs['name'] ?? ''));
+                foreach ($preview as $p) {
+                    $pAdm = trim((string)($p['admission_no'] ?? ''));
+                    if (empty($pAdm)) continue;
+                    if ((! empty($cLogin) && ($p['login_id'] ?? '') === $cLogin) ||
+                        (! empty($cApaar) && ($p['apaar_id'] ?? '') === $cApaar) ||
+                        (! empty($cName) && strtolower(trim($p['name'] ?? '')) === $cName)) {
+                        $cs['admission_no'] = $pAdm;
+                        $updatedAny = true;
+                        break;
+                    }
+                }
+            }
+            unset($cs);
+            if ($updatedAny) {
+                @file_put_contents($tStudentsFile, json_encode($curStudents, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            }
+        }
+
+        // Also sync preview to any sibling school accounts sharing the same UDISE code
+        if ($school && ! empty($school->udise_code)) {
+            $cleanUdise = preg_replace('/[^0-9]/', '', (string)$school->udise_code);
+            $siblings = \App\Models\School::where(function($q) use ($school, $cleanUdise) {
+                $q->where('udise_code', $school->udise_code);
+                if (! empty($cleanUdise)) {
+                    $q->orWhere('udise_code', 'like', "%{$cleanUdise}%");
+                }
+            })->where('id', '!=', $school->id)->get();
+
+            foreach ($siblings as $sib) {
+                $sibDir = storage_path('app/hpc/schools/' . $sib->id);
+                if (! is_dir($sibDir)) @mkdir($sibDir, 0777, true);
+                @file_put_contents($sibDir . '/teacher_preview.json', $previewJson);
+                if (! empty($detectedStage)) {
+                    @file_put_contents($sibDir . "/teacher_preview_{$detectedStage}.json", $previewJson);
+                }
+            }
+        }
 
         if (! $request->expectsJson() && ! $request->ajax()) {
             return redirect()->to(route('dashboard') . '?step=4')
@@ -572,34 +1041,199 @@ class HpcTeacherController extends Controller
 
     public function runReset()
     {
-        $file = $this->getSchoolStorageDir() . '/teacher_run_results.json';
-        if (file_exists($file)) @unlink($file);
+        $schoolDir = $this->getSchoolStorageDir();
+        $resultsFile = $schoolDir . '/teacher_run_results.json';
+        if (file_exists($resultsFile)) @unlink($resultsFile);
+        $previewFile = $schoolDir . '/teacher_preview.json';
+        if (file_exists($previewFile)) @unlink($previewFile);
+        $uploadedXlsx = $schoolDir . '/teacher_assessment_uploaded.xlsx';
+        if (file_exists($uploadedXlsx)) @unlink($uploadedXlsx);
         return response()->json(['ok' => true]);
+    }
+
+    public function evaluationsQueue(Request $request)
+    {
+        $cors = $this->getCorsHeaders($request);
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 200, $cors);
+        }
+
+        $schoolId = $request->input('school_id');
+        $school = $schoolId ? \App\Models\School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        
+        $schoolDir = $this->getSchoolStorageDir($school);
+        $previewFile = $schoolDir . '/teacher_preview.json';
+        
+        if (! file_exists($previewFile) && $school && ! empty($school->udise_code)) {
+            $cleanUdise = preg_replace('/[^0-9]/', '', (string)$school->udise_code);
+            $siblings = \App\Models\School::where(function($q) use ($school, $cleanUdise) {
+                $q->where('udise_code', $school->udise_code);
+                if (! empty($cleanUdise)) {
+                    $q->orWhere('udise_code', 'like', "%{$cleanUdise}%");
+                }
+            })->where('id', '!=', $school->id)->get();
+
+            foreach ($siblings as $sib) {
+                $sibFile = storage_path('app/hpc/schools/' . $sib->id . '/teacher_preview.json');
+                if (file_exists($sibFile)) {
+                    $previewFile = $sibFile;
+                    @file_put_contents($schoolDir . '/teacher_preview.json', file_get_contents($sibFile));
+                    break;
+                }
+            }
+        }
+
+        if (! file_exists($previewFile)) {
+            $basePreview = storage_path('app/hpc/teacher_preview.json');
+            if (file_exists($basePreview)) {
+                $previewFile = $basePreview;
+            }
+        }
+        
+        if (! file_exists($previewFile)) {
+            return response()->json([
+                'ok' => false,
+                'error' => 'No student evaluations uploaded yet. Please upload the filled Excel template first.',
+                'students' => []
+            ], 200, $cors);
+        }
+        
+        $all = json_decode(file_get_contents($previewFile), true) ?: [];
+        $validStudents = array_values(array_filter($all, function($s) {
+            return empty($s['errors']) && 
+                   empty($s['is_demo']) && 
+                   ($s['login_id'] ?? '') !== 'DEMO_SAMPLE' &&
+                   stripos($s['name'] ?? '', 'SAMPLE') === false &&
+                   stripos($s['name'] ?? '', 'DEMO') === false;
+        }));
+        
+        return response()->json([
+            'ok' => true,
+            'school_id' => $school?->id,
+            'school_name' => $school?->name ?? 'My School',
+            'total' => count($validStudents),
+            'students' => $validStudents,
+        ], 200, $cors);
+    }
+
+    public function evaluationsProgress(Request $request)
+    {
+        $cors = $this->getCorsHeaders($request);
+        if ($request->isMethod('OPTIONS')) {
+            return response('', 200, $cors);
+        }
+
+        $schoolId = $request->input('school_id');
+        $school = $schoolId ? \App\Models\School::find($schoolId) : \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $schoolDir = $this->getSchoolStorageDir($school);
+        $resultsFile = $schoolDir . '/teacher_run_results.json';
+        
+        $current = (int) $request->input('current', 1);
+        $total = (int) $request->input('total', 1);
+        $name = (string) $request->input('name', '');
+        $loginId = (string) $request->input('login_id', '');
+        $status = (string) $request->input('status', 'completed');
+        $message = (string) $request->input('message', '');
+        $done = (bool) $request->input('done', false);
+        
+        $existing = file_exists($resultsFile) ? (json_decode(file_get_contents($resultsFile), true) ?: []) : [];
+        $results = $existing['results'] ?? [];
+        
+        if ($loginId || $name) {
+            $found = false;
+            foreach ($results as &$r) {
+                if ((!empty($r['login_id']) && $r['login_id'] === $loginId) || 
+                    (!empty($r['name']) && strcasecmp(trim($r['name']), trim($name)) === 0)) {
+                    $r['status'] = $status;
+                    $r['message'] = $message;
+                    $found = true;
+                    break;
+                }
+            }
+            unset($r);
+            if (! $found) {
+                $results[] = [
+                    'row' => count($results) + 1,
+                    'name' => $name,
+                    'login_id' => $loginId,
+                    'status' => $status,
+                    'message' => $message,
+                ];
+            }
+        }
+        
+        $payload = [
+            'started' => true,
+            'done' => $done || ($current >= $total && $status === 'completed'),
+            'login_wait' => false,
+            'total' => $total,
+            'processed' => $current,
+            'results' => $results,
+            'updated_at' => now()->toIso8601String(),
+        ];
+        file_put_contents($resultsFile, json_encode($payload, JSON_PRETTY_PRINT));
+        
+        return response()->json(['ok' => true], 200, $cors);
     }
 
     // ─── Discovery Trigger ────────────────────────────────────────────────────
 
     public function discover(Request $request)
     {
-        $stage = trim((string) $request->input('stage'));
-        $artisan = base_path('artisan');
-        $php = PHP_BINARY;
-        $cmd = escapeshellcmd("{$php} {$artisan} hpc:teacher-discover --skip-login " . ($stage ? "--stage=" . escapeshellarg($stage) : ""));
+        $stage             = trim((string) $request->input('stage'));
+        $grade             = trim((string) $request->input('grade'));
+        $school            = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
+        $schoolDir         = $this->getSchoolStorageDir($school);
+        $teacherProfileDir = $this->getActiveTeacherProfileDir($school);
 
-        $output = [];
-        $exitCode = 0;
-        if (function_exists('exec')) {
-            exec($cmd . ' 2>&1', $output, $exitCode);
+        $studentsFile = null;
+        if (file_exists($teacherProfileDir . '/teacher_students.json')) {
+            $studentsFile = $teacherProfileDir . '/teacher_students.json';
+        } elseif (file_exists($schoolDir . '/teacher_students.json')) {
+            $studentsFile = $schoolDir . '/teacher_students.json';
         }
 
-        $studentsFile = storage_path('app/hpc/teacher_students.json');
-        $students = file_exists($studentsFile) ? json_decode(file_get_contents($studentsFile), true) : [];
+        $students = $studentsFile ? (json_decode(file_get_contents($studentsFile), true) ?: []) : [];
+
+        // Workflow requirement: Students MUST be fetched from PARAKH portal first.
+        if (empty($students)) {
+            return response()->json([
+                'ok'       => false,
+                'total'    => 0,
+                'students' => [],
+                'error'    => 'No students fetched from PARAKH portal yet. Please login to PARAKH portal and click "📥 Fetch Students from This Page" in the HPC Assist extension.'
+            ]);
+        }
+
+        if (! empty($grade) && $grade !== 'all') {
+            $normGrade = strtolower(trim(str_ireplace('grade', '', $grade)));
+            $students = array_values(array_filter($students, function($s) use ($grade, $normGrade) {
+                $stGrade = trim((string)($s['grade'] ?? ''));
+                if (empty($stGrade)) return true;
+                return strcasecmp($stGrade, trim($grade)) === 0 || strtolower(trim(str_ireplace('grade', '', $stGrade))) === $normGrade;
+            }));
+        } elseif (! empty($stage) && $stage !== 'all') {
+            $stageGrades = $this->getStageGrades($stage);
+            if (! empty($stageGrades)) {
+                $students = array_values(array_filter($students, function($s) use ($stageGrades, $stage) {
+                    $stGrade = trim((string)($s['grade'] ?? ''));
+                    if (empty($stGrade)) {
+                        $stStage = trim((string)($s['stage'] ?? ''));
+                        if (! empty($stStage) && (stripos($stStage, $stage) !== false || stripos($stage, $stStage) !== false)) {
+                            return true;
+                        }
+                        return true;
+                    }
+                    return in_array($stGrade, $stageGrades, true);
+                }));
+            }
+        }
 
         return response()->json([
             'ok'       => true,
             'total'    => count($students),
             'students' => $students,
-            'output'   => implode("\n", $output)
+            'message'  => count($students) . ' student(s) loaded for this school.'
         ]);
     }
 
@@ -780,16 +1414,49 @@ class HpcTeacherController extends Controller
 
     public function getActiveSchool(): array
     {
+        $dbSchool = \Illuminate\Support\Facades\Auth::user()?->getEffectiveSchool();
         $data = $this->getSchoolsData();
         $activeId = $data['active'] ?? 'default';
-        foreach ($data['schools'] as $school) {
+
+        if ($dbSchool) {
+            foreach ($data['schools'] ?? [] as $school) {
+                if (($school['udise'] ?? '') === $dbSchool->udise_code || ($school['id'] ?? '') === (string)$dbSchool->id) {
+                    return $school;
+                }
+            }
+            return [
+                'id'       => (string)$dbSchool->id,
+                'name'     => $dbSchool->name,
+                'udise'    => $dbSchool->udise_code,
+                'teachers' => $dbSchool->teachers()->get()->map(fn($t) => [
+                    'id'   => 'teacher_' . $t->id,
+                    'name' => $t->name,
+                    'dir'  => 'teacher-profiles/teacher_' . $t->id,
+                ])->all(),
+            ];
+        }
+
+        foreach ($data['schools'] ?? [] as $school) {
             if ($school['id'] === $activeId) return $school;
         }
-        return $data['schools'][0];
+        return $data['schools'][0] ?? ['id' => 'default', 'name' => 'School', 'teachers' => []];
     }
 
     public function getActiveTeacher(): array
     {
+        if (\Illuminate\Support\Facades\Auth::check() && \Illuminate\Support\Facades\Auth::user()->isTeacher()) {
+            $userTeacher = \Illuminate\Support\Facades\Auth::user()->getEffectiveTeacher();
+            if ($userTeacher) {
+                return [
+                    'id'      => 'teacher_' . $userTeacher->id,
+                    'name'    => $userTeacher->name,
+                    'dir'     => 'teacher-profiles/teacher_' . $userTeacher->id,
+                    'classes' => $userTeacher->classes,
+                    'email'   => $userTeacher->email,
+                ];
+            }
+        }
+
         $school = $this->getActiveSchool();
         $activeTeacherId = $school['active_teacher'] ?? 'teacher_default';
         foreach ($school['teachers'] ?? [] as $t) {
@@ -896,33 +1563,20 @@ class HpcTeacherController extends Controller
         @mkdir($profileDir, 0777, true);
         @file_put_contents($profileDir . '/session_active.txt', now()->toIso8601String());
 
-        if (function_exists('exec')) {
-            $macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-            if (file_exists($macChrome)) {
-                @exec("nohup '{$macChrome}' --user-data-dir=" . escapeshellarg($profileDir) . " " . escapeshellarg($loginUrl) . " > /dev/null 2>&1 &");
-            }
-        }
-
         $teacher = $this->getActiveTeacher();
         return response()->json([
             'ok'      => true,
             'url'     => $loginUrl,
-            'message' => "Teacher session connected for {$teacher['name']}. Please sign in to the PARAKH portal."
+            'message' => "Session activated for {$teacher['name']}. Opening PARAKH portal login page…"
         ]);
     }
 
     public function endSession()
     {
         $profileDir = $this->getActiveTeacherProfileDir();
-        if (function_exists('exec')) {
-            @exec("pkill -f " . escapeshellarg($profileDir) . " 2>/dev/null");
-        }
-        if (is_dir($profileDir)) {
-            $files = glob($profileDir . '/*');
-            foreach ($files as $file) {
-                if (is_file($file)) @unlink($file);
-            }
-            @rmdir($profileDir);
+        $sessionFile = $profileDir . '/session_active.txt';
+        if (file_exists($sessionFile)) {
+            @unlink($sessionFile);
         }
         return response()->json(['ok' => true, 'message' => "Session ended for active teacher profile."]);
     }
@@ -1283,8 +1937,14 @@ class HpcTeacherController extends Controller
 
     public function getStudentStarterProfile(int $sIdx, array $st, array $defaultWorkMap, array $defaultMax, int $rowNum): array
     {
-        $admNo  = 'ADM-2026-' . str_pad($sIdx + 1, 3, '0', STR_PAD_LEFT);
-        $stName = $st['name'] ?? 'Student ' . ($sIdx + 1);
+        $stageService = app(\App\Services\StageTemplateService::class);
+        $admNo   = $stageService->resolveAdmissionNumber($st, $sIdx);
+        $loginId = ! empty($st['login_id']) ? (string)$st['login_id'] : '';
+        $apaarId = ! empty($st['apaar_id']) ? (string)$st['apaar_id'] : '';
+
+        $stName  = $st['name'] ?? 'Student ' . ($sIdx + 1);
+        $grade   = ! empty($st['grade']) ? $st['grade'] : 'Grade 1';
+        $section = ! empty($st['section']) ? $st['section'] : 'A';
 
         $monthKeys = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
         $monthlyPairs = [];
@@ -1303,10 +1963,10 @@ class HpcTeacherController extends Controller
             $st['name'] ?? $stName,
             $st['status'] ?? 'HPC Pending',
 
-            // 4-11: Part-A1 Profile (Admission No, Grade, Section pre-filled, others blank)
+            // 4-11: Part-A1 Profile (Admission No from HPC/DB or empty, Grade, Section pre-filled, others blank)
             $admNo,
-            'Grade 6',
-            'A',
+            $grade,
+            $section,
             '', // Location
             '', // Medium of Instruction
             '', // Mother Tongue

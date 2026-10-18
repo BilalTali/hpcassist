@@ -1,9 +1,11 @@
 // HPC Assist Configuration
-// Pre-configured for active school on ctetmonktest.fun
+// Dynamic auto-detect from active dashboard or PARAKH portal
 window.__HPC_CONFIG = window.__HPC_CONFIG || {
-    school_id: 2,
-    school_name: "Boys middle school pwc",
-    udise_code: "01041800702",
+    school_id: null,
+    school_name: "",
+    udise_code: "",
     token: "",
+    progress_token: "",
     server_url: "https://ctetmonktest.fun"
 };
+

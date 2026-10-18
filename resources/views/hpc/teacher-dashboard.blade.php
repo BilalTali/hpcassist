@@ -2,14 +2,20 @@
     <x-slot name="header">
         <div class="flex items-center justify-between flex-wrap gap-4">
             <div class="flex items-center gap-3">
-                <a href="{{ route('dashboard') }}" class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition">
-                    ← Dashboard
-                </a>
-                <span class="text-slate-300 text-xs">/</span>
-                <a href="{{ route('hpc.dashboard') }}" class="text-xs font-semibold text-slate-500 hover:text-indigo-600 transition">
-                    Student Registration
-                </a>
-                <span class="text-slate-300 text-xs">/</span>
+                @if(Auth::user()?->isTeacher())
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        👩‍🏫 Class Teacher Portal
+                    </span>
+                    <span class="text-slate-300 text-xs">/</span>
+                    <span class="text-xs font-semibold text-slate-700">
+                        {{ $activeSchool['name'] ?? 'My School' }}
+                    </span>
+                @else
+                    <a href="{{ route('dashboard') }}?step=3" class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition">
+                        ← Back to School Admin (Step 3)
+                    </a>
+                    <span class="text-slate-300 text-xs">/</span>
+                @endif
                 <h2 class="font-extrabold text-xl text-slate-900 tracking-tight flex items-center gap-2">
                     <span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
                     Teacher HPC Assessment Suite
@@ -18,27 +24,39 @@
 
             <!-- Profile & Active Session Controls -->
             <div class="flex items-center gap-3 flex-wrap">
-                <!-- Teacher Profile Switcher -->
-                <div class="flex items-center gap-2 bg-white border border-slate-300/80 rounded-xl px-3 py-1.5 shadow-sm">
-                    <span class="text-xs font-bold text-slate-600 flex items-center gap-1">
-                        👩‍🏫 Teacher:
-                    </span>
-                    <select id="teacher-select" onchange="handleTeacherChange(this.value)"
-                            class="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer">
-                        @foreach($activeSchool['teachers'] ?? [] as $t)
-                            <option value="{{ $t['id'] }}" {{ $t['id'] === $activeTeacher['id'] ? 'selected' : '' }}>
-                                {{ $t['name'] }}
-                            </option>
-                        @endforeach
-                        <option value="__add_new_teacher__">➕ + Add New Teacher Profile...</option>
-                    </select>
-                    @if(($activeTeacher['id'] ?? '') !== 'teacher_default')
-                        <button onclick="deleteActiveTeacher('{{ $activeTeacher['id'] }}', '{{ addslashes($activeTeacher['name']) }}')"
-                                class="text-slate-400 hover:text-rose-600 p-0.5 text-xs transition" title="Delete this teacher profile">
-                            🗑️
-                        </button>
-                    @endif
-                </div>
+                @if(Auth::user()?->isTeacher())
+                    <!-- Dedicated Teacher Badge -->
+                    <div class="flex items-center gap-2 bg-white border border-indigo-200 rounded-xl px-3 py-1.5 shadow-sm">
+                        <span class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                            <span>👩‍🏫</span> {{ $activeTeacher['name'] ?? Auth::user()->name }}
+                        </span>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
+                            {{ $activeTeacher['classes'] ?? 'Assigned Class' }}
+                        </span>
+                    </div>
+                @else
+                    <!-- Teacher Profile Switcher (For School Admin preview) -->
+                    <div class="flex items-center gap-2 bg-white border border-slate-300/80 rounded-xl px-3 py-1.5 shadow-sm">
+                        <span class="text-xs font-bold text-slate-600 flex items-center gap-1">
+                            👩‍🏫 Teacher:
+                        </span>
+                        <select id="teacher-select" onchange="handleTeacherChange(this.value)"
+                                class="text-xs font-bold bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer">
+                            @foreach($activeSchool['teachers'] ?? [] as $t)
+                                <option value="{{ $t['id'] }}" {{ $t['id'] === $activeTeacher['id'] ? 'selected' : '' }}>
+                                    {{ $t['name'] }}
+                                </option>
+                            @endforeach
+                            <option value="__add_new_teacher__">➕ + Add New Teacher Profile...</option>
+                        </select>
+                        @if(($activeTeacher['id'] ?? '') !== 'teacher_default')
+                            <button onclick="deleteActiveTeacher('{{ $activeTeacher['id'] }}', '{{ addslashes($activeTeacher['name']) }}')"
+                                    class="text-slate-400 hover:text-rose-600 p-0.5 text-xs transition" title="Delete this teacher profile">
+                                🗑️
+                            </button>
+                        @endif
+                    </div>
+                @endif
 
                 <!-- Session Status Badge -->
                 @if($hasSession)
@@ -224,6 +242,42 @@
 
             </div>
 
+            <!-- 4 HPC STAGES SELECTOR BAR -->
+            @php
+                $activeStageSlug = \App\Services\StageTemplateService::normalizeStage($selectedStage !== 'all' ? $selectedStage : ($selectedGrade ? \App\Services\StageTemplateService::getStageForGrade($selectedGrade) : 'middle-stage'));
+                $stageDefinitions = \App\Services\StageTemplateService::getStages();
+            @endphp
+            <div class="bg-white rounded-xl shadow-xs border border-slate-200 p-3 mb-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-100">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>🏛️</span> Active Stage:
+                        </span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold text-white shadow-xs" style="background: {{ $stageDefinitions[$activeStageSlug]['color'] ?? '#ea580c' }}">
+                            {{ $stageDefinitions[$activeStageSlug]['title'] }} ({{ $stageDefinitions[$activeStageSlug]['grade_range'] }})
+                        </span>
+                    </div>
+                    <span class="text-[11px] text-slate-500 font-medium">
+                        Each stage generates a strictly tailored official NCERT template.
+                    </span>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    @foreach($stageDefinitions as $sSlug => $sDef)
+                        @php $isActive = ($activeStageSlug === $sSlug); @endphp
+                        <a href="{{ route('hpc.teacher.dashboard', ['stage' => $sSlug]) }}"
+                           class="flex flex-col p-2.5 rounded-xl border transition {{ $isActive ? 'bg-slate-900 text-white border-slate-900 shadow-sm ring-2 ring-indigo-500/50' : 'bg-slate-50/70 hover:bg-slate-100/80 text-slate-700 border-slate-200' }}">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xs font-bold">{{ $sDef['title'] }}</span>
+                                <span class="text-[9px] font-bold px-1.5 py-0.2 rounded {{ $isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600' }}">{{ $sDef['grade_range'] }}</span>
+                            </div>
+                            <div class="text-[10px] {{ $isActive ? 'text-slate-300' : 'text-slate-500' }} line-clamp-1 leading-tight">
+                                {{ $sDef['description'] }}
+                            </div>
+                        </a>
+                    @endforeach
+                </div>
+            </div>
+
             <!-- SECTION 2: 3-STEP EVALUATION WORKFLOW -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
 
@@ -233,12 +287,12 @@
                         <div class="flex items-center justify-between mb-2">
                             <span class="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">1</span>
                             <span class="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                                33 Visible Columns
+                                {{ $stageDefinitions[$activeStageSlug]['title'] }}
                             </span>
                         </div>
-                        <h3 class="text-sm font-bold text-slate-900 mb-1">Download Assessment Template</h3>
+                        <h3 class="text-sm font-bold text-slate-900 mb-1">Download {{ $stageDefinitions[$activeStageSlug]['title'] }} Template</h3>
                         <p class="text-xs text-slate-500 mb-3 leading-relaxed">
-                            Compact sheet without horizontal dragging. Fill obtained marks directly on screen.
+                            Official {{ $stageDefinitions[$activeStageSlug]['title'] }} ({{ $stageDefinitions[$activeStageSlug]['grade_range'] }}) assessment sheet with live cell validation.
                         </p>
 
                         <!-- Feature highlights -->
@@ -253,19 +307,21 @@
                             </div>
                             <div class="flex items-center gap-1.5 text-slate-700">
                                 <span class="text-amber-600 font-bold">✏️</span>
-                                <span><strong>Marks Ready:</strong> 8 subject columns highlighted yellow</span>
+                                <span><strong>Marks Ready:</strong> Curricular subject marks highlighted yellow</span>
                             </div>
                             <div class="flex items-center gap-1.5 text-slate-700">
                                 <span class="text-indigo-600 font-bold">📁</span>
-                                <span><strong>Expand [ + ]:</strong> 114 detailed columns collapsed in groups</span>
+                                <span><strong>NCF Rubrics:</strong> Awareness, Sensitivity &amp; Creativity dragdowns</span>
                             </div>
                         </div>
                     </div>
 
-                    <a href="{{ route('hpc.teacher.template.download') }}"
-                       class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow">
-                        📥 Download Template (.xlsx)
-                    </a>
+                    <button type="button" id="btn-download-template" onclick="openConfigureTemplateModal()"
+                            data-stage="{{ $activeStageSlug }}"
+                            data-grade="{{ $selectedGrade ?? '' }}"
+                            class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm transition hover:shadow cursor-pointer">
+                        📥 Download {{ $stageDefinitions[$activeStageSlug]['title'] }} Template (.xlsx)
+                    </button>
                 </div>
 
                 <!-- STEP 2: Upload Excel -->
@@ -343,17 +399,24 @@
                         <div class="flex items-center gap-2">
                             <span class="text-xs font-bold text-slate-900">Enrolled Students Roster</span>
                             <span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                                <span id="students-count">0</span> Students
+                                <span id="students-count">{{ count($students) }}</span> Students
                             </span>
                         </div>
 
                         <!-- Stage Sync Controls -->
                         <div class="flex items-center gap-2">
-                            <select id="stage-select"
+                            <select id="stage-select" onchange="discoverStageStudents()"
                                     class="text-xs font-bold bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer">
-                                <option value="all" selected>All Stages</option>
+                                @if(!empty($teacherClass))
+                                    <option value="class:{{ $teacherClass }}" {{ ($selectedGrade === $teacherClass) ? 'selected' : '' }}>
+                                        👩‍🏫 My Class ({{ $teacherClass }})
+                                    </option>
+                                @endif
+                                <option value="all" {{ (empty($selectedGrade) && $selectedStage === 'all') ? 'selected' : '' }}>
+                                    🏫 All Students (Whole School)
+                                </option>
                                 @foreach($stages as $st)
-                                    <option value="{{ $st['slug'] }}">
+                                    <option value="{{ $st['slug'] }}" {{ ($selectedStage === $st['slug'] && empty($selectedGrade)) ? 'selected' : '' }}>
                                         {{ $st['title'] }}
                                     </option>
                                 @endforeach
@@ -379,15 +442,68 @@
                                 </tr>
                             </thead>
                             <tbody id="students-table-body" class="divide-y divide-slate-100 bg-white">
-                                <tr>
-                                    <td colspan="5" class="px-4 py-8 text-center text-slate-400">
-                                        <div class="flex flex-col items-center justify-center gap-1">
-                                            <span class="text-xl">📋</span>
-                                            <span class="text-xs font-bold text-slate-600">No records loaded yet</span>
-                                            <span class="text-[11px] text-slate-400">Select stage above and click <strong>"📥 Fetch Data"</strong> to retrieve students from the PARAKH portal.</span>
-                                        </div>
-                                    </td>
-                                </tr>
+                                @if(!empty($students))
+                                    @foreach($students as $idx => $st)
+                                        @php
+                                            $stStatus = $st['status'] ?? 'pending';
+                                            $isCompleted = str_contains(strtolower($stStatus), 'complete') || str_contains(strtolower($stStatus), 'success');
+                                            $loginId = !empty($st['login_id']) ? $st['login_id'] : (!empty($st['apaar_id']) ? $st['apaar_id'] : '—');
+                                        @endphp
+                                        <tr class="hover:bg-slate-50/80 transition">
+                                            <td class="px-3 py-2 font-mono text-slate-400">{{ $idx + 1 }}</td>
+                                            <td class="px-3 py-2 font-mono font-bold text-slate-800">{{ $loginId }}</td>
+                                            <td class="px-3 py-2 font-bold text-slate-900">{{ $st['name'] ?? '' }}</td>
+                                            <td class="px-3 py-2">
+                                                @if($isCompleted)
+                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Successful</span>
+                                                @else
+                                                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">⏳ Ready for Assessment</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-3 py-2 text-slate-600 text-[11px] font-medium">{{ $st['grade'] ?? ($st['stage'] ?? 'Middle Stage') }}</td>
+                                        </tr>
+                                    @endforeach
+                                @else
+                                    <tr>
+                                        <td colspan="5" class="p-4">
+                                            <div class="bg-indigo-50/70 border border-indigo-200 rounded-xl p-4 text-slate-700">
+                                                <div class="flex items-center gap-2 mb-2">
+                                                    <span class="text-base">🔒</span>
+                                                    <h4 class="text-xs font-bold text-indigo-900">Step 1: Fetch Live Student Roster from PARAKH Portal</h4>
+                                                </div>
+                                                <p class="text-[11px] text-slate-600 mb-3 leading-relaxed">
+                                                    To prevent mismatched evaluations, your Excel template is populated <strong>strictly from your logged-in PARAKH portal stage roster</strong> (not from the local database).
+                                                </p>
+                                                <div class="space-y-1.5 text-[11px] mb-3">
+                                                    <div class="flex items-start gap-1.5">
+                                                        <span class="font-bold text-indigo-600">1.</span>
+                                                        <span>Click <strong class="text-slate-900">"🚀 Log In as Teacher"</strong> (top right) or open PARAKH portal in Chrome.</span>
+                                                    </div>
+                                                    <div class="flex items-start gap-1.5">
+                                                        <span class="font-bold text-indigo-600">2.</span>
+                                                        <span>Navigate to your stage page (e.g. <a href="https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage" target="_blank" class="text-indigo-600 underline font-semibold">Middle Stage</a>).</span>
+                                                    </div>
+                                                    <div class="flex items-start gap-1.5">
+                                                        <span class="font-bold text-indigo-600">3.</span>
+                                                        <span>Click <strong class="text-orange-600">"📥 Fetch Students from This Page"</strong> in the floating HPC Assist widget.</span>
+                                                    </div>
+                                                    <div class="flex items-start gap-1.5">
+                                                        <span class="font-bold text-indigo-600">4.</span>
+                                                        <span>Refresh this page — your exact portal students will appear here, and Step 1 Excel template will be unlocked!</span>
+                                                    </div>
+                                                </div>
+                                                <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-indigo-100">
+                                                    <button onclick="startTeacherSession()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-sm transition">
+                                                        🚀 Open PARAKH Login
+                                                    </button>
+                                                    <button onclick="copyTeacherSyncScript()" class="px-3 py-1.5 bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-300 rounded-lg font-semibold text-xs transition" title="Copy 1-line sync script to paste into Chrome DevTools console if extension is not installed">
+                                                        📋 Copy Console Sync Script
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endif
                             </tbody>
                         </table>
                     </div>
@@ -402,7 +518,12 @@
                                 {{ !empty($preview) ? count($preview) . ' loaded' : '0 evaluated' }}
                             </span>
                         </div>
-                        <span class="text-[10px] text-slate-400 font-medium">Auto-refreshes during run</span>
+                        <div class="flex items-center gap-3">
+                            <button type="button" onclick="resetTeacherEvaluations()" class="text-[10px] text-slate-400 hover:text-rose-600 transition underline font-semibold">
+                                🔄 Reset
+                            </button>
+                            <span class="text-[10px] text-slate-400 font-medium">Auto-refreshes during run</span>
+                        </div>
                     </div>
 
                     <!-- 5 Rows Visible Height & Scrollable -->
@@ -531,8 +652,10 @@
                 headers: { 'X-CSRF-TOKEN': csrfToken }
             });
             const d = await res.json();
-            alert(d.message || 'Chrome opened');
-            setTimeout(() => window.location.reload(), 2000);
+            if (d.ok && d.url) {
+                window.open(d.url, '_blank');
+            }
+            setTimeout(() => window.location.reload(), 1500);
         }
 
         async function endTeacherSession() {
@@ -545,35 +668,95 @@
             window.location.reload();
         }
 
+        function copyTeacherSyncScript() {
+            const serverUrl = window.location.origin;
+            const schoolId = (window.__HPC_CONFIG && window.__HPC_CONFIG.school_id) ? window.__HPC_CONFIG.school_id : {{ json_encode($schoolId) }};
+            const script = `(async () => {
+    const rows = Array.from(document.querySelectorAll('table tbody tr'));
+    const stage = location.pathname.split('/').filter(Boolean).pop() || 'middle-stage';
+    const students = [];
+    rows.forEach((tr, idx) => {
+        const cells = Array.from(tr.querySelectorAll('td')).map(td => td.innerText.trim());
+        if (cells.length >= 3) {
+            students.push({
+                row: idx + 1,
+                login_id: cells[1] || ('ST_' + (idx + 1)),
+                name: cells[2] || ('Student ' + (idx + 1)),
+                status: cells[3] || 'HPC In Progress',
+                stage: stage,
+                grade: stage.includes('middle') ? 'Grade 6' : (stage.includes('prep') ? 'Grade 4' : 'Grade 1')
+            });
+        }
+    });
+    if (!students.length) { alert('No students found in the stage table on this page!'); return; }
+    const res = await fetch('${serverUrl}/hpc/teacher/sync-roster', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ school_id: ${schoolId}, stage: stage, students: students })
+    });
+    const d = await res.json();
+    if (d.ok) alert('✅ Successfully synced ' + (d.count || students.length) + ' student(s) to HPC Assist! Refresh your teacher dashboard.');
+    else alert('❌ Sync failed: ' + (d.error || 'Server error'));
+})();`;
+            navigator.clipboard.writeText(script).then(() => {
+                alert('✅ Console sync script copied to clipboard!\n\nOpen your PARAKH portal stage page (e.g. Middle Stage), press F12 (or Cmd+Option+I), paste into Console, and press Enter to instantly sync your stage roster.');
+            }).catch(() => {
+                prompt('Copy this sync script:', script);
+            });
+        }
+
         // ── Stage Student Discovery ───────────────────────────────────────────
         async function discoverStageStudents() {
-            const stage = document.getElementById('stage-select').value;
+            const stageVal = document.getElementById('stage-select').value;
+            let stage = stageVal;
+            let grade = '';
+            if (stageVal.startsWith('class:')) {
+                grade = stageVal.replace('class:', '');
+                stage = 'all';
+            }
+
             const btn = document.getElementById('btn-discover');
             const spinner = document.getElementById('discover-spinner');
             const tbody = document.getElementById('students-table-body');
             const countBadge = document.getElementById('students-count');
+            const dlBtn = document.getElementById('btn-download-template');
 
-            btn.disabled = true;
-            spinner.classList.remove('hidden');
+            // Dynamically update Step 1 template configuration data
+            if (dlBtn) {
+                dlBtn.dataset.stage = (stage && stage !== 'all') ? stage : '{{ $activeStageSlug }}';
+                dlBtn.dataset.grade = grade || '';
+            }
+
+            if (btn) btn.disabled = true;
+            if (spinner) spinner.classList.remove('hidden');
 
             try {
                 const res = await fetch('{{ route('hpc.teacher.discover') }}', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-                    body: JSON.stringify({ stage })
+                    body: JSON.stringify({ stage, grade })
                 });
                 const d = await res.json();
                 if (d.ok && d.students) {
                     tbody.innerHTML = '';
                     if (d.students.length === 0) {
-                        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400 italic">No enrolled students found for stage ${stage} on portal.</td></tr>`;
+                        tbody.innerHTML = `<tr><td colspan="5" class="p-4">
+                            <div class="bg-indigo-50/70 border border-indigo-200 rounded-xl p-4 text-center text-slate-700">
+                                <span class="text-xl">📋</span>
+                                <div class="text-xs font-bold text-indigo-900 mt-1">No portal students synced yet for this stage.</div>
+                                <div class="text-[11px] text-slate-500 mt-1 mb-3">Open PARAKH portal stage page and click <strong>"📥 Fetch Students from This Page"</strong> in the HPC Assist extension widget.</div>
+                                <button onclick="startTeacherSession()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs shadow-sm transition">
+                                    🚀 Open PARAKH Login
+                                </button>
+                            </div>
+                        </td></tr>`;
                         countBadge.innerText = '0';
                     } else {
                         d.students.forEach((st, idx) => {
                             const isCompleted = (st.status || '').toLowerCase().includes('completed');
                             const statusBadge = isCompleted 
                                 ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Successful</span>`
-                                : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">⏳ Pending</span>`;
+                                : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">⏳ Ready for Assessment</span>`;
                             
                             const tr = document.createElement('tr');
                             tr.className = 'hover:bg-slate-50/80';
@@ -582,7 +765,7 @@
                                 <td class="px-3 py-2 font-mono font-bold text-slate-800">${st.login_id || ''}</td>
                                 <td class="px-3 py-2 font-bold text-slate-900">${st.name || ''}</td>
                                 <td class="px-3 py-2">${statusBadge}</td>
-                                <td class="px-3 py-2 text-slate-600 text-[11px] font-medium">${st.stage_title || st.stage || 'Middle Stage'}</td>
+                                <td class="px-3 py-2 text-slate-600 text-[11px] font-medium">${st.grade || st.stage || 'Middle Stage'}</td>
                             `;
                             tbody.appendChild(tr);
                         });
@@ -591,13 +774,19 @@
                         if (metricBadge) metricBadge.innerText = d.students.length;
                     }
                 } else {
-                    alert(d.error || 'Discovery failed');
+                    tbody.innerHTML = `<tr><td colspan="5" class="p-4">
+                        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center text-slate-700">
+                            <div class="text-xs font-bold text-amber-900">⚠️ ${d.error || 'No students loaded'}</div>
+                            <div class="text-[11px] text-slate-600 mt-1 mb-2">Please login to PARAKH portal and click "📥 Fetch Students" in the extension widget.</div>
+                            <button onclick="copyTeacherSyncScript()" class="px-3 py-1 bg-white border border-amber-300 text-amber-800 rounded-lg text-xs font-semibold">📋 Copy Console Sync Script</button>
+                        </div>
+                    </td></tr>`;
                 }
             } catch (e) {
                 alert('Discovery error: ' + e.message);
             } finally {
-                btn.disabled = false;
-                spinner.classList.add('hidden');
+                if (btn) btn.disabled = false;
+                if (spinner) spinner.classList.add('hidden');
             }
         }
 
@@ -610,6 +799,7 @@
 
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('stage', '{{ $activeStageSlug }}');
 
             try {
                 const res = await fetch('{{ route('hpc.teacher.upload') }}', {
@@ -887,5 +1077,233 @@
             el.innerText = msg;
             el.classList.remove('hidden');
         }
+
+        async function resetTeacherEvaluations() {
+            if (!confirm('Are you sure you want to clear evaluation results and preview?')) return;
+            try {
+                const res = await fetch('{{ route('hpc.teacher.run.reset') }}', {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' }
+                });
+                const d = await res.json();
+                if (d.ok) {
+                    window.location.reload();
+                }
+            } catch(e) {
+                alert('Reset error: ' + e.message);
+            }
+        }
+
+        let activeModalStage = '{{ $activeStageSlug }}';
+        let activeModalGrade = '{{ $selectedGrade ?? '' }}';
+
+        function openConfigureTemplateModal() {
+            const dlBtn = document.getElementById('btn-download-template');
+            activeModalStage = dlBtn?.dataset?.stage || '{{ $activeStageSlug }}';
+            activeModalGrade = dlBtn?.dataset?.grade || '{{ $selectedGrade ?? '' }}';
+
+            const isPrep = activeModalStage.includes('prep');
+            const middleSelect = document.getElementById('modal-preset-middle');
+            const prepSelect = document.getElementById('modal-preset-prep');
+            const pill = document.getElementById('modal-stage-pill');
+
+            if (isPrep) {
+                if (middleSelect) middleSelect.classList.add('hidden');
+                if (prepSelect) prepSelect.classList.remove('hidden');
+                if (pill) pill.innerText = 'Preparatory Stage (Class 3-5)';
+            } else {
+                if (middleSelect) middleSelect.classList.remove('hidden');
+                if (prepSelect) prepSelect.classList.add('hidden');
+                if (pill) pill.innerText = 'Middle Stage (Class 6-8)';
+            }
+
+            const modal = document.getElementById('template-config-modal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeConfigureTemplateModal() {
+            const modal = document.getElementById('template-config-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function toggleActivityMode() {
+            const isGlobal = document.querySelector('input[name="modal_activity_mode"]:checked')?.value === 'global';
+            const wrapper = document.getElementById('modal-presets-wrapper');
+            if (wrapper) {
+                if (isGlobal) {
+                    wrapper.classList.remove('opacity-40', 'pointer-events-none');
+                } else {
+                    wrapper.classList.add('opacity-40', 'pointer-events-none');
+                }
+            }
+        }
+
+        function executeTemplateDownload() {
+            const isGlobal = document.querySelector('input[name="modal_activity_mode"]:checked')?.value === 'global';
+            const isPrep = activeModalStage.includes('prep');
+            const preset = isPrep 
+                ? document.getElementById('modal-preset-prep')?.value 
+                : document.getElementById('modal-preset-middle')?.value;
+            const autoFill = document.getElementById('modal-auto-fill')?.checked ? '1' : '0';
+
+            const baseUrl = '{{ route('hpc.stage.template.download') }}';
+            const params = new URLSearchParams();
+            params.set('stage', activeModalStage);
+            if (activeModalGrade) params.set('grade', activeModalGrade);
+            params.set('global_activities', isGlobal ? '1' : '0');
+            if (isGlobal && preset) params.set('activity_preset', preset);
+            params.set('auto_fill', autoFill);
+
+            window.location.href = baseUrl + '?' + params.toString();
+            closeConfigureTemplateModal();
+        }
+    </script>
+
+    <!-- MODAL: CONFIGURE ASSESSMENT TEMPLATE (GLOBAL ACTIVITIES & AUTO-FILL) -->
+    <div id="template-config-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden transition-all transform animate-in fade-in zoom-in-95 duration-150">
+            <!-- Modal Header -->
+            <div class="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">📑</span>
+                    <div>
+                        <h3 class="text-sm font-bold text-white leading-tight">Configure Assessment Spreadsheet</h3>
+                        <p class="text-[11px] text-slate-300">Choose activity strategy &amp; student evaluation auto-fill</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="modal-stage-pill" class="text-[10px] font-extrabold uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2 py-0.5 rounded-full">
+                        {{ $stageDefinitions[$activeStageSlug]['title'] }}
+                    </span>
+                    <button type="button" onclick="closeConfigureTemplateModal()" class="text-slate-400 hover:text-white transition text-lg leading-none p-1">✕</button>
+                </div>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="p-5 space-y-4 text-xs max-h-[75vh] overflow-y-auto">
+
+                <!-- STEP A: Global Activities vs Manual Creation -->
+                <div>
+                    <label class="block font-bold text-slate-800 text-xs mb-1">
+                        1. Part-B Holistic Activities Strategy <span class="text-rose-500">*</span>
+                    </label>
+                    <p class="text-[11px] text-slate-500 mb-2.5">
+                        Would you like to assign approved Global NCERT Activities to this class, or create custom activities manually?
+                    </p>
+
+                    <div class="space-y-2">
+                        <!-- Option 1: Global Activities (Recommended) -->
+                        <label class="flex items-start gap-2.5 p-3 rounded-xl border border-indigo-300 bg-indigo-50/40 hover:bg-indigo-50/70 cursor-pointer transition">
+                            <input type="radio" name="modal_activity_mode" value="global" checked onchange="toggleActivityMode()"
+                                   class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-bold text-slate-900 text-xs">🌐 Use Global NCERT Exemplar Activities</span>
+                                    <span class="text-[9px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.2 rounded">Recommended</span>
+                                </div>
+                                <p class="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                                    Automatically populates official NCF-SE activities for the entire class. Titles, approaches, rubrics, self-reflections, peer feedback, and teacher support plans are pre-filled so you only need to review or tweak in Excel.
+                                </p>
+
+                                <!-- Activity Preset Dropdowns -->
+                                <div id="modal-presets-wrapper" class="mt-2.5 pt-2 border-t border-indigo-200/60">
+                                    <div class="text-[10px] font-bold uppercase tracking-wider text-indigo-900 mb-1">Select Class Activity Theme:</div>
+                                    
+                                    <!-- Middle Stage Presets -->
+                                    <select id="modal-preset-middle" class="w-full text-xs font-semibold bg-white border border-indigo-200 rounded-lg p-2 text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                                        <option value="science_solar">🔬 Science: Solar System 3D Model &amp; Daily Life Geometry (Art-Integrated)</option>
+                                        <option value="math_geometry">📐 Mathematics: Geometric Symmetry &amp; Garden Mapping (Toy-Based)</option>
+                                        <option value="social_heritage">🌍 Social Science: Unity in Diversity &amp; Heritage Mapping (Experiential)</option>
+                                        <option value="languages_story">📖 Language 1 (R1): Creative Monologue &amp; Roleplay (Art-Integrated)</option>
+                                    </select>
+
+                                    <!-- Preparatory Stage Presets -->
+                                    <select id="modal-preset-prep" class="w-full text-xs font-semibold bg-white border border-indigo-200 rounded-lg p-2 text-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 hidden">
+                                        <option value="evs_nature">🌿 The World Around Us: Plant Seed Germination &amp; Nature Study (Inquiry-Based)</option>
+                                        <option value="math_shapes">📐 Mathematics: Geometric Shapes, Toy-Clock &amp; Measuring (Toy-Based)</option>
+                                        <option value="lang_folktale">📖 Language 1: Regional Folktale Dramatization &amp; Puppet Theatre (Art-Integrated)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </label>
+
+                        <!-- Option 2: Blank / Manual Activities -->
+                        <label class="flex items-start gap-2.5 p-3 rounded-xl border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 cursor-pointer transition">
+                            <input type="radio" name="modal_activity_mode" value="manual" onchange="toggleActivityMode()"
+                                   class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
+                            <div class="flex-1">
+                                <span class="font-bold text-slate-800 text-xs">✍️ Blank Activities (Manual Entry in Excel)</span>
+                                <p class="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                    Leaves Part-B activity columns blank with dropdown rules enabled so you can write custom school projects completely from scratch.
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- STEP B: Auto-Fill Mode -->
+                <div class="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+                    <label class="flex items-start gap-2.5 cursor-pointer">
+                        <input type="checkbox" id="modal-auto-fill" checked
+                               class="mt-0.5 text-emerald-600 rounded focus:ring-emerald-500">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-bold text-emerald-950 text-xs">⚡ Automatically Pre-Fill All Student Evaluations</span>
+                                <span class="text-[9px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">Zero Blank Cells</span>
+                            </div>
+                            <p class="text-[11px] text-emerald-900/80 mt-1 leading-relaxed">
+                                Fully populates monthly attendance (~95%), Part-A2 learner voice, Part-A3 ambition cards, Part-A4 parent partnership, and subject marks (40–48/50).
+                            </p>
+                            <p class="text-[10px] text-emerald-700 font-semibold mt-1">
+                                💡 Result: The Excel is 100% valid out of the box! You only need to verify, tweak individual scores or remarks if needed, and upload back.
+                            </p>
+                        </div>
+                    </label>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-slate-50 px-5 py-3 border-t border-slate-200 flex items-center justify-between gap-2">
+                <button type="button" onclick="closeConfigureTemplateModal()"
+                        class="px-3.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold transition">
+                    Cancel
+                </button>
+                <button type="button" onclick="executeTemplateDownload()"
+                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition hover:shadow inline-flex items-center gap-1.5">
+                    <span>📥 Download Pre-Filled Excel (.xlsx)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {{-- HPC Extension Bridge Configuration for Teacher Role --}}
+    <div id="hpc-extension-bridge"
+         style="display:none;"
+         data-school-id="{{ $schoolId ?? '' }}"
+         data-school-name="{{ $activeSchool['name'] ?? ($school?->name ?? '') }}"
+         data-udise-code="{{ $activeSchool['udise_code'] ?? ($activeSchool['udise'] ?? ($school?->udise_code ?? '')) }}"
+         data-teacher-id="{{ $activeTeacher['id'] ?? '' }}"
+         data-teacher-name="{{ $activeTeacher['name'] ?? '' }}"
+         data-role="teacher"
+         data-progress-token="{{ config('hpc.progress_token') }}"
+         data-server-url="{{ rtrim(config('app.url'), '/') }}"></div>
+
+    <script>
+        window.__HPC_CONFIG = {
+            server_url: "{{ rtrim(config('app.url'), '/') }}",
+            school_id: {{ json_encode($schoolId) }},
+            school_name: "{{ addslashes($activeSchool['name'] ?? ($school?->name ?? '')) }}",
+            udise_code: "{{ addslashes($activeSchool['udise_code'] ?? ($activeSchool['udise'] ?? ($school?->udise_code ?? ''))) }}",
+            teacher_id: "{{ $activeTeacher['id'] ?? '' }}",
+            teacher_name: "{{ addslashes($activeTeacher['name'] ?? '') }}",
+            role: "teacher",
+            progress_token: "{{ config('hpc.progress_token') }}"
+        };
+
+        try {
+            window.postMessage({ type: 'HPC_ACTIVE_SCHOOL_SYNC', config: window.__HPC_CONFIG }, '*');
+            document.dispatchEvent(new CustomEvent('HPC_ACTIVE_SCHOOL_SYNC', { detail: window.__HPC_CONFIG }));
+        } catch(e) {}
     </script>
 </x-app-layout>

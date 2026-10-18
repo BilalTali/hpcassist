@@ -2502,7 +2502,6 @@
             window.postMessage({ type: 'HPC_ACTIVE_SCHOOL_SYNC', config: window.__HPC_CONFIG }, '*');
             document.dispatchEvent(new CustomEvent('HPC_ACTIVE_SCHOOL_SYNC', { detail: window.__HPC_CONFIG }));
         } catch(e) {}
-    </script>
 
         // ── Step 3: Refresh HPC-confirmed students table via AJAX ──────────────
         async function loadStep3Table() {

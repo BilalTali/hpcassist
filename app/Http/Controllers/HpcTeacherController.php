@@ -571,31 +571,15 @@ class HpcTeacherController extends Controller
             ]);
         }
 
-        $collapsibleRanges = [
-            [0, 1],
-            [3, 3],
-            [5, 10],
-            [12, 35],
-            [39, 40],
-            [42, 66],
-            [69, 76],
-            [78, 86],
-            [88, 90],
-            [92, 101],
-            [104, 125],
-            [129, 144],
-        ];
-
-        foreach ($collapsibleRanges as [$startIdx, $endIdx]) {
-            for ($cIdx = $startIdx; $cIdx <= $endIdx; $cIdx++) {
-                $cLetter = $this->indexToColumnLetter($cIdx);
-                $evalSheet->getColumnDimension($cLetter)->setOutlineLevel(1);
-                $evalSheet->getColumnDimension($cLetter)->setVisible(false);
-                $evalSheet->getColumnDimension($cLetter)->setCollapsed(true);
+        // Map column indices to sections
+        $colToSection = [];
+        foreach ($sections as $sec) {
+            for ($i = $sec['start']; $i <= $sec['end']; $i++) {
+                $colToSection[$i] = $sec;
             }
         }
-        $evalSheet->setShowSummaryRight(true);
-        $evalSheet->getRowDimension(1)->setRowHeight(30);
+
+        $evalSheet->getRowDimension(1)->setRowHeight(32);
 
         // Row 2: Field Names & Row 3: Guidance Notes
         foreach ($columns as $idx => $col) {
@@ -603,10 +587,20 @@ class HpcTeacherController extends Controller
             $isObt    = str_ends_with($col['key'], '_obt');
             $isLocked = in_array($col['type'], ['locked', 'calc']);
 
-            $label = $isObt ? '✏️ ' . $col['label'] : $col['label'];
+            $sec = $colToSection[$idx] ?? null;
+            $prefix = $sec ? StageTemplateService::getSectionShortPrefix($sec['title']) : '';
+
+            $baseLabel = $isObt ? '✏️ ' . $col['label'] : $col['label'];
+            if (!empty($prefix) && $idx >= 4 && !str_starts_with($baseLabel, '[')) {
+                $label = "{$prefix}\n{$baseLabel}";
+            } else {
+                $label = $baseLabel;
+            }
+
             $evalSheet->setCellValue("{$colLetter}2", $label);
-            $evalSheet->setCellValue("{$colLetter}3", $col['note']);
-            $evalSheet->getColumnDimension($colLetter)->setWidth($col['width']);
+            $evalSheet->setCellValue("{$colLetter}3", $col['note'] ?? '');
+            $colWidth = max($col['width'], 22);
+            $evalSheet->getColumnDimension($colLetter)->setWidth($colWidth);
 
             $headerBg    = $isObt ? 'FFFEF08A' : ($isLocked ? 'FFE2E8F0' : 'FF1E293B');
             $headerColor = $isObt ? 'FF854D0E' : ($isLocked ? 'FF334155' : 'FFFFFFFF');
@@ -614,19 +608,19 @@ class HpcTeacherController extends Controller
             $evalSheet->getStyle("{$colLetter}2")->applyFromArray([
                 'font'      => ['bold' => true, 'color' => ['argb' => $headerColor], 'size' => 9.5],
                 'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $headerBg]],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
                 'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFCBD5E1']]],
             ]);
 
             $evalSheet->getStyle("{$colLetter}3")->applyFromArray([
                 'font'      => ['italic' => true, 'color' => ['argb' => 'FF64748B'], 'size' => 8.5],
                 'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFF8FAFC']],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
                 'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFE2E8F0']]],
             ]);
         }
-        $evalSheet->getRowDimension(2)->setRowHeight(26);
-        $evalSheet->getRowDimension(3)->setRowHeight(20);
+        $evalSheet->getRowDimension(2)->setRowHeight(42);
+        $evalSheet->getRowDimension(3)->setRowHeight(24);
 
         // Rows 4 onwards: Real Enrolled Students (No dummy demo row)
         $defaultWd = SchoolWorkingDay::getDefault();
@@ -691,7 +685,32 @@ class HpcTeacherController extends Controller
         $blankRule->getStyle()->getBorders()->getRight()->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFFCA5A5');
 
         $evalSheet->getStyle($evalDataRange)->setConditionalStyles([$blankRule]);
-        $evalSheet->freezePane('D5');
+
+        // Outlines & Focus Mode
+        $evalSheet->setShowSummaryRight(false);
+        $evalSheet->setShowSummaryBelow(false);
+
+        // 1. Locked Left Side Focus Mode:
+        // Columns A (APAAR ID), B (HPC Login ID), D (Status) collapsed under Outline Level 1.
+        // Column C (Student Name) is visible at Outline Level 0 with width 28.
+        $evalSheet->getColumnDimension('A')->setOutlineLevel(1)->setVisible(false)->setCollapsed(true);
+        $evalSheet->getColumnDimension('B')->setOutlineLevel(1)->setVisible(false)->setCollapsed(true);
+        $evalSheet->getColumnDimension('C')->setOutlineLevel(0)->setVisible(true)->setWidth(28);
+        $evalSheet->getColumnDimension('D')->setOutlineLevel(1)->setVisible(false)->setCollapsed(true);
+
+        // 2. Part Outlines: Group assessment sections
+        foreach ($sections as $sec) {
+            if ($sec['start'] >= 4 && $sec['end'] > $sec['start']) {
+                $startLtr = $this->indexToColumnLetter($sec['start']);
+                $evalSheet->getColumnDimension($startLtr)->setOutlineLevel(0)->setVisible(true);
+                for ($c = $sec['start'] + 1; $c <= $sec['end']; $c++) {
+                    $cLtr = $this->indexToColumnLetter($c);
+                    $evalSheet->getColumnDimension($cLtr)->setOutlineLevel(1)->setVisible(true)->setCollapsed(false);
+                }
+            }
+        }
+
+        $evalSheet->freezePane('E4');
     }
 
     public function indexToColumnLetter(int $index): string

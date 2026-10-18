@@ -299,19 +299,19 @@
                         <div class="space-y-1 mb-4 text-[11px]">
                             <div class="flex items-center gap-1.5 text-slate-700">
                                 <span class="text-emerald-600 font-bold">✓</span>
-                                <span><strong>Identity:</strong> Only Student Name visible (frozen on left)</span>
+                                <span><strong>Max Screen Width:</strong> Only Student Name visible on frozen left pane (click <strong>[+]</strong> in Excel to show APAAR &amp; Login IDs)</span>
                             </div>
                             <div class="flex items-center gap-1.5 text-slate-700">
-                                <span class="text-rose-600 font-bold">🔴</span>
-                                <span><strong>Red Empty Alert:</strong> Empty cells turn red until filled</span>
-                            </div>
-                            <div class="flex items-center gap-1.5 text-slate-700">
-                                <span class="text-amber-600 font-bold">✏️</span>
-                                <span><strong>Marks Ready:</strong> Curricular subject marks highlighted yellow</span>
+                                <span class="text-blue-600 font-bold">🌟</span>
+                                <span><strong>Fixed Part Headings:</strong> Every column header states <code>[Part A(2) All About Me]</code> for easy horizontal scrolling</span>
                             </div>
                             <div class="flex items-center gap-1.5 text-slate-700">
                                 <span class="text-indigo-600 font-bold">📁</span>
-                                <span><strong>NCF Rubrics:</strong> Awareness, Sensitivity &amp; Creativity dragdowns</span>
+                                <span><strong>Step-by-Step Outlines:</strong> Collapse completed parts with <strong>[-]</strong> to complete one part then go next</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 text-slate-700">
+                                <span class="text-rose-600 font-bold">🔴</span>
+                                <span><strong>Red Empty Alert:</strong> Missing mandatory cells highlight red until completed</span>
                             </div>
                         </div>
                     </div>
@@ -1261,6 +1261,18 @@
                     </label>
                 </div>
 
+                <!-- Focus Mode & Outlines Tip -->
+                <div class="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-1">
+                    <div class="flex items-center gap-1.5 font-bold text-indigo-950 text-xs">
+                        <span>🖥️ Maximized Screen &amp; Step-by-Step Outlines</span>
+                        <span class="text-[9px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.2 rounded">Optimized</span>
+                    </div>
+                    <p class="text-[11px] text-indigo-900/80 leading-relaxed">
+                        • <strong>Focus Frozen Pane:</strong> Only <strong>Student Name</strong> is visible on the left for maximum data entry width. Click <strong>[+]</strong> in Excel to expand APAAR &amp; Login IDs anytime.<br>
+                        • <strong>Fixed Part Headings:</strong> Column headers clearly state <code>[Part A(2) All About Me]</code> for seamless horizontal scrolling.<br>
+                        • <strong>Step-by-Step Work:</strong> Click <strong>[-]</strong> above any section in Excel to complete one part then collapse and move to the next!
+                    </p>
+                </div>
             </div>
 
             <!-- Modal Footer -->

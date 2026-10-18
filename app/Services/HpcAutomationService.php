@@ -27,9 +27,8 @@ class HpcAutomationService
                 'https://hpc.parakh.ncert.gov.in',
                 'https://sdms.udiseplus.gov.in',
                 'chrome-extension://',
-                rtrim(config('app.url', 'http://localhost'), '/'),
-                'http://127.0.0.1',
-                'http://localhost',
+                'https://ctetmonktest.fun',
+                rtrim(config('app.url', 'https://ctetmonktest.fun'), '/'),
             ];
             foreach ($allowedPatterns as $pattern) {
                 if (str_starts_with($incoming, $pattern)) {
@@ -42,7 +41,7 @@ class HpcAutomationService
         if ($extId !== '') {
             return "chrome-extension://{$extId}";
         }
-        return rtrim(config('app.url', 'http://localhost'), '/');
+        return rtrim(config('app.url', 'https://ctetmonktest.fun'), '/');
     }
 
     public function getActiveProfileDir($school = null): string

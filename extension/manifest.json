@@ -9,11 +9,7 @@
   "host_permissions": [
     "https://sdms.udiseplus.gov.in/*",
     "https://hpc.parakh.ncert.gov.in/*",
-    "https://ctetmonktest.fun/*",
-    "http://127.0.0.1:8000/*",
-    "http://127.0.0.1/*",
-    "http://localhost:8000/*",
-    "http://localhost/*"
+    "https://ctetmonktest.fun/*"
   ],
   "action": {
     "default_title": "HPC Assist Portal Assistant"
@@ -41,11 +37,7 @@
     },
     {
       "matches": [
-        "https://ctetmonktest.fun/*",
-        "http://127.0.0.1:8000/*",
-        "http://127.0.0.1/*",
-        "http://localhost:8000/*",
-        "http://localhost/*"
+        "https://ctetmonktest.fun/*"
       ],
       "js": [
         "dashboard_bridge.js"

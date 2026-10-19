@@ -473,7 +473,7 @@ class StageTemplateService
         $stageInfo = self::getStages()[$stage];
         $sheet->setTitle('Instructions & Rules');
 
-        $colCount = ($stage === self::STAGE_MIDDLE) ? 222 : (($stage === self::STAGE_PREPARATORY) ? 176 : 147);
+        $colCount = count($this->getStageColumns($stage));
         $title = "HPCAssist - {$stageInfo['title']} ({$stageInfo['grade_range']}) Assessment Template (Official NCERT {$colCount} Columns)";
         $sheet->setCellValue('A1', $title);
         $sheet->mergeCells('A1:D1');
@@ -487,16 +487,16 @@ class StageTemplateService
         $rules = [
             ['Section / Category', 'Visual Badge & Color', 'Classification & Excel Behavior', 'Teacher Instructions & Portal Alignment'],
             ['Workbook Structure', '📑 Sheet Tabs', '3 Distinct Sheets: Manual Entry, Pre-Filled, and Instructions', 'Sheet 1 (Manual Entry): Clean template for manual teacher input with active formulas and dropdowns. Sheet 2 (Pre-Filled): 100% complete compliant baseline ready for 1-click submission. Sheet 3: This instruction sheet.'],
-            ['🔒 Student Identity', '🔒 [LOCKED] (Slate #F1F5F9)', 'Synced directly from PARAKH Portal roster. Read-only.', 'Includes School Admission No, Date of Birth, Gender, APAAR ID, HPC Login ID, Disability ID, Grade, Section. Synchronized with portal; do not alter IDs.'],
+            ['🔒 Student Identity', '🔒 [LOCKED] (Slate #F1F5F9)', 'Synced directly from PARAKH Portal roster. Read-only.', 'Includes Student Name, School Admission No, Date of Birth, Gender, APAAR ID, HPC Login ID, Disability ID, Grade, Section. Synchronized with portal for clear student identification.'],
             ['⚙️ Calculated Fields', '⚙️ [FORMULA] (Soft Blue #E0F2FE)', 'Live Excel formulas (=SUM, =IF, =ROUND). Read-only.', 'Automatically calculates Total Working Days, Present Days, Attendance %, Absence count, Total SA Max/Obtained Marks, and HPC Credit Points. Updates automatically as you type!'],
             ['⚡ Smart Auto Defaults', '⚡ [AUTO] (Clean White #FFFFFF)', 'Pre-filled with NCERT standard baselines & dropdowns.', 'Medium of Instruction, Area Type, Mother Tongue, standard attendance days (~90-95%), home learning resources, parent feedback, and NCF rubrics (default Proficient/Advanced). Fully editable.'],
             ['✏️ Teacher Input', '✏️ [INPUT] (Soft Yellow #FEF9C3)', 'Teacher evaluation action items and marks entry.', 'Summative Assessment (SA) Marks Obtained (0 to Max), observational notes, student goals, and peer feedback. Highlighted in soft yellow for quick teacher review.'],
         ];
 
         if ($stage === self::STAGE_MIDDLE) {
-            $rules[] = ['Middle Stage (Classes 6-8)', '222 Columns Total', '14 Assessment Sections', 'Part 1: Student Identity (cols 1-9) | Part 2: Profile (cols 10-14) | Part 3: Working Days Apr-Mar (cols 15-26) | Part 4: Present Days Apr-Mar (cols 27-38) | Part 5: Attendance Summary (cols 39-44) | Part 6: All About Me & Goals (cols 45-70) | Part 7: Ambition Card (cols 71-80) | Part 8: Home Resources (cols 81-90) | Part 9: Parent Partnership (cols 91-105) | Part 10: Holistic Activity 1 (cols 106-128) | Part 11: Self/Peer Feedback (cols 129-154) | Part 12: 11 Curricular Domains (cols 155-198) | Part 13: 8 SA Marks (cols 199-216) | Part 14: HPC Credits (cols 217-222).'];
+            $rules[] = ['Middle Stage (Classes 6-8)', "{$colCount} Columns Total", '14 Assessment Sections', 'Part 1: Student Identity (cols 1-10) | Part 2: Profile (cols 11-15) | Part 3: Working Days Apr-Mar (cols 16-27) | Part 4: Present Days Apr-Mar (cols 28-39) | Part 5: Attendance Summary (cols 40-45) | Part 6: All About Me & Goals (cols 46-71) | Part 7: Ambition Card (cols 72-81) | Part 8: Home Resources (cols 82-91) | Part 9: Parent Partnership (cols 92-106) | Part 10: Holistic Activity 1 (cols 107-129) | Part 11: Self/Peer Feedback (cols 130-155) | Part 12: 11 Curricular Domains (cols 156-199) | Part 13: 8 SA Marks (cols 200-217) | Part 14: HPC Credits (cols 218-223).'];
         } elseif ($stage === self::STAGE_PREPARATORY) {
-            $rules[] = ['Preparatory Stage (Classes 3-5)', '176 Columns Total', '13 Assessment Sections', 'Part 1: Student Identity (cols 1-9) | Part 2: Profile (cols 10-14) | Part 3: Working Days Apr-Mar (cols 15-26) | Part 4: Present Days Apr-Mar (cols 27-38) | Part 5: Attendance Summary (cols 39-44) | Part 6: Hand of Self-Reflection & All About Me (cols 45-72) | Part 7: Home Resources (cols 73-82) | Part 8: Parent Partnership (cols 83-97) | Part 9: Holistic Activity 1 (cols 98-120) | Part 10: Self & Peer 1/2 Reflection (cols 121-146) | Part 11: 3 Curricular Domains (cols 147-158) | Part 12: 6 SA Marks (cols 159-172) | Part 13: HPC Credits (cols 173-176).'];
+            $rules[] = ['Preparatory Stage (Classes 3-5)', "{$colCount} Columns Total", '13 Assessment Sections', 'Part 1: Student Identity (cols 1-10) | Part 2: Profile (cols 11-15) | Part 3: Working Days Apr-Mar (cols 16-27) | Part 4: Present Days Apr-Mar (cols 28-39) | Part 5: Attendance Summary (cols 40-45) | Part 6: Hand of Self-Reflection & All About Me (cols 46-67) | Part 7: Peer 1/2 Reviews (cols 68-83) | Part 8: Home Resources (cols 84-91) | Part 9: Parent Feedback (cols 92-110) | Part 10: Holistic Activity 1 (cols 111-131) | Part 11: Curricular Domains (cols 132-159) | Part 12: 6 SA Marks (cols 160-173) | Part 13: HPC Credits (cols 174-177).'];
         }
 
         foreach ($rules as $rIdx => $row) {
@@ -883,7 +883,7 @@ class StageTemplateService
 
                 $isExplicitString = in_array($col['key'], [
                     'admission_no', 'apaar_id', 'login_id', 'roll_no',
-                    'School_Admission_No', 'APAAR_ID', 'HPC_Login_ID', 'UDID_Disability_ID', 'Date_of_Birth'
+                    'Student_Name', 'School_Admission_No', 'APAAR_ID', 'HPC_Login_ID', 'UDID_Disability_ID', 'Date_of_Birth'
                 ], true);
 
                 if ($isExplicitString) {

@@ -7,30 +7,30 @@ use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 class HpcMiddleStageSchema
 {
     /**
-     * Grouping of all 222 columns into 14 distinct assessment sections
+     * Grouping of all 223 columns into 14 distinct assessment sections
      */
     public static function getSections(): array
     {
         return [
-            ['title' => '🔒 Part 1: Student Identity (Locked)', 'start' => 0, 'end' => 8, 'bg' => 'FF0F172A'],
-            ['title' => '👤 Part 2: Medium & Guardian Profile', 'start' => 9, 'end' => 13, 'bg' => 'FF1E40AF'],
-            ['title' => '📅 Part 3: Monthly Working Days (Apr–Mar)', 'start' => 14, 'end' => 25, 'bg' => 'FF0369A1'],
-            ['title' => '📅 Part 4: Monthly Present Days (Apr–Mar)', 'start' => 26, 'end' => 37, 'bg' => 'FF0284C7'],
-            ['title' => '📈 Part 5: Attendance Summary & Leave (Auto)', 'start' => 38, 'end' => 43, 'bg' => 'FF0D9488'],
-            ['title' => '🌱 Part 6: Part-A2 All About Me & Goal Setting', 'start' => 44, 'end' => 69, 'bg' => 'FF6D28D9'],
-            ['title' => '🚀 Part 7: Part-A3 My Ambition Card', 'start' => 70, 'end' => 79, 'bg' => 'FF7C3AED'],
-            ['title' => '🏡 Part 8: Part-A4 Home Learning Resources', 'start' => 80, 'end' => 89, 'bg' => 'FFBE185D'],
-            ['title' => '🤝 Part 9: Part-A4 Parent Partnership & Feedback', 'start' => 90, 'end' => 104, 'bg' => 'FFB91C1C'],
-            ['title' => '🎨 Part 10: Part-B Holistic Activity 1 & Rubrics', 'start' => 105, 'end' => 127, 'bg' => 'FFD97706'],
-            ['title' => '🌟 Part 11: Part-B Self/Peer Reflection & Feedback', 'start' => 128, 'end' => 153, 'bg' => 'FFEA580C'],
-            ['title' => '📊 Part 12: Part-C Curricular Domains (11 Subj x 4)', 'start' => 154, 'end' => 197, 'bg' => 'FF059669'],
-            ['title' => '🎯 Part 13: Part-D Summative Assessment Marks (SA)', 'start' => 198, 'end' => 215, 'bg' => 'FF047857'],
-            ['title' => '✍️ Part 14: Part-E HPC Credit Points & Declaration', 'start' => 216, 'end' => 221, 'bg' => 'FF334155'],
+            ['title' => '🔒 Part 1: Student Identity (Locked)', 'start' => 0, 'end' => 9, 'bg' => 'FF0F172A'],
+            ['title' => '👤 Part 2: Medium & Guardian Profile', 'start' => 10, 'end' => 14, 'bg' => 'FF1E40AF'],
+            ['title' => '📅 Part 3: Monthly Working Days (Apr–Mar)', 'start' => 15, 'end' => 26, 'bg' => 'FF0369A1'],
+            ['title' => '📅 Part 4: Monthly Present Days (Apr–Mar)', 'start' => 27, 'end' => 38, 'bg' => 'FF0284C7'],
+            ['title' => '📈 Part 5: Attendance Summary & Leave (Auto)', 'start' => 39, 'end' => 44, 'bg' => 'FF0D9488'],
+            ['title' => '🌱 Part 6: Part-A2 All About Me & Goal Setting', 'start' => 45, 'end' => 70, 'bg' => 'FF6D28D9'],
+            ['title' => '🚀 Part 7: Part-A3 My Ambition Card', 'start' => 71, 'end' => 80, 'bg' => 'FF7C3AED'],
+            ['title' => '🏡 Part 8: Part-A4 Home Learning Resources', 'start' => 81, 'end' => 90, 'bg' => 'FFBE185D'],
+            ['title' => '🤝 Part 9: Part-A4 Parent Partnership & Feedback', 'start' => 91, 'end' => 105, 'bg' => 'FFB91C1C'],
+            ['title' => '🎨 Part 10: Part-B Holistic Activity 1 & Rubrics', 'start' => 106, 'end' => 128, 'bg' => 'FFD97706'],
+            ['title' => '🌟 Part 11: Part-B Self/Peer Reflection & Feedback', 'start' => 129, 'end' => 154, 'bg' => 'FFEA580C'],
+            ['title' => '📊 Part 12: Part-C Curricular Domains (11 Subj x 4)', 'start' => 155, 'end' => 198, 'bg' => 'FF059669'],
+            ['title' => '🎯 Part 13: Part-D Summative Assessment Marks (SA)', 'start' => 199, 'end' => 216, 'bg' => 'FF047857'],
+            ['title' => '✍️ Part 14: Part-E HPC Credit Points & Declaration', 'start' => 217, 'end' => 222, 'bg' => 'FF334155'],
         ];
     }
 
     /**
-     * Complete, authoritative definition of all 222 Middle Stage columns
+     * Complete, authoritative definition of all 223 Middle Stage columns
      */
     public static function getColumns(): array
     {
@@ -40,10 +40,11 @@ class HpcMiddleStageSchema
         $parentQOpts = '"Yes,Sometimes,No,Not Sure"';
 
         return [
+            ['key' => 'Student_Name', 'label' => '🔒 [LOCKED] Student Name', 'type' => 'locked', 'width' => 24, 'note' => 'Official full name of student (for identification)', 'classification' => 'locked'],
             ['key' => 'School_Admission_No', 'label' => '🔒 [LOCKED] School Admission No', 'type' => 'locked', 'width' => 20, 'note' => 'Official school admission / roll number', 'classification' => 'locked'],
             ['key' => 'Date_of_Birth', 'label' => '🔒 [LOCKED] Date of Birth', 'type' => 'locked', 'width' => 20, 'note' => 'Student Date of Birth (YYYY-MM-DD)', 'classification' => 'locked'],
             ['key' => 'Gender', 'label' => '🔒 [LOCKED] Gender', 'type' => 'list', 'options' => "Male,Female,Other", 'width' => 20, 'note' => 'Student Gender (Male / Female / Other)', 'classification' => 'locked'],
-            ['key' => 'APAAR_ID', 'label' => '🔒 [LOCKED] APAAR ID', 'type' => 'locked', 'width' => 20, 'note' => 'Official 12-digit APAAR ID if allocated', 'classification' => 'locked'],
+            ['key' => 'APAAR_ID', 'label' => '🔒 [LOCKED] APAAR ID', 'type' => 'locked', 'width' => 20, 'note' => 'Official 12-digit APAAR ID / Aadhaar for student identification', 'classification' => 'locked'],
             ['key' => 'HPC_Login_ID', 'label' => '🔒 [LOCKED] HPC Login ID', 'type' => 'locked', 'width' => 20, 'note' => 'Unique student login ID assigned by PARAKH portal', 'classification' => 'locked'],
             ['key' => 'UDID_Disability_ID', 'label' => '🔒 [LOCKED] UDID Disability ID', 'type' => 'locked', 'width' => 20, 'note' => 'Disability ID if applicable (or blank)', 'classification' => 'locked'],
             ['key' => 'Grade', 'label' => '🔒 [LOCKED] Grade', 'type' => 'list', 'options' => "Grade 6,Grade 7,Grade 8", 'width' => 20, 'note' => 'Class / Grade (Grade 6, Grade 7, Grade 8)', 'classification' => 'locked'],
@@ -299,9 +300,16 @@ class HpcMiddleStageSchema
         $months = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
         $defaultWorkDays = [20, 22, 10, 20, 22, 21, 19, 20, 15, 15, 20, 18];
 
+        $colKeys = array_column(self::getColumns(), 'key');
+        $k2c = [];
+        foreach ($colKeys as $idx => $k) {
+            $k2c[$k] = Coordinate::stringFromColumnIndex($idx + 1);
+        }
+
         $vals = [];
 
-        // 1 to 9: Locked Identity
+        // 1 to 10: Locked Identity (Including Student Name & APAAR ID for clear identification)
+        $vals[] = $name;
         $vals[] = $admNo;
         $vals[] = $dob;
         $vals[] = $gender;
@@ -312,32 +320,32 @@ class HpcMiddleStageSchema
         $vals[] = $section;
         $vals[] = 'Yes';
 
-        // 10 to 14: Profile & Medium
+        // 11 to 15: Profile & Medium
         $vals[] = 'English';
         $vals[] = 'Rural';
         $vals[] = 'Kashmiri';
         $vals[] = ($sIdx % 2 === 0) ? 'Father' : 'Mother';
         $vals[] = 'Guardian of ' . explode(' ', trim($name))[0];
 
-        // 15 to 26: Working Days (Apr to Mar)
+        // 16 to 27: Working Days (Apr to Mar)
         foreach ($months as $mIdx => $m) {
             $w = $defaultWorkMap[$m] ?? $defaultWorkDays[$mIdx];
             $vals[] = $w;
         }
 
-        // 27 to 38: Present Days (Apr to Mar)
+        // 28 to 39: Present Days (Apr to Mar)
         foreach ($months as $mIdx => $m) {
             $w = $defaultWorkMap[$m] ?? $defaultWorkDays[$mIdx];
             $p = $autoFill ? max(0, $w - ($sIdx % 3 === 0 ? 1 : 2)) : '';
             $vals[] = $p;
         }
 
-        // 39 to 44: Attendance Summary
-        $vals[] = "=SUM(O{$rowNum}:Z{$rowNum})";
-        $vals[] = "=SUM(AA{$rowNum}:AL{$rowNum})";
-        $vals[] = "=IF(AM{$rowNum}>0, ROUND((AN{$rowNum}/AM{$rowNum})*100, 1) & \"%\", \"\")";
+        // 40 to 45: Attendance Summary
+        $vals[] = "=SUM({$k2c['Working_Days_Apr']}{$rowNum}:{$k2c['Working_Days_Mar']}{$rowNum})";
+        $vals[] = "=SUM({$k2c['Present_Days_Apr']}{$rowNum}:{$k2c['Present_Days_Mar']}{$rowNum})";
+        $vals[] = "=IF({$k2c['Total_Working_Days']}{$rowNum}>0, ROUND(({$k2c['Total_Present_Days']}{$rowNum}/{$k2c['Total_Working_Days']}{$rowNum})*100, 1) & \"%\", \"\")";
         $vals[] = $autoFill ? 'Satisfactory regular attendance maintained throughout session' : '';
-        $vals[] = "=MAX(0, AM{$rowNum}-AN{$rowNum})";
+        $vals[] = "=MAX(0, {$k2c['Total_Working_Days']}{$rowNum}-{$k2c['Total_Present_Days']}{$rowNum})";
         $vals[] = $autoFill ? $interest : '';
 
         // 45 to 70: Part-A2 All About Me & Goal Setting
@@ -505,15 +513,15 @@ class HpcMiddleStageSchema
         }
 
         // Total SA Max & Obtained Formulas
-        $vals[] = "=SUM(GQ{$rowNum},GS{$rowNum},GU{$rowNum},GW{$rowNum},GY{$rowNum},HA{$rowNum},HC{$rowNum},HE{$rowNum})";
-        $vals[] = "=SUM(GR{$rowNum},GT{$rowNum},GV{$rowNum},GX{$rowNum},GZ{$rowNum},HB{$rowNum},HD{$rowNum},HF{$rowNum})";
+        $vals[] = "=SUM({$k2c['L1_Max_Marks_SA']}{$rowNum},{$k2c['L2_Max_Marks_SA']}{$rowNum},{$k2c['L3_Max_Marks_SA']}{$rowNum},{$k2c['Math_Max_Marks_SA']}{$rowNum},{$k2c['Science_Max_Marks_SA']}{$rowNum},{$k2c['SocialScience_Max_Marks_SA']}{$rowNum},{$k2c['Art_Max_Marks_SA']}{$rowNum},{$k2c['PE_Max_Marks_SA']}{$rowNum})";
+        $vals[] = "=SUM({$k2c['L1_Marks_Obtained_SA']}{$rowNum},{$k2c['L2_Marks_Obtained_SA']}{$rowNum},{$k2c['L3_Marks_Obtained_SA']}{$rowNum},{$k2c['Math_Marks_Obtained_SA']}{$rowNum},{$k2c['Science_Marks_Obtained_SA']}{$rowNum},{$k2c['SocialScience_Marks_Obtained_SA']}{$rowNum},{$k2c['Art_Marks_Obtained_SA']}{$rowNum},{$k2c['PE_Marks_Obtained_SA']}{$rowNum})";
 
-        // 217 to 222: Part-E HPC Credit Points & Declaration
-        $vals[] = "=ROUND((HH{$rowNum}/HG{$rowNum})*20, 1)";
-        $vals[] = "=ROUND((HH{$rowNum}/HG{$rowNum})*20, 1)";
-        $vals[] = "=HI{$rowNum}+HJ{$rowNum}";
-        $vals[] = "=HK{$rowNum}";
-        $vals[] = "=HH{$rowNum}";
+        // Part-E HPC Credit Points & Declaration
+        $vals[] = "=ROUND(({$k2c['Total_SA_Marks_Obtained']}{$rowNum}/{$k2c['Total_SA_Max_Marks']}{$rowNum})*20, 1)";
+        $vals[] = "=ROUND(({$k2c['Total_SA_Marks_Obtained']}{$rowNum}/{$k2c['Total_SA_Max_Marks']}{$rowNum})*20, 1)";
+        $vals[] = "={$k2c['Total_Credit_Earned_HPC_Formative']}{$rowNum}+{$k2c['Credit_Earned_Summative_SA']}{$rowNum}";
+        $vals[] = "={$k2c['Total_Credit_Earned_Final']}{$rowNum}";
+        $vals[] = "={$k2c['Total_SA_Marks_Obtained']}{$rowNum}";
         $vals[] = 'Yes';
 
         return $vals;
@@ -527,15 +535,17 @@ class HpcMiddleStageSchema
         $normalized = $row;
 
         // Populate convenient aliases for dashboard and automation extension
+        $normalized['name']         = $row['Student_Name'] ?? ($row['name'] ?? ($row['AboutMe_Student_Name_Tag'] ?? 'Student'));
+        $normalized['Student_Name'] = $normalized['name'];
         $normalized['admission_no'] = $row['School_Admission_No'] ?? ($row['admission_no'] ?? '');
         $normalized['dob']          = $row['Date_of_Birth'] ?? ($row['dob'] ?? '');
         $normalized['gender']       = $row['Gender'] ?? ($row['gender'] ?? '');
-        $normalized['apaar_id']     = $row['APAAR_ID'] ?? ($row['apaar_id'] ?? '');
+        $normalized['apaar_id']     = $row['APAAR_ID'] ?? ($row['apaar_id'] ?? ($row['aadhaar'] ?? ''));
+        $normalized['APAAR_ID']     = $normalized['apaar_id'];
         $normalized['login_id']     = $row['HPC_Login_ID'] ?? ($row['login_id'] ?? '');
         $normalized['udid']         = $row['UDID_Disability_ID'] ?? ($row['udid'] ?? '');
         $normalized['grade']        = $row['Grade'] ?? ($row['grade'] ?? '');
         $normalized['section']      = $row['Section'] ?? ($row['section'] ?? '');
-        $normalized['name']         = $row['name'] ?? ($row['AboutMe_Student_Name_Tag'] ?? 'Student');
 
         // Attendance aliases
         $months = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];

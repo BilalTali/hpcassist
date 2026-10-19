@@ -855,12 +855,16 @@ class HpcTeacherController extends Controller
 
             $portalStudents = [];
             $portalStudentsByName = [];
+            $portalStudentsByApaar = [];
             $tStudentsFile = $dir . '/teacher_students.json';
             if (file_exists($tStudentsFile)) {
                 $tsData = json_decode(file_get_contents($tStudentsFile), true) ?: [];
                 foreach ($tsData as $tSt) {
                     if (!empty($tSt['login_id'])) {
                         $portalStudents[$tSt['login_id']] = $tSt;
+                    }
+                    if (!empty($tSt['apaar_id'])) {
+                        $portalStudentsByApaar[$tSt['apaar_id']] = $tSt;
                     }
                     if (!empty($tSt['name'])) {
                         $clean = strtolower(preg_replace('/[^a-z0-9]/i', '', $tSt['name']));
@@ -880,22 +884,24 @@ class HpcTeacherController extends Controller
                     $cell = $ws->getCell("{$colLetter}{$r}");
                     $val = $cell->isFormula() ? $cell->getCalculatedValue() : $cell->getValue();
                     $k = $col['key'];
-                    if (in_array($k, ['admission_no', 'apaar_id', 'login_id', 'roll_no', 'School_Admission_No', 'APAAR_ID', 'HPC_Login_ID', 'UDID_Disability_ID'], true)) {
+                    if (in_array($k, ['Student_Name', 'admission_no', 'apaar_id', 'login_id', 'roll_no', 'School_Admission_No', 'APAAR_ID', 'HPC_Login_ID', 'UDID_Disability_ID'], true)) {
                         $rowValues[$k] = trim((string) $val);
                     } else {
                         $rowValues[$k] = is_string($val) ? trim($val) : $val;
                     }
                 }
 
-                $loginId = (string) ($rowValues['login_id'] ?? $rowValues['HPC_Login_ID'] ?? '');
-                $apaarId = (string) ($rowValues['apaar_id'] ?? $rowValues['APAAR_ID'] ?? '');
-                $name    = (string) ($rowValues['name'] ?? $rowValues['AboutMe_Student_Name_Tag'] ?? $rowValues['Student_Name'] ?? '');
+                $loginId = (string) ($rowValues['HPC_Login_ID'] ?? $rowValues['login_id'] ?? '');
+                $apaarId = (string) ($rowValues['APAAR_ID'] ?? $rowValues['apaar_id'] ?? '');
+                $name    = (string) ($rowValues['Student_Name'] ?? $rowValues['name'] ?? $rowValues['AboutMe_Student_Name_Tag'] ?? '');
                 $status  = (string) ($rowValues['status'] ?? '');
 
-                // Match against portal student roster
+                // Match against portal student roster by Login ID, APAAR ID, or Student Name
                 $matchedPortal = null;
                 if (!empty($loginId) && isset($portalStudents[$loginId])) {
                     $matchedPortal = $portalStudents[$loginId];
+                } elseif (!empty($apaarId) && isset($portalStudentsByApaar[$apaarId])) {
+                    $matchedPortal = $portalStudentsByApaar[$apaarId];
                 } elseif (!empty($name)) {
                     $cleanName = strtolower(preg_replace('/[^a-z0-9]/i', '', $name));
                     if (!empty($cleanName) && isset($portalStudentsByName[$cleanName])) {

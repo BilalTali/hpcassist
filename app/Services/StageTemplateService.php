@@ -290,32 +290,31 @@ class StageTemplateService
         $cols = $this->getBaseMetadataColumns('"Grade 3,Grade 4,Grade 5"');
 
         // Part A(2) All About Me & Self-Reflection (Columns AQ to BA)
-        $cols[] = ['key' => 'my_name', 'label' => 'My name is (A2) *', 'width' => 26, 'type' => 'string', 'note' => 'Student full name'];
-        $cols[] = ['key' => 'my_age', 'label' => 'I am ... years old (A2) *', 'width' => 22, 'type' => 'integer', 'note' => 'Student age in years (e.g. 9 or 10)'];
-        $cols[] = ['key' => 'dont_like', 'label' => 'I don\'t like to (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Fighting, shouting, and loud noises'];
-        $cols[] = ['key' => 'like_to', 'label' => 'I like to (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Reading storybooks, drawing nature, and playing outdoors'];
-        $cols[] = ['key' => 'want_to_improve', 'label' => 'I would like to improve my skills of (A2) *', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Neat cursive handwriting and fast mental math'];
-        $cols[] = ['key' => 'not_good_at', 'label' => 'I am not good at (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Drawing complex diagrams and spelling long words'];
-        $cols[] = ['key' => 'good_at', 'label' => 'I am good at (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Solving arithmetic puzzles and reciting poems'];
-        $cols[] = ['key' => 'fav_food', 'label' => 'Favourite foods, fruits (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Dal Chawal, Apples, and seasonal fresh fruits'];
-        $cols[] = ['key' => 'fav_festival', 'label' => 'Favourite festival (A2) *', 'width' => 26, 'type' => 'string', 'note' => 'e.g. Eid, Diwali, Navroz'];
-        $cols[] = ['key' => 'grow_up_be', 'label' => 'When I grow up I want to be (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Doctor / Space Scientist / Teacher'];
-        $cols[] = ['key' => 'person_inspires_and_learn', 'label' => 'One person who inspires me / Things I want to learn this year (A2) *', 'width' => 48, 'type' => 'string', 'note' => 'e.g. Dr. A.P.J. Abdul Kalam | 1. Science models 2. Fast division math 3. Fluent English reading'];
+        $cols[] = ['key' => 'live_with', 'label' => 'I live with (A2)', 'width' => 24, 'type' => 'string', 'note' => 'e.g. My parents, siblings, and grandparents'];
+        $cols[] = ['key' => 'fav_dish', 'label' => 'My Favorite Food / Indian Dish (A2) *', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Dal Chawal, Rajma, Khichdi'];
+        $cols[] = ['key' => 'fav_game', 'label' => 'My Favorite Indigenous / Traditional Game (A2) *', 'width' => 34, 'type' => 'string', 'note' => 'e.g. Kho-Kho, Kabaddi, Gilli-Danda'];
+        $cols[] = ['key' => 'free_time', 'label' => 'In my free time I love (A2)', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Reading Panchatantra stories and sketching'];
+        $cols[] = ['key' => 'do_well', 'label' => 'Something I do really well (A2) *', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Solving math puzzles and recitation'];
+        $cols[] = ['key' => 'want_to_improve', 'label' => 'Something I want to improve in (A2)', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Neat handwriting and spelling'];
+        $cols[] = ['key' => 'responsible', 'label' => 'I am responsible (A2) *', 'width' => 24, 'type' => 'list', 'options' => '"all the time,most times,sometimes"', 'note' => 'all the time, most times, sometimes'];
+        $cols[] = ['key' => 'proud_of', 'label' => 'I feel proud of myself when (A2)', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Helping my classmate with reading'];
+        $cols[] = ['key' => 'goal_acad', 'label' => 'My Learning Goal this year (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Read 15 storybooks in English and Urdu'];
+        $cols[] = ['key' => 'goal_step', 'label' => 'Steps I will take to reach my goal (A2)', 'width' => 34, 'type' => 'string', 'note' => 'e.g. Read 2 pages every evening before bed'];
+        $cols[] = ['key' => 'good_deed', 'label' => 'A kind deed I did recently (A2)', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Shared my lunch with a friend who forgot hers'];
 
-        // Part A(3) Feelings at School, Peer Review & Parent Feedback (Columns BB to BM)
-        $rateOpts = '"Yes,Sometimes,No,Not Sure"';
-        $cols[] = ['key' => 'feel_at_school', 'label' => 'How do I feel at school? (Self Q1-7) *', 'width' => 32, 'type' => 'list', 'options' => $rateOpts, 'note' => 'Talks about feelings, calm during difficulties, understands friends, respects views'];
-        $cols[] = ['key' => 'peer1_name', 'label' => 'Peer 1: Friend\'s Name *', 'width' => 22, 'type' => 'string', 'note' => 'First assigned classmate'];
-        $cols[] = ['key' => 'peer1_feedback', 'label' => 'Peer 1 Feedback (Q1-6: Expresses feelings, calm, caring) *', 'width' => 34, 'type' => 'list', 'options' => $rateOpts, 'note' => 'Friend can talk about feelings, calm self, respects views, helps make up after fight'];
-        $cols[] = ['key' => 'peer2_name', 'label' => 'Peer 2: Friend\'s Name *', 'width' => 22, 'type' => 'string', 'note' => 'Second assigned classmate'];
-        $cols[] = ['key' => 'peer2_feedback', 'label' => 'Peer 2 Feedback (Q1-6: Expresses feelings, calm, caring) *', 'width' => 34, 'type' => 'list', 'options' => $rateOpts, 'note' => 'Friend can talk about feelings, calm self, respects views, helps make up after fight'];
-        $cols[] = ['key' => 'parent_school_space', 'label' => 'Parent Q1-2: School welcoming, safe & participates *', 'width' => 32, 'type' => 'list', 'options' => $rateOpts, 'note' => 'Child finds school safe space & participates actively'];
-        $cols[] = ['key' => 'parent_curriculum_progress', 'label' => 'Parent Q3-5: Grade-level progress & school support *', 'width' => 34, 'type' => 'list', 'options' => $rateOpts, 'note' => 'Child making good progress and getting needed support'];
-        $cols[] = ['key' => 'parent_child_empathy', 'label' => 'Parent Q6-11: Calms self, expresses feelings & empathy *', 'width' => 34, 'type' => 'list', 'options' => $rateOpts, 'note' => 'Child talks about feelings, calms self, respects others views, helps friends'];
-        $cols[] = ['key' => 'parent_home_resources', 'label' => 'Your Child Matters: Home Resources Available *', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Books, Newspaper, Toys, Phone/Computer, Internet, TV'];
-        $cols[] = ['key' => 'parent_support_areas', 'label' => 'My child needs support with (Subjects / Skills) *', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Reading, Numbers and Math, Oral communication, Self-confidence'];
-        $cols[] = ['key' => 'parent_support_specify', 'label' => 'Support Specifics (Write here) *', 'width' => 45, 'type' => 'string', 'note' => 'e.g. Regular evening reading revision and daily arithmetic practice worksheets'];
-        $cols[] = ['key' => 'parent_signature_status', 'label' => 'Parent SMC / PTA Consultation Done *', 'width' => 26, 'type' => 'list', 'options' => '"Completed,In Progress,Pending"', 'note' => 'Parent consultation meeting status'];
+        // Part A(3) Peer 1, Peer 2 & Parent Feedback (Columns BB to BM)
+        $cols[] = ['key' => 'peer1_name', 'label' => 'Peer 1: Reviewer Name *', 'width' => 22, 'type' => 'string', 'note' => 'First assigned peer'];
+        $cols[] = ['key' => 'peer1_helpful', 'label' => 'Peer 1: Is helpful and cooperative *', 'width' => 26, 'type' => 'list', 'options' => '"Always,Usually,Sometimes"', 'note' => 'Peer 1 feedback'];
+        $cols[] = ['key' => 'peer1_listens', 'label' => 'Peer 1: Listens to others in group *', 'width' => 26, 'type' => 'list', 'options' => '"Always,Usually,Sometimes"', 'note' => 'Peer 1 collaboration'];
+        $cols[] = ['key' => 'peer1_praise', 'label' => 'Peer 1: What I like most about friend', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Very cheerful and always shares pencils'];
+        $cols[] = ['key' => 'peer2_name', 'label' => 'Peer 2: Reviewer Name *', 'width' => 22, 'type' => 'string', 'note' => 'Second assigned peer'];
+        $cols[] = ['key' => 'peer2_helpful', 'label' => 'Peer 2: Works well in team activities *', 'width' => 26, 'type' => 'list', 'options' => '"Always,Usually,Sometimes"', 'note' => 'Peer 2 feedback'];
+        $cols[] = ['key' => 'peer2_praise', 'label' => 'Peer 2: Positive comment for friend', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Explains maths questions very patiently'];
+        $cols[] = ['key' => 'parent_reads_with', 'label' => 'Parent: Reads / discusses school at home *', 'width' => 30, 'type' => 'list', 'options' => '"Daily,Weekly,Occasionally,Rarely"', 'note' => 'Parent-teacher card'];
+        $cols[] = ['key' => 'parent_study_space', 'label' => 'Parent: Child has quiet space for study *', 'width' => 28, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Home environment'];
+        $cols[] = ['key' => 'parent_social_habits', 'label' => 'Parent: Child displays respectful behavior *', 'width' => 30, 'type' => 'list', 'options' => '"Always,Usually,Needs Guidance"', 'note' => 'Parent observation'];
+        $cols[] = ['key' => 'parent_support_needed', 'label' => 'Parent: Support requested from school', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Regular spelling practice worksheets'];
+        $cols[] = ['key' => 'parent_signature_status', 'label' => 'Parent PTA Consultation Done *', 'width' => 24, 'type' => 'list', 'options' => '"Completed,In Progress,Pending"', 'note' => 'SMC/PTA meeting status'];
 
         // Part B Progress across 6 Curricular Learning Standards
         $rubricOpts = '"Beginner,Proficient,Advanced"';
@@ -377,154 +376,12 @@ class StageTemplateService
     // ─────────────────────────────────────────────────────────────────────────
     protected function getMiddleSections(): array
     {
-        return [
-            ['title' => '🔒 Locked Metadata',                                   'start' => 0,   'end' => 3,   'bg' => 'FF334155'],
-            ['title' => '📋 Part A(1): Student Profile & Attendance',          'start' => 4,   'end' => 41,  'bg' => 'FF1E293B'],
-            ['title' => '🌟 Part A(2): All About Me & Goal Setting',            'start' => 42,  'end' => 67,  'bg' => 'FF0284C7'],
-            ['title' => '🎯 Part A(3): Ambition Card (Career Exploration)',      'start' => 68,  'end' => 77,  'bg' => 'FF0D9488'],
-            ['title' => '🤝 Part A(4): Parent Partnership & Home Support',     'start' => 78,  'end' => 87,  'bg' => 'FFD97706'],
-            ['title' => '🔬 Part B: Activity 1 (Academic Domain)',              'start' => 88,  'end' => 91,  'bg' => 'FF059669'],
-            ['title' => '🎨 Part B: Activity 2 (Co-Curricular / Creative)',      'start' => 92,  'end' => 102, 'bg' => 'FF2563EB'],
-            ['title' => '📊 Part C: Annual Curricular Assessment (Levels)',     'start' => 103, 'end' => 128, 'bg' => 'FF7C3AED'],
-            ['title' => '🎯 Part D: HPC Credit Subject Marks (8 Subj)',          'start' => 129, 'end' => 144, 'bg' => 'FF047857'],
-            ['title' => '✍️ Part E: Final Declaration & Remarks',               'start' => 145, 'end' => 146, 'bg' => 'FF334155'],
-        ];
+        return (new \App\Http\Controllers\HpcTeacherController())->getEvaluationSections();
     }
 
     protected function getMiddleColumns(): array
     {
-        // Use existing complete 147-column model from HpcTeacherController
-        $cols = $this->getBaseMetadataColumns('"Grade 6,Grade 7,Grade 8"');
-
-        // Part-A(2) All About Me & Goal Setting
-        $cols[] = ['key' => 'live_with', 'label' => 'I live with my (A2)', 'width' => 24, 'type' => 'string', 'note' => 'e.g. Family / Parents and Grandparents'];
-        $cols[] = ['key' => 'stay_at', 'label' => 'We stay at (A2)', 'width' => 22, 'type' => 'string', 'note' => 'e.g. Sugin, Budgam'];
-        $cols[] = ['key' => 'free_time', 'label' => 'I spend my free time doing (A2)', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Reading books and drawing'];
-        $cols[] = ['key' => 'do_well', 'label' => 'I ... very well (A2)', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Learning new skills and actively participating'];
-        $cols[] = ['key' => 'responsible', 'label' => 'I am responsible (A2) *', 'width' => 24, 'type' => 'list', 'options' => '"all the time,most times,sometimes"', 'note' => 'Select: all the time, most times, sometimes'];
-        $cols[] = ['key' => 'do_better', 'label' => 'I could do better specially when it comes to (A2)', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Time management in exams'];
-        $cols[] = ['key' => 'care_others', 'label' => 'I care about others. I show it by (A2)', 'width' => 34, 'type' => 'string', 'note' => 'e.g. Helping peers with notes'];
-        $cols[] = ['key' => 'feel_proud', 'label' => 'I feel proud of myself when (A2)', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Solving challenging problems independently'];
-        $cols[] = ['key' => 'friend_name', 'label' => 'My Friend: Name (A2)', 'width' => 22, 'type' => 'string', 'note' => 'e.g. Ayaan Ahmad'];
-        $cols[] = ['key' => 'friend_age', 'label' => 'My Friend: Age (A2)', 'width' => 18, 'type' => 'integer', 'note' => 'e.g. 12'];
-        $cols[] = ['key' => 'acad_goal', 'label' => 'My Academic Goal (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Score above 90% in Mathematics and Science'];
-        $cols[] = ['key' => 'acad_goal_why', 'label' => 'Academic: This goal is important to me because (A2) *', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Builds solid foundation for engineering'];
-        $cols[] = ['key' => 'acad_step1', 'label' => 'Academic: Step 1 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Dedicate 45 minutes daily to numerical problems'];
-        $cols[] = ['key' => 'acad_step2', 'label' => 'Academic: Step 2 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Clarify doubts with subject teachers promptly'];
-        $cols[] = ['key' => 'pers_goal', 'label' => 'My Personal Goal (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Develop regular exercise and reading routine'];
-        $cols[] = ['key' => 'pers_goal_why', 'label' => 'Personal: This goal is important to me because (A2) *', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Keeps mind alert and improves concentration'];
-        $cols[] = ['key' => 'pers_step1', 'label' => 'Personal: Step 1 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Wake up at 6:00 AM every morning'];
-        $cols[] = ['key' => 'pers_step2', 'label' => 'Personal: Step 2 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Read at least 15 pages before bedtime'];
-        $cols[] = ['key' => 'sch_learn1', 'label' => 'Learnt at school: 1 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Laws of reflection in science laboratory'];
-        $cols[] = ['key' => 'sch_learn2', 'label' => 'Learnt at school: 2 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Solving linear equations in mathematics'];
-        $cols[] = ['key' => 'sch_learn3', 'label' => 'Learnt at school: 3 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Constitutional fundamental rights'];
-        $cols[] = ['key' => 'out_learn1', 'label' => 'Learnt outside school: 1 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Organic kitchen gardening and soil care'];
-        $cols[] = ['key' => 'out_learn2', 'label' => 'Learnt outside school: 2 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Bicycle maintenance and tyre inflation'];
-        $cols[] = ['key' => 'out_learn3', 'label' => 'Learnt outside school: 3 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Digital payments and basic banking literacy'];
-        $cols[] = ['key' => 'ask_teach1', 'label' => 'I would like to ask my teachers: 1 (A2)', 'width' => 34, 'type' => 'string', 'note' => 'e.g. How telescopes photograph distant galaxies'];
-        $cols[] = ['key' => 'ask_teach2', 'label' => 'I would like to ask my teachers: 2 (A2)', 'width' => 34, 'type' => 'string', 'note' => 'e.g. Tips to improve fast mental arithmetic'];
-
-        // Part-A(3) Ambition Card
-        $cols[] = ['key' => 'ambition', 'label' => 'My Career Ambition (A3)', 'width' => 26, 'type' => 'string', 'note' => 'e.g. Software Engineer / Data Scientist'];
-        $cols[] = ['key' => 'ambition_path', 'label' => 'Path to achieve this Ambition (A3)', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Focus on Maths and Computer Science'];
-        $cols[] = ['key' => 'skill_acquire', 'label' => 'Skills I want to acquire (5 skills) (A3) *', 'width' => 45, 'type' => 'string', 'note' => 'e.g. Python Programming, Critical Thinking, Logic'];
-        $cols[] = ['key' => 'focus_subjects', 'label' => 'Subjects I need to focus on (A3)', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Mathematics, Science, English'];
-        $cols[] = ['key' => 'habits_cultivate', 'label' => 'Habits I will cultivate (A3)', 'width' => 34, 'type' => 'string', 'note' => 'e.g. Daily revision and time-blocked study'];
-        $cols[] = ['key' => 'mentor_name', 'label' => 'Teacher Mentor Name (A3)', 'width' => 24, 'type' => 'string', 'note' => 'e.g. Mohammad Shafi'];
-        $cols[] = ['key' => 'mentor_guidance', 'label' => 'Mentor Guidance & Advice (A3)', 'width' => 36, 'type' => 'string', 'note' => 'e.g. Build solid mathematical logic'];
-        $cols[] = ['key' => 'feel_calm', 'label' => 'I feel calm when (A3)', 'width' => 26, 'type' => 'string', 'note' => 'e.g. Walking in nature and listening to birds'];
-        $cols[] = ['key' => 'feel_anxious', 'label' => 'I feel anxious when (A3)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Sudden unannounced viva examinations'];
-        $cols[] = ['key' => 'cope_anxiety', 'label' => 'How I cope with anxiety (A3)', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Deep breathing exercises and taking short walks'];
-
-        // Part-A(4) Parent Partnership
-        $cols[] = ['key' => 'res_books', 'label' => 'Resources: Books & Reading Material *', 'width' => 28, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Select Yes / No'];
-        $cols[] = ['key' => 'res_play', 'label' => 'Resources: Play & Sports Equipment *', 'width' => 28, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Select Yes / No'];
-        $cols[] = ['key' => 'res_digital', 'label' => 'Resources: Digital Device / Internet *', 'width' => 28, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Select Yes / No'];
-        $cols[] = ['key' => 'child_q1', 'label' => 'Parent: Child shares school experiences *', 'width' => 34, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio smiley response'];
-        $cols[] = ['key' => 'child_q2', 'label' => 'Parent: Child handles emotional feelings *', 'width' => 34, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio smiley response'];
-        $cols[] = ['key' => 'child_q3', 'label' => 'Parent: Child completes tasks responsibly *', 'width' => 34, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio smiley response'];
-        $cols[] = ['key' => 'child_q4', 'label' => 'Parent: Child interacts warmly with peers *', 'width' => 34, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio smiley response'];
-        $cols[] = ['key' => 'need_time', 'label' => 'Need: Dedicated Time with Child *', 'width' => 26, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Select Yes / No'];
-        $cols[] = ['key' => 'need_resources', 'label' => 'Need: More Learning Resources *', 'width' => 26, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Select Yes / No'];
-        $cols[] = ['key' => 'parent_plan', 'label' => 'Home Support Action Plan *', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Schedule dedicated 1-hour quiet study'];
-
-        // Part-B Activity 1 & 2
-        $rubricOpts = '"Beginner,Proficient,Advanced"';
-        $cols[] = ['key' => 'act1_subject', 'label' => 'Activity 1: Subject / Domain *', 'width' => 26, 'type' => 'list', 'options' => '"Science,Mathematics,Social Science,Languages,Art Education,Physical Education"', 'note' => 'Subject for Activity 1'];
-        $cols[] = ['key' => 'act1_pedagogy', 'label' => 'Activity 1: Pedagogical Approach *', 'width' => 28, 'type' => 'list', 'options' => '"Art-Integrated,Sports-Integrated,Experiential Learning,Toy-Based Pedagogy,Inquiry-Based"', 'note' => 'Pedagogy used'];
-        $cols[] = ['key' => 'act1_title', 'label' => 'Activity 1: Activity Title *', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Investigating Heat Transfer'];
-        $cols[] = ['key' => 'act1_desc', 'label' => 'Activity 1: Description & Objectives *', 'width' => 45, 'type' => 'string', 'note' => 'Hands-on lab experiment'];
-
-        $cols[] = ['key' => 'act2_subject', 'label' => 'Activity 2: Subject / Domain *', 'width' => 26, 'type' => 'list', 'options' => '"Languages,Art Education,Physical Education and Well-being,Vocational Education,Social Science"', 'note' => 'Subject for Activity 2'];
-        $cols[] = ['key' => 'act2_pedagogy', 'label' => 'Activity 2: Pedagogical Approach *', 'width' => 28, 'type' => 'list', 'options' => '"Art-Integrated,Sports-Integrated,Experiential Learning,Toy-Based Pedagogy,Inquiry-Based"', 'note' => 'Pedagogy used'];
-        $cols[] = ['key' => 'act2_title', 'label' => 'Activity 2: Activity Title *', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Creative Monologue on Environmental Conservation'];
-        $cols[] = ['key' => 'act2_desc', 'label' => 'Activity 2: Description & Objectives *', 'width' => 45, 'type' => 'string', 'note' => 'Dramatic presentation on water crisis'];
-        $cols[] = ['key' => 'act_aware', 'label' => 'Rubric: Awareness Level *', 'width' => 22, 'type' => 'list', 'options' => $rubricOpts, 'note' => 'Beginner, Proficient, Advanced'];
-        $cols[] = ['key' => 'act_sens', 'label' => 'Rubric: Sensitivity Level *', 'width' => 22, 'type' => 'list', 'options' => $rubricOpts, 'note' => 'Beginner, Proficient, Advanced'];
-        $cols[] = ['key' => 'act_creat', 'label' => 'Rubric: Creativity Level *', 'width' => 22, 'type' => 'list', 'options' => $rubricOpts, 'note' => 'Beginner, Proficient, Advanced'];
-        $cols[] = ['key' => 'act_self', 'label' => 'Student Self-Reflection on Activity *', 'width' => 36, 'type' => 'string', 'note' => 'e.g. I enjoyed researching local water sources'];
-        $cols[] = ['key' => 'act_peer', 'label' => 'Peer Review Feedback *', 'width' => 34, 'type' => 'string', 'note' => 'e.g. Very confident voice and expressive acting'];
-        $cols[] = ['key' => 'act_teach_strength', 'label' => 'Teacher Observed Strengths *', 'width' => 36, 'type' => 'string', 'note' => 'e.g. Articulated scientific concepts clearly'];
-        $cols[] = ['key' => 'act_teach_barrier', 'label' => 'Teacher Observed Barriers & Next Steps *', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Needs to manage time better during group discussions'];
-
-        // Part-C Curricular Competencies (8 Subjects x 3-4 Competencies = 26 items)
-        $midCurricular = [
-            'r1_c1' => 'Lang 1 (R1): Reading Comprehension',
-            'r1_c2' => 'Lang 1 (R1): Creative Writing & Grammar',
-            'r1_c3' => 'Lang 1 (R1): Oral Expression & Vocabulary',
-            'r2_c1' => 'Lang 2 (R2): Text Reading & Comprehension',
-            'r2_c2' => 'Lang 2 (R2): Sentence Construction & Writing',
-            'r2_c3' => 'Lang 2 (R2): Listening & Conversational Fluency',
-            'r3_c1' => 'Lang 3 (R3): Basic Script & Word Recognition',
-            'r3_c2' => 'Lang 3 (R3): Elementary Writing & Dialogue',
-            'mat_c1' => 'Maths: Number Operations & Fractions',
-            'mat_c2' => 'Maths: Algebraic Equations & Patterns',
-            'mat_c3' => 'Maths: Geometry, Mensuration & Data',
-            'mat_c4' => 'Maths: Mathematical Reasoning & Problem Solving',
-            'sci_c1' => 'Science: Scientific Inquiry & Observation',
-            'sci_c2' => 'Science: Living World & Natural Phenomena',
-            'sci_c3' => 'Science: Matter, Forces & Energy Concepts',
-            'sci_c4' => 'Science: Lab Experimentation & Safe Handling',
-            'soc_c1' => 'Social Sci: Historical Timelines & Heritage',
-            'soc_c2' => 'Social Sci: Geography, Maps & Environment',
-            'soc_c3' => 'Social Sci: Democratic Institutions & Civic Duty',
-            'art_c1' => 'Art: Visual Arts Expression & Media',
-            'art_c2' => 'Art: Performing Arts & Cultural Heritage',
-            'pe_c1'  => 'PE: Physical Fitness, Agility & Stamina',
-            'pe_c2'  => 'PE: Teamwork, Fair Play & Game Rules',
-            'pe_c3'  => 'PE: Health, Nutrition & Personal Hygiene',
-            'voc_c1' => 'Vocational: Pre-vocational Skills & Tools',
-            'voc_c2' => 'Vocational: Work Ethics, Safety & Quality',
-        ];
-
-        foreach ($midCurricular as $k => $label) {
-            $cols[] = ['key' => "c_{$k}", 'label' => "{$label} *", 'width' => 26, 'type' => 'list', 'options' => $rubricOpts, 'note' => 'Beginner, Proficient, Advanced'];
-        }
-
-        // Part-D Subject Marks (8 subjects: Max & Obtained)
-        $midMarks = [
-            ['key' => 'lang1', 'name' => 'Language 1 (R1)'],
-            ['key' => 'lang2', 'name' => 'Language 2 (R2)'],
-            ['key' => 'lang3', 'name' => 'Language 3 (R3)'],
-            ['key' => 'math',  'name' => 'Mathematics'],
-            ['key' => 'sci',   'name' => 'Science'],
-            ['key' => 'soc',   'name' => 'Social Science'],
-            ['key' => 'art',   'name' => 'Art Education'],
-            ['key' => 'pe',    'name' => 'Physical Education'],
-        ];
-
-        foreach ($midMarks as $m) {
-            $k = $m['key'];
-            $n = $m['name'];
-            $cols[] = ['key' => "sub_{$k}_max", 'label' => "Max Marks - {$n} *", 'width' => 16, 'type' => 'integer', 'note' => 'Default 50'];
-            $cols[] = ['key' => "sub_{$k}_obt", 'label' => "Marks Obtained - {$n} *", 'width' => 18, 'type' => 'integer', 'note' => 'Marks scored (0 to Max)'];
-        }
-
-        // Declaration & Remarks
-        $cols[] = ['key' => 'teacher_declaration', 'label' => 'Teacher Certification *', 'width' => 22, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Declaration of authenticity'];
-        $cols[] = ['key' => 'holistic_remarks', 'label' => 'Comprehensive Holistic Remarks *', 'width' => 45, 'type' => 'string', 'note' => 'Holistic summary observation'];
-
-        return $cols;
+        return (new \App\Http\Controllers\HpcTeacherController())->getEvaluationColumns();
     }
 
     // ─────────────────────────────────────────────────────────────────────────

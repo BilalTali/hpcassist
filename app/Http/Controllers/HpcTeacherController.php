@@ -841,9 +841,9 @@ class HpcTeacherController extends Controller
                 }
             }
 
-            // Fallback: detect by grade in column F (Row 4)
+            // Fallback: detect by grade in column H (Row 4) or F (Row 4)
             if (!$detectedStage) {
-                $gSample = (string) $ws->getCell('F4')->getValue();
+                $gSample = (string) ($ws->getCell('H4')->getValue() ?: $ws->getCell('F4')->getValue());
                 if (!empty($gSample)) {
                     $detectedStage = StageTemplateService::getStageForGrade($gSample);
                 }
@@ -882,7 +882,11 @@ class HpcTeacherController extends Controller
                 foreach ($columns as $cIdx => $col) {
                     $colLetter = $this->indexToColumnLetter($cIdx);
                     $cell = $ws->getCell("{$colLetter}{$r}");
-                    $val = $cell->isFormula() ? $cell->getCalculatedValue() : $cell->getValue();
+                    try {
+                        $val = $cell->isFormula() ? $cell->getCalculatedValue() : $cell->getValue();
+                    } catch (\Throwable) {
+                        $val = $cell->getValue();
+                    }
                     $k = $col['key'];
                     if (in_array($k, ['Student_Name', 'admission_no', 'apaar_id', 'login_id', 'roll_no', 'School_Admission_No', 'APAAR_ID', 'HPC_Login_ID', 'UDID_Disability_ID'], true)) {
                         $rowValues[$k] = trim((string) $val);
@@ -962,16 +966,16 @@ class HpcTeacherController extends Controller
                     'is_completed' => $isCompleted,
                     'errors' => $rowErrors,
                     'marks' => $marks,
-                    'l1_max' => $marks['l1']['max'],
-                    'l1_obt' => $marks['l1']['obt'],
-                    'm_max' => $marks['m']['max'],
-                    'm_obt' => $marks['m']['obt'],
-                    'sci_max' => $marks['sci']['max'],
-                    'sci_obt' => $marks['sci']['obt'],
-                    'art_max' => $marks['art']['max'],
-                    'art_obt' => $marks['art']['obt'],
-                    'pe_max' => $marks['pe']['max'],
-                    'pe_obt' => $marks['pe']['obt'],
+                    'l1_max' => $marks['l1']['max'] ?? $marks['lang1']['max'] ?? 50,
+                    'l1_obt' => $marks['l1']['obt'] ?? $marks['lang1']['obt'] ?? 42,
+                    'm_max' => $marks['m']['max'] ?? $marks['math']['max'] ?? 50,
+                    'm_obt' => $marks['m']['obt'] ?? $marks['math']['obt'] ?? 44,
+                    'sci_max' => $marks['sci']['max'] ?? $marks['evs']['max'] ?? $marks['twc']['max'] ?? 50,
+                    'sci_obt' => $marks['sci']['obt'] ?? $marks['evs']['obt'] ?? $marks['twc']['obt'] ?? 43,
+                    'art_max' => $marks['art']['max'] ?? 50,
+                    'art_obt' => $marks['art']['obt'] ?? 46,
+                    'pe_max' => $marks['pe']['max'] ?? 50,
+                    'pe_obt' => $marks['pe']['obt'] ?? 47,
                     // Activity Aliases for Extension & Preview
                     'act_subject' => $rowValues['act_subject'] ?? $rowValues['act1_subject'] ?? ($detectedStage === StageTemplateService::STAGE_PREPARATORY ? 'The World Around Us' : 'Science'),
                     'act_approach' => $rowValues['act_approach'] ?? $rowValues['act1_pedagogy'] ?? ($detectedStage === StageTemplateService::STAGE_PREPARATORY ? ($rowValues['evs_approach'] ?? 'Inquiry-Based') : 'Art-Integrated'),

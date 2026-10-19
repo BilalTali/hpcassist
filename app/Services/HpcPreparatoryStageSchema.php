@@ -463,14 +463,31 @@ class HpcPreparatoryStageSchema
         }
 
         // Marks map
+        $l1Max = $row['L1_Max_Marks_SA'] ?? 50;
+        $l1Obt = $row['L1_Marks_Obtained_SA'] ?? 43;
+        $l2Max = $row['L2_Max_Marks_SA'] ?? 50;
+        $l2Obt = $row['L2_Marks_Obtained_SA'] ?? 41;
+        $mathMax = $row['Math_Max_Marks_SA'] ?? 50;
+        $mathObt = $row['Math_Marks_Obtained_SA'] ?? 45;
+        $evsMax = $row['TWC_Max_Marks_SA'] ?? 50;
+        $evsObt = $row['TWC_Marks_Obtained_SA'] ?? 44;
+        $artMax = $row['Art_Max_Marks_SA'] ?? 50;
+        $artObt = $row['Art_Marks_Obtained_SA'] ?? 46;
+        $peMax  = $row['PE_Max_Marks_SA'] ?? 50;
+        $peObt  = $row['PE_Marks_Obtained_SA'] ?? 47;
+
         $normalized['marks'] = [
-            'lang1' => ['max' => $row['L1_Max_Marks_SA'] ?? 50, 'obt' => $row['L1_Marks_Obtained_SA'] ?? 43],
-            'lang2' => ['max' => $row['L2_Max_Marks_SA'] ?? 50, 'obt' => $row['L2_Marks_Obtained_SA'] ?? 41],
-            'math'  => ['max' => $row['Math_Max_Marks_SA'] ?? 50, 'obt' => $row['Math_Marks_Obtained_SA'] ?? 45],
-            'evs'   => ['max' => $row['TWC_Max_Marks_SA'] ?? 50, 'obt' => $row['TWC_Marks_Obtained_SA'] ?? 44],
-            'twc'   => ['max' => $row['TWC_Max_Marks_SA'] ?? 50, 'obt' => $row['TWC_Marks_Obtained_SA'] ?? 44],
-            'art'   => ['max' => $row['Art_Max_Marks_SA'] ?? 50, 'obt' => $row['Art_Marks_Obtained_SA'] ?? 46],
-            'pe'    => ['max' => $row['PE_Max_Marks_SA'] ?? 50, 'obt' => $row['PE_Marks_Obtained_SA'] ?? 47],
+            'lang1' => ['max' => $l1Max, 'obt' => $l1Obt],
+            'l1'    => ['max' => $l1Max, 'obt' => $l1Obt],
+            'lang2' => ['max' => $l2Max, 'obt' => $l2Obt],
+            'l2'    => ['max' => $l2Max, 'obt' => $l2Obt],
+            'math'  => ['max' => $mathMax, 'obt' => $mathObt],
+            'm'     => ['max' => $mathMax, 'obt' => $mathObt],
+            'evs'   => ['max' => $evsMax, 'obt' => $evsObt],
+            'twc'   => ['max' => $evsMax, 'obt' => $evsObt],
+            'sci'   => ['max' => $evsMax, 'obt' => $evsObt],
+            'art'   => ['max' => $artMax, 'obt' => $artObt],
+            'pe'    => ['max' => $peMax, 'obt' => $peObt],
         ];
 
         // Part A2 aliases

@@ -125,4 +125,51 @@ class HpcTeacherAssessmentStageTest extends TestCase
         $this->assertEquals('FU', $prepSs->getSheetByName('Manual Entry (Blank)')->getHighestColumn());
         $this->assertEquals('FU', $prepSs->getSheetByName('Pre-Filled (Auto-Fill)')->getHighestColumn());
     }
+
+    public function test_upload_preparatory_and_middle_stage_excel_does_not_throw_undefined_array_key(): void
+    {
+        $user = User::create([
+            'name' => 'Teacher User',
+            'email' => 'teacher_test@example.com',
+            'password' => bcrypt('password'),
+        ]);
+
+        $school = School::create([
+            'user_id' => $user->id,
+            'name' => 'Govt Middle School Test',
+            'udise_code' => '01041800999',
+            'principal_name' => 'Principal Test',
+            'phone' => '9419000111',
+            'district' => 'Pulwama',
+            'state' => 'Jammu & Kashmir',
+            'is_active' => true,
+        ]);
+
+        $service = app(StageTemplateService::class);
+        $students = [
+            ['name' => 'Maryam Jan', 'login_id' => 'PREP001', 'admission_no' => 'ADM-201', 'apaar_id' => '998877665545'],
+        ];
+
+        // Save prep spreadsheet
+        $prepSs = $service->buildSpreadsheet('preparatory-stage', $students);
+        $tmpPrep = tempnam(sys_get_temp_dir(), 'prep_') . '.xlsx';
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($prepSs);
+        $writer->save($tmpPrep);
+
+        $uploadedFile = new \Illuminate\Http\UploadedFile($tmpPrep, 'prep.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+
+        $response = $this->actingAs($user)->postJson(route('hpc.teacher.upload'), [
+            'file' => $uploadedFile,
+            'stage' => 'preparatory-stage',
+        ]);
+
+        @unlink($tmpPrep);
+
+        $response->assertOk();
+        $data = $response->json();
+        $this->assertTrue($data['ok']);
+        $this->assertGreaterThanOrEqual(1, $data['total']);
+        $this->assertEquals('Maryam Jan', $data['preview'][0]['name']);
+        $this->assertEquals('PREP001', $data['preview'][0]['login_id']);
+    }
 }

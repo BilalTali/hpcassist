@@ -1983,7 +1983,7 @@
         }
 
         const student = studentsQueue[currentIndex];
-        const stName = student.name || `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'Student';
+        const stName = student.Student_Name || student.name || `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'Student';
         logStatus(`[${currentIndex + 1}/${studentsQueue.length}] Filling ${stName}...`);
 
         // Wait up to 5 seconds for form fields to be visible
@@ -2003,8 +2003,9 @@
 
         try {
             // 1. First Name & Last Name
-            const firstName = student.first_name || student.name?.split(' ')?.[0] || 'Student';
-            const lastName  = student.last_name || (student.name?.split(' ')?.slice(1)?.join(' ')) || '';
+            const resolvedFullName = student.Student_Name || student.name || '';
+            const firstName = student.first_name || resolvedFullName.split(' ')?.[0] || 'Student';
+            const lastName  = student.last_name || (resolvedFullName.split(' ')?.slice(1)?.join(' ')) || '';
 
             if (fields.firstName) {
                 setNativeValue(fields.firstName, firstName);
@@ -2016,8 +2017,8 @@
             }
 
             // 2. Date of Birth
-            if (fields.dob && student.dob) {
-                await fillDob(fields.dob, student.dob);
+            if (fields.dob && (student.dob || student.Date_of_Birth)) {
+                await fillDob(fields.dob, student.Date_of_Birth || student.dob);
                 await sleep(200);
             }
 
@@ -2036,19 +2037,22 @@
             await fillAdmissionNumber(student, fields);
 
             // 6. Grade Dropdown
-            const gradeCandidates = getGradeCandidates(student.grade);
-            logStatus(`Setting Grade: ${student.grade || 'Grade 1'}...`);
-            await selectDropdownOption('grade', 1, student.grade || 'Grade 1', gradeCandidates);
+            const gradeVal = student.Grade || student.grade || 'Grade 1';
+            const gradeCandidates = getGradeCandidates(gradeVal);
+            logStatus(`Setting Grade: ${gradeVal}...`);
+            await selectDropdownOption('grade', 1, gradeVal, gradeCandidates);
             await sleep(600); // Allow section options to update in React state
 
             // 7. Section Dropdown
-            const secCandidates = getSectionCandidates(student.section);
-            logStatus(`Setting Section: ${student.section || 'A'}...`);
-            await selectDropdownOption('section', 2, student.section || 'A', secCandidates);
+            const secVal = student.Section || student.section || 'A';
+            const secCandidates = getSectionCandidates(secVal);
+            logStatus(`Setting Section: ${secVal}...`);
+            await selectDropdownOption('section', 2, secVal, secCandidates);
             await sleep(250);
 
             // 8. APAAR ID (12 character boxes)
-            await fillApaarId(student.apaar_id);
+            const resolvedApaar = student.APAAR_ID || student.apaar_id || student.aadhaar || '';
+            await fillApaarId(resolvedApaar);
             await sleep(200);
 
             // 8b. Re-verify School Admission Number in case dropdown re-renders wiped it

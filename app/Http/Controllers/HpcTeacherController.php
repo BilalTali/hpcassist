@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\SchoolWorkingDay;
 use App\Models\SchoolMaxMark;
 use App\Services\StageTemplateService;
+use App\Services\HpcMiddleStageSchema;
+use App\Services\HpcPreparatoryStageSchema;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -852,12 +854,19 @@ class HpcTeacherController extends Controller
             $columns = $stageService->getStageColumns($detectedStage);
 
             $portalStudents = [];
+            $portalStudentsByName = [];
             $tStudentsFile = $dir . '/teacher_students.json';
             if (file_exists($tStudentsFile)) {
                 $tsData = json_decode(file_get_contents($tStudentsFile), true) ?: [];
                 foreach ($tsData as $tSt) {
                     if (!empty($tSt['login_id'])) {
-                        $portalStudents[$tSt['login_id']] = $tSt['status'] ?? '';
+                        $portalStudents[$tSt['login_id']] = $tSt;
+                    }
+                    if (!empty($tSt['name'])) {
+                        $clean = strtolower(preg_replace('/[^a-z0-9]/i', '', $tSt['name']));
+                        if (!empty($clean)) {
+                            $portalStudentsByName[$clean] = $tSt;
+                        }
                     }
                 }
             }
@@ -870,26 +879,54 @@ class HpcTeacherController extends Controller
                     $colLetter = $this->indexToColumnLetter($cIdx);
                     $cell = $ws->getCell("{$colLetter}{$r}");
                     $val = $cell->isFormula() ? $cell->getCalculatedValue() : $cell->getValue();
-                    if (in_array($col['key'], ['admission_no', 'apaar_id', 'login_id', 'roll_no'], true)) {
-                        $rowValues[$col['key']] = trim((string) $val);
+                    $k = $col['key'];
+                    if (in_array($k, ['admission_no', 'apaar_id', 'login_id', 'roll_no', 'School_Admission_No', 'APAAR_ID', 'HPC_Login_ID', 'UDID_Disability_ID'], true)) {
+                        $rowValues[$k] = trim((string) $val);
                     } else {
-                        $rowValues[$col['key']] = is_string($val) ? trim($val) : $val;
+                        $rowValues[$k] = is_string($val) ? trim($val) : $val;
                     }
                 }
 
-                $name = (string) ($rowValues['name'] ?? '');
-                $loginId = (string) ($rowValues['login_id'] ?? '');
-                $status = (string) ($rowValues['status'] ?? '');
+                $loginId = (string) ($rowValues['login_id'] ?? $rowValues['HPC_Login_ID'] ?? '');
+                $apaarId = (string) ($rowValues['apaar_id'] ?? $rowValues['APAAR_ID'] ?? '');
+                $name    = (string) ($rowValues['name'] ?? $rowValues['AboutMe_Student_Name_Tag'] ?? $rowValues['Student_Name'] ?? '');
+                $status  = (string) ($rowValues['status'] ?? '');
+
+                // Match against portal student roster
+                $matchedPortal = null;
+                if (!empty($loginId) && isset($portalStudents[$loginId])) {
+                    $matchedPortal = $portalStudents[$loginId];
+                } elseif (!empty($name)) {
+                    $cleanName = strtolower(preg_replace('/[^a-z0-9]/i', '', $name));
+                    if (!empty($cleanName) && isset($portalStudentsByName[$cleanName])) {
+                        $matchedPortal = $portalStudentsByName[$cleanName];
+                    }
+                }
+
+                if ($matchedPortal) {
+                    if (empty($name) && !empty($matchedPortal['name'])) {
+                        $name = $matchedPortal['name'];
+                    }
+                    if (empty($loginId) && !empty($matchedPortal['login_id'])) {
+                        $loginId = $matchedPortal['login_id'];
+                    }
+                    if (empty($apaarId) && !empty($matchedPortal['apaar_id'])) {
+                        $apaarId = $matchedPortal['apaar_id'];
+                    }
+                    if (!empty($matchedPortal['status'])) {
+                        $status = $matchedPortal['status'];
+                    }
+                }
 
                 if ($name === '' && $loginId === '')
                     continue;
                 if (str_contains($loginId, 'Login ID') || str_contains($name, 'Student Name'))
                     continue;
 
-                if (!empty($loginId) && isset($portalStudents[$loginId]) && !empty($portalStudents[$loginId])) {
-                    $status = $portalStudents[$loginId];
-                    $rowValues['status'] = $status;
-                }
+                $rowValues['name']     = $name;
+                $rowValues['login_id'] = $loginId;
+                $rowValues['apaar_id'] = $apaarId;
+                $rowValues['status']   = $status;
 
                 $isDemo = ($loginId === 'DEMO_SAMPLE' || stripos($name, 'SAMPLE') !== false || stripos($name, 'DEMO') !== false);
                 if ($isDemo) {
@@ -905,36 +942,12 @@ class HpcTeacherController extends Controller
                         $rowErrors[] = 'HPC Login ID missing';
                 }
 
-                // Normalise marks across stages
-                $marks = [];
-                if ($detectedStage === StageTemplateService::STAGE_PREPARATORY) {
-                    $marks = [
-                        'lang1' => ['max' => (string) ($rowValues['sub_lang1_max'] ?: 50), 'obt' => (string) ($rowValues['sub_lang1_obt'] ?: 42)],
-                        'lang2' => ['max' => (string) ($rowValues['sub_lang2_max'] ?: 50), 'obt' => (string) ($rowValues['sub_lang2_obt'] ?: 40)],
-                        'math' => ['max' => (string) ($rowValues['sub_math_max'] ?: 50), 'obt' => (string) ($rowValues['sub_math_obt'] ?: 44)],
-                        'evs' => ['max' => (string) ($rowValues['sub_evs_max'] ?: 50), 'obt' => (string) ($rowValues['sub_evs_obt'] ?: 43)],
-                        'art' => ['max' => (string) ($rowValues['sub_art_max'] ?: 50), 'obt' => (string) ($rowValues['sub_art_obt'] ?: 46)],
-                        'pe' => ['max' => (string) ($rowValues['sub_pe_max'] ?: 50), 'obt' => (string) ($rowValues['sub_pe_obt'] ?: 47)],
-                        'work' => ['max' => (string) ($rowValues['sub_work_max'] ?: 50), 'obt' => (string) ($rowValues['sub_work_obt'] ?: 45)],
-                        'l1' => ['max' => (string) ($rowValues['sub_lang1_max'] ?: 50), 'obt' => (string) ($rowValues['sub_lang1_obt'] ?: 42)],
-                        'l2' => ['max' => (string) ($rowValues['sub_lang2_max'] ?: 50), 'obt' => (string) ($rowValues['sub_lang2_obt'] ?: 40)],
-                        'l3' => ['max' => '50', 'obt' => '40'],
-                        'm' => ['max' => (string) ($rowValues['sub_math_max'] ?: 50), 'obt' => (string) ($rowValues['sub_math_obt'] ?: 44)],
-                        'sci' => ['max' => (string) ($rowValues['sub_evs_max'] ?: 50), 'obt' => (string) ($rowValues['sub_evs_obt'] ?: 43)],
-                        'soc' => ['max' => (string) ($rowValues['sub_evs_max'] ?: 50), 'obt' => (string) ($rowValues['sub_evs_obt'] ?: 42)],
-                    ];
-                } else {
-                    $marks = [
-                        'l1' => ['max' => (string) ($rowValues['l1_max'] ?: ($defaultMax['l1'] ?? 50)), 'obt' => (string) ($rowValues['l1_obt'] ?: 42)],
-                        'l2' => ['max' => (string) ($rowValues['l2_max'] ?: ($defaultMax['l2'] ?? 50)), 'obt' => (string) ($rowValues['l2_obt'] ?: 40)],
-                        'l3' => ['max' => (string) ($rowValues['l3_max'] ?: ($defaultMax['l3'] ?? 50)), 'obt' => (string) ($rowValues['l3_obt'] ?: 41)],
-                        'm' => ['max' => (string) ($rowValues['m_max'] ?: ($defaultMax['m'] ?? 50)), 'obt' => (string) ($rowValues['m_obt'] ?: 44)],
-                        'sci' => ['max' => (string) ($rowValues['sci_max'] ?: ($defaultMax['sci'] ?? 50)), 'obt' => (string) ($rowValues['sci_obt'] ?: 43)],
-                        'soc' => ['max' => (string) ($rowValues['soc_max'] ?: ($defaultMax['soc'] ?? 50)), 'obt' => (string) ($rowValues['soc_obt'] ?: 42)],
-                        'art' => ['max' => (string) ($rowValues['art_max'] ?: ($defaultMax['art'] ?? 50)), 'obt' => (string) ($rowValues['art_obt'] ?: 46)],
-                        'pe' => ['max' => (string) ($rowValues['pe_max'] ?: ($defaultMax['pe'] ?? 50)), 'obt' => (string) ($rowValues['pe_obt'] ?: 47)],
-                    ];
-                }
+                // Apply schema normalizer for detected stage
+                $normalized = ($detectedStage === StageTemplateService::STAGE_PREPARATORY)
+                    ? HpcPreparatoryStageSchema::normalizeStudentRow($rowValues)
+                    : HpcMiddleStageSchema::normalizeStudentRow($rowValues);
+
+                $marks = $normalized['marks'] ?? [];
 
                 $rowItem = array_merge($rowValues, [
                     'row' => $r,
@@ -1749,203 +1762,12 @@ class HpcTeacherController extends Controller
 
     public function getEvaluationSections(): array
     {
-        return [
-            ['title' => '🔒 Part 1: Student Identity (Locked)', 'start' => 0, 'end' => 3, 'bg' => 'FF0F172A'],
-            ['title' => '👤 Part 2: Part-A1 Basic Profile', 'start' => 4, 'end' => 11, 'bg' => 'FF1E40AF'],
-            ['title' => '📅 Part 3: Monthly Attendance (Apr–Mar)', 'start' => 12, 'end' => 35, 'bg' => 'FF0369A1'],
-            ['title' => '📈 Part 4: Attendance Summary (Auto)', 'start' => 36, 'end' => 38, 'bg' => 'FF0D9488'],
-            ['title' => '🌟 Part 5: Absence & Hobby', 'start' => 39, 'end' => 41, 'bg' => 'FF4338CA'],
-            ['title' => '🌱 Part 6: Part-A2 All About Me & Goals', 'start' => 42, 'end' => 67, 'bg' => 'FF6D28D9'],
-            ['title' => '🚀 Part 7: Part-A3 My Ambition Card', 'start' => 68, 'end' => 77, 'bg' => 'FF7C3AED'],
-            ['title' => '🏡 Part 8: Part-A4 Home Resources', 'start' => 78, 'end' => 87, 'bg' => 'FFBE185D'],
-            ['title' => '😊 Part 9: Part-A4 Motivation & Progress', 'start' => 88, 'end' => 91, 'bg' => 'FF9D174D'],
-            ['title' => '🤝 Part 10: Part-A4 School Support Needed', 'start' => 92, 'end' => 102, 'bg' => 'FFB91C1C'],
-            ['title' => '📝 Part 11: Parent Home Support Plan', 'start' => 103, 'end' => 103, 'bg' => 'FFC2410C'],
-            ['title' => '🎨 Part 12: Part-B Holistic Activity Profile', 'start' => 104, 'end' => 126, 'bg' => 'FFD97706'],
-            ['title' => '📊 Part 13: Part-C Curricular Progress Levels', 'start' => 127, 'end' => 128, 'bg' => 'FF059669'],
-            ['title' => '🎯 Part 14: HPC Credit Subject Marks (8 Subj)', 'start' => 129, 'end' => 144, 'bg' => 'FF047857'],
-            ['title' => '✍️ Part 15: Final Declaration & Remarks', 'start' => 145, 'end' => 146, 'bg' => 'FF334155'],
-        ];
+        return HpcMiddleStageSchema::getSections();
     }
 
     public function getEvaluationColumns(): array
     {
-        return [
-            // ── Student Metadata (Locked) ─────────────────────────────────────────────
-            ['key' => 'apaar_id', 'label' => 'APAAR ID (Locked)', 'width' => 20, 'type' => 'locked', 'note' => 'Official APAAR ID if assigned'],
-            ['key' => 'login_id', 'label' => 'HPC Login ID (Locked) *', 'width' => 22, 'type' => 'locked', 'note' => 'Unique student ID on portal'],
-            ['key' => 'name', 'label' => 'Student Name (Locked) *', 'width' => 26, 'type' => 'locked', 'note' => 'Locked name from portal'],
-            ['key' => 'status', 'label' => 'Status (Locked)', 'width' => 18, 'type' => 'locked', 'note' => 'HPC Completed (skipped) / Pending'],
-
-            // ── Part-A(1) Student Profile & Attendance ─────────────────────────────────
-            ['key' => 'admission_no', 'label' => 'School Admission Number *', 'width' => 22, 'type' => 'string', 'note' => 'Official school admission / roll no.'],
-            ['key' => 'grade', 'label' => 'Class / Grade *', 'width' => 16, 'type' => 'list', 'options' => '"Grade 6,Grade 7,Grade 8"', 'note' => 'Select grade'],
-            ['key' => 'section', 'label' => 'Section', 'width' => 12, 'type' => 'list', 'options' => '"A,B,C,D,E"', 'note' => 'Select section'],
-            ['key' => 'location', 'label' => 'Area / Location', 'width' => 14, 'type' => 'list', 'options' => '"Rural,Urban"', 'note' => 'Rural or Urban'],
-            ['key' => 'medium_of_instruction', 'label' => 'Medium of Instruction *', 'width' => 22, 'type' => 'list', 'options' => '"English,Urdu,Hindi,Kashmiri,Dogri,Other"', 'note' => 'Instructional medium'],
-            ['key' => 'mother_tongue', 'label' => 'Mother Tongue *', 'width' => 18, 'type' => 'list', 'options' => '"Kashmiri,Urdu,Hindi,English,Dogri,Punjabi,Other"', 'note' => 'Student mother tongue'],
-            ['key' => 'relation', 'label' => 'Parent Relation *', 'width' => 22, 'type' => 'list', 'options' => '"Father,Mother,Guardian (Other than Parents)"', 'note' => 'Select relation'],
-            ['key' => 'parent_name', 'label' => 'Parent / Guardian Name *', 'width' => 24, 'type' => 'string', 'note' => 'Full parent / guardian name'],
-            // Monthly Attendance Neck-to-Neck (Working Days / Present Days per Month: Apr to Mar)
-            ['key' => 'work_apr', 'label' => 'Working Days - Apr *', 'width' => 16, 'type' => 'integer', 'note' => 'April working days (e.g. 20)'],
-            ['key' => 'pres_apr', 'label' => 'Present Days - Apr *', 'width' => 16, 'type' => 'integer', 'note' => 'April present days (e.g. 19)'],
-            ['key' => 'work_may', 'label' => 'Working Days - May *', 'width' => 16, 'type' => 'integer', 'note' => 'May working days (e.g. 22)'],
-            ['key' => 'pres_may', 'label' => 'Present Days - May *', 'width' => 16, 'type' => 'integer', 'note' => 'May present days (e.g. 21)'],
-            ['key' => 'work_jun', 'label' => 'Working Days - Jun *', 'width' => 16, 'type' => 'integer', 'note' => 'June working days (e.g. 10)'],
-            ['key' => 'pres_jun', 'label' => 'Present Days - Jun *', 'width' => 16, 'type' => 'integer', 'note' => 'June present days (e.g. 10)'],
-            ['key' => 'work_jul', 'label' => 'Working Days - Jul *', 'width' => 16, 'type' => 'integer', 'note' => 'July working days (e.g. 20)'],
-            ['key' => 'pres_jul', 'label' => 'Present Days - Jul *', 'width' => 16, 'type' => 'integer', 'note' => 'July present days (e.g. 18)'],
-            ['key' => 'work_aug', 'label' => 'Working Days - Aug *', 'width' => 16, 'type' => 'integer', 'note' => 'August working days (e.g. 22)'],
-            ['key' => 'pres_aug', 'label' => 'Present Days - Aug *', 'width' => 16, 'type' => 'integer', 'note' => 'August present days (e.g. 20)'],
-            ['key' => 'work_sep', 'label' => 'Working Days - Sep *', 'width' => 16, 'type' => 'integer', 'note' => 'September working days (e.g. 21)'],
-            ['key' => 'pres_sep', 'label' => 'Present Days - Sep *', 'width' => 16, 'type' => 'integer', 'note' => 'September present days (e.g. 20)'],
-            ['key' => 'work_oct', 'label' => 'Working Days - Oct *', 'width' => 16, 'type' => 'integer', 'note' => 'October working days (e.g. 19)'],
-            ['key' => 'pres_oct', 'label' => 'Present Days - Oct *', 'width' => 16, 'type' => 'integer', 'note' => 'October present days (e.g. 18)'],
-            ['key' => 'work_nov', 'label' => 'Working Days - Nov *', 'width' => 16, 'type' => 'integer', 'note' => 'November working days (e.g. 20)'],
-            ['key' => 'pres_nov', 'label' => 'Present Days - Nov *', 'width' => 16, 'type' => 'integer', 'note' => 'November present days (e.g. 17)'],
-            ['key' => 'work_dec', 'label' => 'Working Days - Dec *', 'width' => 16, 'type' => 'integer', 'note' => 'December working days (e.g. 15)'],
-            ['key' => 'pres_dec', 'label' => 'Present Days - Dec *', 'width' => 16, 'type' => 'integer', 'note' => 'December present days (e.g. 14)'],
-            ['key' => 'work_jan', 'label' => 'Working Days - Jan *', 'width' => 16, 'type' => 'integer', 'note' => 'January working days (e.g. 15)'],
-            ['key' => 'pres_jan', 'label' => 'Present Days - Jan *', 'width' => 16, 'type' => 'integer', 'note' => 'January present days (e.g. 13)'],
-            ['key' => 'work_feb', 'label' => 'Working Days - Feb *', 'width' => 16, 'type' => 'integer', 'note' => 'February working days (e.g. 20)'],
-            ['key' => 'pres_feb', 'label' => 'Present Days - Feb *', 'width' => 16, 'type' => 'integer', 'note' => 'February present days (e.g. 19)'],
-            ['key' => 'work_mar', 'label' => 'Working Days - Mar *', 'width' => 16, 'type' => 'integer', 'note' => 'March working days (e.g. 18)'],
-            ['key' => 'pres_mar', 'label' => 'Present Days - Mar *', 'width' => 16, 'type' => 'integer', 'note' => 'March present days (e.g. 17)'],
-            ['key' => 'total_work', 'label' => 'Total Working Days (Auto)', 'width' => 20, 'type' => 'calc', 'note' => 'Auto-calculated sum: =SUM(M,O,Q,S,U,W,Y,AA,AC,AE,AG,AI)'],
-            ['key' => 'total_pres', 'label' => 'Total Present Days (Auto)', 'width' => 20, 'type' => 'calc', 'note' => 'Auto-calculated sum: =SUM(N,P,R,T,V,X,Z,AB,AD,AF,AH,AJ)'],
-
-            // Attendance % & Absence
-            ['key' => 'attendance_pct', 'label' => 'Attendance % (Auto)', 'width' => 18, 'type' => 'calc', 'note' => 'Auto %: =IF(AK>0, ROUND((AL/AK)*100, 1) & "%", "")'],
-            ['key' => 'absent_count', 'label' => 'Absent Times Count', 'width' => 18, 'type' => 'integer', 'note' => 'Total times remained absent (e.g. 16)'],
-            ['key' => 'absence_reason', 'label' => 'Reason for Absence (A1)', 'width' => 26, 'type' => 'string', 'note' => 'e.g. Brief seasonal viral illness'],
-            ['key' => 'interest', 'label' => 'Primary Interest / Hobby (A1) *', 'width' => 32, 'type' => 'list', 'options' => '"Reading,Dancing or Singing or Playing a musical instrument,Creative Writing,Gardening,Yoga,Art,Craft,Sports or Games,Cooking,Participation at home"', 'note' => 'Student hobby from Doc 29'],
-
-            // ── Part-A(2) All About Me & Goal Setting ──────────────────────────────────
-            ['key' => 'live_with', 'label' => 'I live with my (A2)', 'width' => 24, 'type' => 'string', 'note' => 'e.g. Family / Parents and Grandparents'],
-            ['key' => 'stay_at', 'label' => 'We stay at (A2)', 'width' => 22, 'type' => 'string', 'note' => 'e.g. Sugin, Budgam'],
-            ['key' => 'free_time', 'label' => 'I spend my free time doing (A2)', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Reading books and drawing'],
-            ['key' => 'do_well', 'label' => 'I ... very well (A2)', 'width' => 30, 'type' => 'string', 'note' => 'I [things I do] very well, e.g. Learning new skills and actively participating'],
-            ['key' => 'responsible', 'label' => 'I am responsible (A2) *', 'width' => 24, 'type' => 'list', 'options' => '"all the time,most times,sometimes"', 'note' => 'Select: all the time, most times, sometimes'],
-            ['key' => 'do_better', 'label' => 'I could do better specially when it comes to (A2)', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Time management in exams'],
-            ['key' => 'care_others', 'label' => 'I care about others. I show it by (A2)', 'width' => 34, 'type' => 'string', 'note' => 'e.g. Helping peers with notes'],
-            ['key' => 'feel_proud', 'label' => 'I feel proud of myself when (A2)', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Solving challenging problems independently'],
-            ['key' => 'friend_name', 'label' => 'My Friend: Name (A2)', 'width' => 22, 'type' => 'string', 'note' => 'e.g. Ayaan Ahmad'],
-            ['key' => 'friend_age', 'label' => 'My Friend: Age (A2)', 'width' => 18, 'type' => 'integer', 'note' => 'e.g. 12'],
-            ['key' => 'acad_goal', 'label' => 'My Academic Goal (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Score above 90% in Mathematics and Science'],
-            ['key' => 'acad_goal_why', 'label' => 'Academic: This goal is important to me because (A2) *', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Builds solid foundation for pursuing higher studies in Engineering'],
-            ['key' => 'acad_step1', 'label' => 'Academic: Step 1 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Dedicate 45 minutes daily to numerical problem solving'],
-            ['key' => 'acad_step2', 'label' => 'Academic: Step 2 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Clarify doubts with subject teachers immediately'],
-            ['key' => 'pers_goal', 'label' => 'My Personal Goal (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Develop regular physical exercise and disciplined reading routine'],
-            ['key' => 'pers_goal_why', 'label' => 'Personal: This goal is important to me because (A2) *', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Keeps mind alert, improves stamina, and enhances daily concentration'],
-            ['key' => 'pers_step1', 'label' => 'Personal: Step 1 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Wake up at 6:00 AM every morning and do yoga'],
-            ['key' => 'pers_step2', 'label' => 'Personal: Step 2 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Read at least 15 pages of books before bedtime'],
-            ['key' => 'sch_learn1', 'label' => 'Learnt at school: 1 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Laws of reflection and refraction in science laboratory'],
-            ['key' => 'sch_learn2', 'label' => 'Learnt at school: 2 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Formulating and solving linear equations in single variable'],
-            ['key' => 'sch_learn3', 'label' => 'Learnt at school: 3 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Constitutional preamble and fundamental rights in Social Science'],
-            ['key' => 'out_learn1', 'label' => 'Learnt outside school: 1 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Organic kitchen gardening, composting, and soil preparation'],
-            ['key' => 'out_learn2', 'label' => 'Learnt outside school: 2 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Bicycle maintenance, tire inflation, and chain lubrication'],
-            ['key' => 'out_learn3', 'label' => 'Learnt outside school: 3 (A2)', 'width' => 28, 'type' => 'string', 'note' => 'e.g. Basic household budgeting and grocery calculation'],
-            ['key' => 'help_with', 'label' => 'I would like my teacher to help me with (A2)', 'width' => 36, 'type' => 'string', 'note' => 'e.g. Hands-on science experiments and advanced mathematical puzzles'],
-            ['key' => 'teacher_know', 'label' => 'I would like my teacher to know (A2)', 'width' => 36, 'type' => 'string', 'note' => 'e.g. I am enthusiastic about collaborative group projects and active discussions'],
-
-            // ── Part-A(3) My Ambition Card ─────────────────────────────────────────────
-            ['key' => 'ambition', 'label' => 'My ambition is (A3) *', 'width' => 26, 'type' => 'string', 'note' => 'e.g. Doctor / Astrophysicist / Software Engineer'],
-            ['key' => 'achieve_how', 'label' => 'I will achieve my ambition by (A3) *', 'width' => 36, 'type' => 'string', 'note' => 'e.g. Conceptual understanding and daily practice in Maths & Science'],
-            ['key' => 'skills_needed', 'label' => '5 skills I need to achieve my ambition (A3) *', 'width' => 36, 'type' => 'string', 'note' => 'e.g. Critical Thinking, Problem Solving, Communication, Coding, Curiosity'],
-            ['key' => 'focus_subjects', 'label' => 'Subjects I need to focus on (A3) *', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Mathematics, Science, English, Computing'],
-            ['key' => 'habits_i_will', 'label' => 'To achieve my ambition, I need my habits to be... I will... (A3) *', 'width' => 44, 'type' => 'string', 'note' => 'e.g. Disciplined daily study, 30 min morning exercise, and curious questioning'],
-            ['key' => 'mentor', 'label' => 'I will take guidance from ... to achieve my ambition (A3) *', 'width' => 36, 'type' => 'string', 'note' => 'e.g. Bilal Ahmad Tali (Teacher Mentor)'],
-            ['key' => 'mentor_help', 'label' => 'I think this person will help me by (A3) *', 'width' => 36, 'type' => 'string', 'note' => 'e.g. Clarifying complex topics, recommending Olympiad books & guiding projects'],
-            ['key' => 'learn_new', 'label' => 'I will learn new (A3) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Scientific techniques, coding algorithms & laboratory experiments'],
-            ['key' => 'feel_when_achieve', 'label' => 'I will feel ... when I achieve my ambition (A3) *', 'width' => 34, 'type' => 'string', 'note' => 'e.g. Proud, happy, fulfilled, and motivated to contribute to society'],
-            ['key' => 'parents_feel', 'label' => 'My parents will feel ... when I achieve my ambition (A3) *', 'width' => 36, 'type' => 'string', 'note' => 'e.g. Immensely joyful, honored, and proud'],
-
-            // ── Part-A(4) Parent-Teacher Partnership Card (Cols CA onwards) ───────────
-            // 1. Tick the resources available to your child at home (Checkboxes - Yes/No)
-            ['key' => 'res_books', 'label' => 'Home: Books and Magazines (A4)', 'width' => 26, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'res_news', 'label' => 'Home: Newspaper (A4)', 'width' => 22, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'res_toys', 'label' => 'Home: Toys, Games and Sports (A4)', 'width' => 26, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'res_phone', 'label' => 'Home: Phone and Computer (A4)', 'width' => 26, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'res_internet', 'label' => 'Home: Internet (A4)', 'width' => 22, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'res_radio', 'label' => 'Home: Radio (A4)', 'width' => 20, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'res_broadcast', 'label' => 'Home: Broadcast (A4)', 'width' => 22, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'res_tv', 'label' => 'Home: T.V. (A4)', 'width' => 20, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'res_cwd', 'label' => 'Home: Resources for CWD (A4)', 'width' => 26, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'res_other', 'label' => 'Home: Any other (please specify) (A4)', 'width' => 32, 'type' => 'string', 'note' => 'Specify other home resources if any'],
-
-            // 2. Understanding of my Child (Radio buttons - Single select)
-            ['key' => 'p_motivated', 'label' => '1. My child seems motivated to learn (A4) *', 'width' => 38, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio smiley: Yes, Sometimes, No, Not Sure'],
-            ['key' => 'p_schedule', 'label' => '2. Follows a schedule at home for curriculum & screen time (A4) *', 'width' => 42, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio smiley: Yes, Sometimes, No, Not Sure'],
-            ['key' => 'p_curriculum_diff', 'label' => '3. Finds the grade-level curriculum difficult (A4) *', 'width' => 38, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio smiley: Yes, Sometimes, No, Not Sure'],
-            ['key' => 'p_progress', 'label' => '4. Making good progress as per the grade (A4) *', 'width' => 34, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Radio smiley: Yes, Sometimes, No, Not Sure'],
-
-            // 3. At school, my child needs support with (Checkboxes - Yes/No)
-            ['key' => 'supp_lang', 'label' => 'Support: Languages (R1, R2, R3) (A4)', 'width' => 28, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'supp_math', 'label' => 'Support: Mathematics (A4)', 'width' => 24, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'supp_sci', 'label' => 'Support: Science (A4)', 'width' => 22, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'supp_soc', 'label' => 'Support: Social Science (A4)', 'width' => 24, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'supp_self_belief', 'label' => 'Support: Building self-belief (A4)', 'width' => 28, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'supp_social_skills', 'label' => 'Support: Developing social skills (A4)', 'width' => 28, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'supp_emotions', 'label' => 'Support: Managing difficult emotions (A4)', 'width' => 28, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'supp_study_skills', 'label' => 'Support: Developing effective study skills (A4)', 'width' => 32, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'supp_skill_guidance', 'label' => 'Support: Skill Guidance / Digital Literacy (A4)', 'width' => 32, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'supp_other', 'label' => 'Support: Any Other (A4)', 'width' => 22, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Checkbox: Yes or No'],
-            ['key' => 'supp_other_specify', 'label' => 'Support: Any Other Specify (A4)', 'width' => 28, 'type' => 'string', 'note' => 'Specify details if Any Other is Yes'],
-
-            // 4. Support Plan at Home (Textarea)
-            ['key' => 'parent_feedback', 'label' => 'Based on my discussion with teacher, I will support my child at home by (A4) *', 'width' => 48, 'type' => 'string', 'note' => 'Parent home support plan (max 700 chars)'],
-
-            // ── Part-B Holistic Activities ─────────────────────────────────────────────
-            ['key' => 'act_subject', 'label' => 'Activity Subject / Domain (B) *', 'width' => 32, 'type' => 'list', 'options' => '"Science,Mathematics,Language 1 (R1),Language 2 (R2),Language 3 (R3),Social Science,Art Education,Physical Education & Well Being,Skill Education,Other Learning Activities,Bagless days for vocational Experience"', 'note' => 'Select Curricular Subject / Domain for this activity'],
-            ['key' => 'act_approach', 'label' => 'Activity Approach (B) *', 'width' => 24, 'type' => 'list', 'options' => '"Art-Integrated,Sports-Integrated,Toy-Based,Technology-Integrated,Experiential Learning,Any Other"', 'note' => 'Pedagogical approach from Doc 29'],
-            ['key' => 'act_title', 'label' => 'Activity Title (B) *', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Solar System 3D Model & Daily Life Geometry'],
-            ['key' => 'act_desc', 'label' => 'Activity Description (B)', 'width' => 34, 'type' => 'string', 'note' => 'e.g. Created scale planetary orbits and verified ratios'],
-            ['key' => 'act_rubric_awareness', 'label' => 'Rubric: Awareness (B) *', 'width' => 22, 'type' => 'list', 'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Doc 29 rubric level'],
-            ['key' => 'act_rubric_sensitivity', 'label' => 'Rubric: Sensitivity (B) *', 'width' => 22, 'type' => 'list', 'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Doc 29 rubric level'],
-            ['key' => 'act_rubric_creativity', 'label' => 'Rubric: Creativity (B) *', 'width' => 22, 'type' => 'list', 'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Doc 29 rubric level'],
-            ['key' => 'act_self_effort', 'label' => 'Self: Proud of Effort (B) *', 'width' => 22, 'type' => 'list', 'options' => '"Yes,To an extent,No,Not Sure"', 'note' => 'Doc 29 student reflection Q1'],
-            ['key' => 'act_self_apply', 'label' => 'Self: Apply To Real Life (B) *', 'width' => 22, 'type' => 'list', 'options' => '"Yes,To an extent,No,Not Sure"', 'note' => 'Doc 29 student reflection Q2'],
-            ['key' => 'act_self_motivated', 'label' => 'Self: Motivated To Learn (B) *', 'width' => 22, 'type' => 'list', 'options' => '"Yes,To an extent,No,Not Sure"', 'note' => 'Doc 29 student reflection Q3'],
-            ['key' => 'act_learnt', 'label' => 'Student Learnt (B) *', 'width' => 34, 'type' => 'string', 'note' => 'By doing this activity, I learnt (Doc 29)'],
-            ['key' => 'act_interesting', 'label' => 'Most Interesting Aspect (B) *', 'width' => 32, 'type' => 'string', 'note' => 'The most interesting thing was (Doc 29)'],
-            ['key' => 'act_practice', 'label' => 'Need Practice On (B) *', 'width' => 30, 'type' => 'string', 'note' => 'I need practice on (Doc 29)'],
-            ['key' => 'act_help', 'label' => 'Need Help With (B) *', 'width' => 30, 'type' => 'string', 'note' => 'I need help with (Doc 29)'],
-            ['key' => 'act_peer_name', 'label' => 'Peer Reviewer Name (B) *', 'width' => 22, 'type' => 'string', 'note' => 'My Peer\'s Name is (Doc 29)'],
-            ['key' => 'act_peer_engaged', 'label' => 'Peer: Engaged & Motivated (B) *', 'width' => 24, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Doc 29 Peer Q1'],
-            ['key' => 'act_peer_shared', 'label' => 'Peer: Shared Thoughts (B) *', 'width' => 24, 'type' => 'list', 'options' => '"Yes,Sometimes,No,Not Sure"', 'note' => 'Doc 29 Peer Q2'],
-            ['key' => 'act_peer_practice', 'label' => 'Peer: Needs Practice On (B)', 'width' => 30, 'type' => 'string', 'note' => 'My peer needs to practice (Doc 29)'],
-            ['key' => 'act_peer_help', 'label' => 'Peer: Needs Help With (B)', 'width' => 30, 'type' => 'string', 'note' => 'My peer needs help with (Doc 29)'],
-            ['key' => 'act_peer_feedback', 'label' => 'Peer General Remarks (B)', 'width' => 32, 'type' => 'string', 'note' => 'Peer holistic comment'],
-            ['key' => 'act_strength', 'label' => 'Teacher Strength Area (B) *', 'width' => 26, 'type' => 'list', 'options' => '"Follow Instructions,Collaboration,Independent Work,Responsible,Communication,Creative,Solution-Focused Thinking,Concentration,Empathy,Organization & Prioritization"', 'note' => 'Exact from Doc 29'],
-            ['key' => 'act_barriers', 'label' => 'Teacher Barrier(s) Area (B) *', 'width' => 26, 'type' => 'list', 'options' => '"None,Lack of Attention,Peer Pressure,Lack of Motivation,Undefined Goals,Lack of Preparation,Domestic Issues,Inappropriate behavior in classroom,Severe illness or injury"', 'note' => 'Exact from Doc 29'],
-            ['key' => 'act_support_plan', 'label' => 'Teacher Support Plan (B) *', 'width' => 34, 'type' => 'string', 'note' => 'How I can help student progress further (Doc 29)'],
-
-            // ── Part-C Year-End Curricular Assessment ───────────────────────────────────
-            ['key' => 'c_formative', 'label' => 'Formative Overall Level (C) *', 'width' => 22, 'type' => 'list', 'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Curricular formative progress'],
-            ['key' => 'c_summative', 'label' => 'Summative Overall Level (C) *', 'width' => 22, 'type' => 'list', 'options' => '"Beginner,Proficient,Advanced"', 'note' => 'Curricular summative progress'],
-
-            // ── HPC Credit (Summative Assessment Marks Grid) ───────────────────────────
-            ['key' => 'l1_max', 'label' => 'Lang 1 Max Marks *', 'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'l1_obt', 'label' => 'Lang 1 Marks Obtained *', 'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'l2_max', 'label' => 'Lang 2 Max Marks *', 'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'l2_obt', 'label' => 'Lang 2 Marks Obtained *', 'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'l3_max', 'label' => 'Lang 3 Max Marks *', 'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'l3_obt', 'label' => 'Lang 3 Marks Obtained *', 'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'm_max', 'label' => 'Maths Max Marks *', 'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'm_obt', 'label' => 'Maths Marks Obtained *', 'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'sci_max', 'label' => 'Science Max Marks *', 'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'sci_obt', 'label' => 'Science Marks Obtained *', 'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'soc_max', 'label' => 'Soc Sci Max Marks *', 'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'soc_obt', 'label' => 'Soc Sci Marks Obtained *', 'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'art_max', 'label' => 'Art Ed Max Marks *', 'width' => 18, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'art_obt', 'label' => 'Art Ed Marks Obtained *', 'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-            ['key' => 'pe_max', 'label' => 'Physical Ed Max Marks *', 'width' => 20, 'type' => 'integer', 'note' => 'Default 50'],
-            ['key' => 'pe_obt', 'label' => 'Physical Ed Marks Obt *', 'width' => 20, 'type' => 'integer', 'note' => '0 to Max Marks'],
-
-            // ── Declaration & Final Remarks ────────────────────────────────────────────
-            ['key' => 'declaration', 'label' => 'Declaration Certified *', 'width' => 22, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Confirm certified evaluation'],
-            ['key' => 'remarks', 'label' => 'Teacher Holistic Summary Remarks', 'width' => 36, 'type' => 'string', 'note' => 'Professional teacher overall appraisal'],
-        ];
+        return HpcMiddleStageSchema::getColumns();
     }
 
     public function getDemoStudentRow(): array
@@ -2124,106 +1946,7 @@ class HpcTeacherController extends Controller
     public function getStudentStarterProfile(int $sIdx, array $st, array $defaultWorkMap, array $defaultMax, int $rowNum): array
     {
         $stageService = app(StageTemplateService::class);
-        $admNo = $stageService->resolveAdmissionNumber($st, $sIdx);
-        $loginId = !empty($st['login_id']) ? (string) $st['login_id'] : '';
-        $apaarId = !empty($st['apaar_id']) ? (string) $st['apaar_id'] : '';
-
-        $stName = $st['name'] ?? 'Student ' . ($sIdx + 1);
-        $grade = !empty($st['grade']) ? $st['grade'] : 'Grade 1';
-        $section = !empty($st['section']) ? $st['section'] : 'A';
-
-        $monthKeys = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
-        $monthlyPairs = [];
-
-        foreach ($monthKeys as $mKey) {
-            $w = $defaultWorkMap[$mKey] ?? 20;
-            $monthlyPairs[] = $w;  // Pre-filled official working days from school calendar
-            $monthlyPairs[] = '';  // Blank present days for teacher entry
-        }
-
-        // Assemble 147 evaluation values matching getEvaluationColumns schema
-        $row = [
-            // 0-3: Locked Metadata
-            $st['apaar_id'] ?? '',
-            $st['login_id'] ?? '',
-            $st['name'] ?? $stName,
-            $st['status'] ?? 'HPC Pending',
-
-            // 4-11: Part-A1 Profile (Admission No from HPC/DB or empty, Grade, Section pre-filled, others blank)
-            $admNo,
-            $grade,
-            $section,
-            '', // Location
-            '', // Medium of Instruction
-            '', // Mother Tongue
-            '', // Parent Relation
-            '', // Parent / Guardian Name
-        ];
-
-        // 12-35: 24 Monthly Attendance (Working days pre-filled, Present days blank)
-        foreach ($monthlyPairs as $val) {
-            $row[] = $val;
-        }
-
-        // 36-38: Attendance Totals & % Formulas
-        $row[] = "=SUM(M{$rowNum},O{$rowNum},Q{$rowNum},S{$rowNum},U{$rowNum},W{$rowNum},Y{$rowNum},AA{$rowNum},AC{$rowNum},AE{$rowNum},AG{$rowNum},AI{$rowNum})";
-        $row[] = "=SUM(N{$rowNum},P{$rowNum},R{$rowNum},T{$rowNum},V{$rowNum},X{$rowNum},Z{$rowNum},AB{$rowNum},AD{$rowNum},AF{$rowNum},AH{$rowNum},AJ{$rowNum})";
-        $row[] = "=IF(AK{$rowNum}>0, ROUND((AL{$rowNum}/AK{$rowNum})*100, 1) & \"%\", \"\")";
-
-        // 39-41: Absent count, reason, hobby (blank)
-        $row[] = '';
-        $row[] = '';
-        $row[] = '';
-
-        // 42-67: Part-A2 All About Me & Goal Setting (26 blank items)
-        for ($i = 0; $i < 26; $i++) {
-            $row[] = '';
-        }
-
-        // 68-77: Part-A3 My Ambition Card (10 blank items)
-        for ($i = 0; $i < 10; $i++) {
-            $row[] = '';
-        }
-
-        // 78-87: Part-A4 Home Resources (10 blank items)
-        for ($i = 0; $i < 10; $i++) {
-            $row[] = '';
-        }
-
-        // 88-91: Part-A4 Motivation (4 blank items)
-        for ($i = 0; $i < 4; $i++) {
-            $row[] = '';
-        }
-
-        // 92-102: Part-A4 Support Needed (11 blank items)
-        for ($i = 0; $i < 11; $i++) {
-            $row[] = '';
-        }
-
-        // 103: Part-A4 Parent Support Plan (1 blank item)
-        $row[] = '';
-
-        // 104-126: Part-B Holistic Activity (23 blank items)
-        for ($i = 0; $i < 23; $i++) {
-            $row[] = '';
-        }
-
-        // 127-128: Part-C Levels (2 blank items)
-        $row[] = '';
-        $row[] = '';
-
-        // 129-144: HPC Credit Marks (16 items: Max marks pre-filled from settings, Obtained blank)
-        $subjKeys = ['l1', 'l2', 'l3', 'm', 'sci', 'soc', 'art', 'pe'];
-        foreach ($subjKeys as $sKey) {
-            $maxM = $defaultMax[$sKey] ?? 50;
-            $row[] = $maxM; // Pre-filled default max marks
-            $row[] = '';    // Blank obtained marks ready for teacher entry
-        }
-
-        // 145-146: Declaration & Remarks (2 items)
-        $row[] = 'Yes'; // Declaration certified
-        $row[] = '';    // Remarks blank
-
-        return $row;
+        $stage = StageTemplateService::getStageForGrade($st['grade'] ?? 'Grade 6');
+        return $stageService->getStarterRowForStage($stage, $sIdx, $st, $defaultWorkMap, $defaultMax, $rowNum, ['auto_fill' => false]);
     }
 }

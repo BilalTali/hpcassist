@@ -33,6 +33,39 @@
     let isWidgetMinimized = localStorage.getItem('hpc_widget_minimized') === 'true';
     let showSchoolSelector = false;
 
+    // Manifest V3 CSP-immune fetch proxy via background service worker
+    async function extensionFetch(url, options = {}) {
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+            try {
+                const response = await new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage({
+                        action: 'HPC_FETCH',
+                        url: url,
+                        options: options
+                    }, (res) => {
+                        if (chrome.runtime.lastError) {
+                            return reject(chrome.runtime.lastError);
+                        }
+                        resolve(res);
+                    });
+                });
+
+                if (response && response.__hpc_fetch_ok !== undefined) {
+                    return {
+                        ok: response.__hpc_fetch_ok,
+                        status: response.status,
+                        statusText: response.statusText,
+                        json: async () => response.data,
+                        text: async () => (typeof response.data === 'string' ? response.data : JSON.stringify(response.data))
+                    };
+                }
+            } catch (e) {
+                // Background worker unavailable or disconnected, fallback to window.fetch
+            }
+        }
+        return window.fetch(url, options);
+    }
+
     function renderActiveSchoolCard(totalQueueCount) {
         if (!SCHOOL_ID) {
             return `
@@ -120,7 +153,7 @@
         // Remote live logging beacon to server
         if (SERVER_URL) {
             try {
-                fetch(`${SERVER_URL}/hpc/teacher/evaluations/log`, {
+                extensionFetch(`${SERVER_URL}/hpc/teacher/evaluations/log`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                     body: JSON.stringify({ message: msg, school_id: SCHOOL_ID, url: location.href })
@@ -213,7 +246,7 @@
     async function fetchSchoolsList() {
         if (!SERVER_URL) return [];
         try {
-            const res = await fetch(`${SERVER_URL}/hpc/schools/list`, {
+            const res = await extensionFetch(`${SERVER_URL}/hpc/schools/list`, {
                 headers: { 'Accept': 'application/json', 'X-HPC-Token': HPC_TOKEN }
             });
             const data = await res.json();
@@ -402,14 +435,14 @@
         try {
             // Always request explicitly for THIS school ID with timestamp cache busting
             const url = `${SERVER_URL}/hpc/students/queue?school_id=${SCHOOL_ID}&_ts=${Date.now()}`;
-            const res = await fetch(url, {
+            const res = await extensionFetch(url, {
                 headers: {
                     'Accept': 'application/json',
                     'X-HPC-Token': HPC_TOKEN,
                 }
             });
             const data = await res.json();
-            if (data.ok && Array.isArray(data.students)) {
+            if (data && data.ok && Array.isArray(data.students)) {
                 // Security verification: Server response must strictly match requested school
                 if (data.school_id && data.school_id !== SCHOOL_ID) {
                     console.error('[HPC Assist] Security Mismatch! Requested school_id:', SCHOOL_ID, 'got:', data.school_id);
@@ -443,7 +476,7 @@
     async function reportProgress(current, total, name, status, message, done = false, extra = {}) {
         if (!SERVER_URL) return;
         try {
-            await fetch(`${SERVER_URL}/hpc/run/progress`, {
+            await extensionFetch(`${SERVER_URL}/hpc/run/progress`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -466,7 +499,7 @@
         } catch(e) {}
     }
 
-    // Load Teacher Evaluation queue from localStorage or Server API (Strictly isolated by School ID)
+    // Load Teacher Evaluation queue from chrome.storage.local, localStorage or Server API
     async function loadTeacherQueue(forceServer = false) {
         if (!SCHOOL_ID) {
             teacherQueue = [];
@@ -474,6 +507,22 @@
         }
 
         if (!forceServer) {
+            // 1. Check shared extension storage (synced across origins by dashboard_bridge.js)
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                try {
+                    const storageRes = await new Promise(resolve => chrome.storage.local.get(['hpc_teacher_queue'], resolve));
+                    const stored = storageRes?.hpc_teacher_queue;
+                    if (stored && Array.isArray(stored.students) && stored.students.length > 0) {
+                        if (!stored.school_id || stored.school_id === SCHOOL_ID) {
+                            teacherQueue = stored.students;
+                            console.log('[HPC Assist] Successfully loaded', teacherQueue.length, 'students from extension storage cache.');
+                            return true;
+                        }
+                    }
+                } catch(e) {}
+            }
+
+            // 2. Check localStorage fallback
             try {
                 const raw = localStorage.getItem('hpc_teacher_queue');
                 if (raw) {
@@ -489,40 +538,50 @@
         }
 
         if (!SERVER_URL) {
-            console.warn('[HPC Assist] SERVER_URL not configured — cannot fetch teacher evaluation queue.');
             return false;
         }
 
         try {
             const url = `${SERVER_URL}/hpc/teacher/evaluations/queue?school_id=${SCHOOL_ID}&_ts=${Date.now()}`;
-            const res = await fetch(url, {
+            const res = await extensionFetch(url, {
                 headers: {
                     'Accept': 'application/json',
                     'X-HPC-Token': HPC_TOKEN,
                 }
             });
             const data = await res.json();
-            if (data.ok && Array.isArray(data.students)) {
+            if (data && data.ok && Array.isArray(data.students)) {
                 if (data.school_id && data.school_id !== SCHOOL_ID) {
                     teacherQueue = [];
                     return false;
                 }
                 teacherQueue = data.students;
-                localStorage.setItem('hpc_teacher_queue', JSON.stringify({
+                const queuePayload = {
                     school_id: SCHOOL_ID,
                     school_name: data.school_name || currentSchoolName,
                     students: data.students,
                     timestamp: Date.now()
-                }));
+                };
+                if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                    chrome.storage.local.set({ hpc_teacher_queue: queuePayload });
+                }
+                try {
+                    localStorage.setItem('hpc_teacher_queue', JSON.stringify(queuePayload));
+                } catch(e) {}
+                console.log('[HPC Assist] Successfully fetched', teacherQueue.length, 'students from server.');
                 return true;
             } else {
-                console.warn('[HPC Assist] Teacher evaluations queue returned no students or error:', data);
                 teacherQueue = [];
-                localStorage.removeItem('hpc_teacher_queue');
+                if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                    chrome.storage.local.remove(['hpc_teacher_queue']);
+                }
+                try {
+                    localStorage.removeItem('hpc_teacher_queue');
+                } catch(e) {}
                 return false;
             }
         } catch(err) {
-            console.warn('[HPC Assist] Could not fetch teacher evaluation queue from server:', err);
+            console.log('[HPC Assist] Notice: teacher evaluation queue fetch deferred or waiting for connection:', err.message || err);
             return false;
         }
     }
@@ -530,7 +589,7 @@
     async function reportTeacherProgress(current, total, name, loginId, status, message, done = false) {
         if (!SERVER_URL) return;
         try {
-            await fetch(`${SERVER_URL}/hpc/teacher/evaluations/progress`, {
+            await extensionFetch(`${SERVER_URL}/hpc/teacher/evaluations/progress`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1459,7 +1518,7 @@
         logStatus(`📤 Sending ${allStudents.length} portal students to HPC Assist...`);
 
         try {
-            const res = await fetch(`${SERVER_URL}/hpc/students/sync-from-portal`, {
+            const res = await extensionFetch(`${SERVER_URL}/hpc/students/sync-from-portal`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1635,7 +1694,7 @@
         logStatus(`📤 Syncing ${allStudents.length} students to HPC Assist...`);
 
         try {
-            const res = await fetch(targetUrl, {
+            const res = await extensionFetch(targetUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

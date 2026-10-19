@@ -66,8 +66,33 @@
                     console.log('[HPC Assist Bridge] Active school changed! Purging old cached queues.');
                     chrome.storage.local.remove(['hpc_student_queue', 'hpc_teacher_queue']);
                 }
+                syncTeacherQueue(cfg.school_id);
             });
         });
+    }
+
+    async function syncTeacherQueue(schoolId) {
+        if (!schoolId || typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) return;
+        try {
+            const res = await fetch(`/hpc/teacher/evaluations/queue?school_id=${schoolId}&_ts=${Date.now()}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.ok && Array.isArray(data.students) && data.students.length > 0) {
+                    chrome.storage.local.set({
+                        hpc_teacher_queue: {
+                            school_id: schoolId,
+                            school_name: data.school_name || '',
+                            students: data.students,
+                            timestamp: Date.now()
+                        }
+                    }, () => {
+                        console.log('[HPC Assist Bridge] Synced teacher queue (' + data.students.length + ' students) to chrome.storage.local');
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('[HPC Assist Bridge] Could not preload teacher evaluations queue:', e.message);
+        }
     }
 
     // Run extraction immediately

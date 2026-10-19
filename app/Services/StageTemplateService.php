@@ -1690,7 +1690,6 @@ class StageTemplateService
             'parent_support_specify', 'parent_support_needed' => 'Provide 30 minutes of guided reading and arithmetic practice at home',
             'live_with' => 'Parents, grandparents and sister',
             'stay_at'   => 'Sugin, Budgam',
-            'fav_food', 'fav_dish' => 'Dal Chawal and fresh seasonal fruits',
             'fav_game'  => 'Kho-Kho and Badminton',
             'free_time' => 'Reading storybooks and outdoor play',
             'do_well'   => 'Actively participating in classroom discussions',

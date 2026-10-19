@@ -37,6 +37,16 @@ class HpcTeacherController extends Controller
 
     public function dashboard(Request $request)
     {
+        // Auto-run any pending migrations on production server seamlessly
+        try {
+            if (! \Illuminate\Support\Facades\Schema::hasColumn('users', 'role') || 
+                ! \Illuminate\Support\Facades\Schema::hasColumn('students', 'udise_code')) {
+                \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('HPC Dashboard auto-migrate notice: ' . $e->getMessage());
+        }
+
         $storagePath = config('hpc.storage_path');
         $schoolsData = $this->getSchoolsData();
         $activeSchool = $this->getActiveSchool();

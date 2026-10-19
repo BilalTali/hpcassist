@@ -570,7 +570,7 @@
                                                 @if($isDemo)
                                                     <span class="text-amber-700 italic">Sample guide (skipped in run)</span>
                                                 @elseif($hasErrors)
-                                                    <span class="text-rose-600 font-semibold">{{ implode(', ', $p['errors']) }}</span>
+                                                    <span class="text-rose-600 font-semibold">{{ is_array($p['errors']) ? implode(', ', $p['errors']) : (string)$p['errors'] }}</span>
                                                 @elseif($isCompleted)
                                                     <span class="text-emerald-700 font-semibold">Completed on PARAKH portal</span>
                                                 @elseif($isUnderProcess)

@@ -163,32 +163,37 @@
     }
 
     function isLanguageOrHeaderElement(el) {
-        if (!el) return false;
-        if (el.closest('#hpc-status-widget')) return true;
-        if (el.closest('header, nav, .navbar, .top-bar, .header, [class*="navbar" i], [class*="topbar" i], [class*="app-header" i], [class*="main-header" i], [class*="site-header" i], [id*="header" i], [id*="navbar" i]')) {
-            return true;
+        if (!el || typeof el !== 'object') return false;
+        try {
+            if (el.closest && el.closest('#hpc-status-widget')) return true;
+            if (el.closest && el.closest('header, nav, .navbar, .top-bar, .header, [class*="navbar" i], [class*="topbar" i], [class*="app-header" i], [class*="main-header" i], [class*="site-header" i], [id*="header" i], [id*="navbar" i]')) {
+                return true;
+            }
+            if (el.closest && el.closest('.language-select, .language-switcher, [class*="lang" i], [id*="lang" i], [aria-label*="language" i], [aria-label*="भाषा" i], [title*="language" i]')) {
+                return true;
+            }
+            // Exclude top-level horizontal stage breadcrumbs (1 A(1), 2 A(2), 3 A(3), 4 B, 5 C, 6 HPC Credit)
+            if (el.closest && el.closest('.top-steps, .stage-stepper, .stage-navigation, .breadcrumb, [class*="breadcrumb" i]')) {
+                return true;
+            }
+            const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
+            // Explicit top stage indicators
+            if (/^([1-6]\s*)?(a\(?[1-4]\)?|hpc\s*credit|hpc\s*क्रेडिट)$/i.test(txt)) {
+                return true;
+            }
+            const id = String(el.id || '').toLowerCase();
+            const rawCls = typeof el.className === 'string' ? el.className : (el.className?.baseVal || (el.getAttribute && el.getAttribute('class')) || '');
+            const cls = String(rawCls).toLowerCase();
+            const name = String(el.name || (el.getAttribute && el.getAttribute('name')) || '').toLowerCase();
+            const ariaLabel = String((el.getAttribute && el.getAttribute('aria-label')) || '').toLowerCase();
+            const placeholder = String((el.getAttribute && el.getAttribute('placeholder')) || '').toLowerCase();
+            const title = String((el.getAttribute && el.getAttribute('title')) || '').toLowerCase();
+            if (id.includes('lang') || cls.includes('lang') || name.includes('lang') || ariaLabel.includes('lang') || title.includes('lang') || id.includes('screen-reader')) return true;
+            if (placeholder.includes('search') || name.includes('search') || id.includes('search')) return true;
+            if (txt === 'en' || txt === 'hi' || txt === 'hindi' || txt === 'english' || txt.includes('भाषा') || txt.includes('language') || txt.includes('स्क्रीन रीडर')) return true;
+        } catch (e) {
+            return false;
         }
-        if (el.closest('.language-select, .language-switcher, [class*="lang" i], [id*="lang" i], [aria-label*="language" i], [aria-label*="भाषा" i], [title*="language" i]')) {
-            return true;
-        }
-        // Exclude top-level horizontal stage breadcrumbs (1 A(1), 2 A(2), 3 A(3), 4 B, 5 C, 6 HPC Credit)
-        if (el.closest('.top-steps, .stage-stepper, .stage-navigation, .breadcrumb, [class*="breadcrumb" i]')) {
-            return true;
-        }
-        const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
-        // Explicit top stage indicators
-        if (/^([1-6]\s*)?(a\(?[1-4]\)?|hpc\s*credit|hpc\s*क्रेडिट)$/i.test(txt)) {
-            return true;
-        }
-        const id = (el.id || '').toLowerCase();
-        const cls = (el.className || '').toLowerCase();
-        const name = (el.name || '').toLowerCase();
-        const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
-        const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
-        const title = (el.getAttribute('title') || '').toLowerCase();
-        if (id.includes('lang') || cls.includes('lang') || name.includes('lang') || ariaLabel.includes('lang') || title.includes('lang') || id.includes('screen-reader')) return true;
-        if (placeholder.includes('search') || name.includes('search') || id.includes('search')) return true;
-        if (txt === 'en' || txt === 'hi' || txt === 'hindi' || txt === 'english' || txt.includes('भाषा') || txt.includes('language') || txt.includes('स्क्रीन रीडर')) return true;
         return false;
     }
 
@@ -3202,6 +3207,21 @@
             return false;
         };
 
+        const clickStepNextButton = async () => {
+            const nextBtns = Array.from(document.querySelectorAll('button, a[role="button"], input[type="button"], input[type="submit"]')).filter(b => {
+                if (isLanguageOrHeaderElement(b) || b.disabled) return false;
+                const t = String(b.innerText || b.value || '').trim().toLowerCase();
+                if (t.includes('finish') || t.includes('complete activity') || t.includes('student') || t.includes('final') || t.includes('submit')) return false;
+                return t === 'next' || t === 'अगला' || t.includes('save & next') || t.includes('save and next') || t.includes('आगे बढ़ें') || t === 'continue' || t === 'जारी रखें';
+            });
+            if (nextBtns.length > 0) {
+                try {
+                    nextBtns[0].click();
+                    await sleep(400);
+                } catch(e) {}
+            }
+        };
+
         const processActivityTabs = async () => {
             // ─────────────────────────────────────────────────────────
             // 1. TARGET STEP 1: Activity Details / गतिविधि विवरण
@@ -3212,6 +3232,12 @@
             if (nameInp && (!nameInp.value || nameInp.value.trim() === '')) {
                 setNativeValue(nameInp, actTitle);
             }
+            document.querySelectorAll('textarea').forEach(ta => {
+                if (isLanguageOrHeaderElement(ta)) return;
+                if (!ta.value || ta.value.trim() === '') {
+                    setNativeValue(ta, actDesc);
+                }
+            });
             document.querySelectorAll('input[type="checkbox"]').forEach((cb, i) => {
                 if (isLanguageOrHeaderElement(cb)) return;
                 if (i < 2 && !cb.checked) {
@@ -3222,6 +3248,7 @@
                 }
             });
             logStatus('[Part-B] ✓ Step 1 (Activity Details) filled.');
+            await clickStepNextButton();
             await sleep(600);
 
             // ─────────────────────────────────────────────────────────
@@ -3230,20 +3257,20 @@
             await goToStep(2, ['Subject', 'CG', 'Competencies', 'विषय', 'क्षमता']);
             await sleep(600);
 
-            // 2a. Select Subject: "The World Around Us" / "हमारे चारों ओर की दुनिया"
+            // 2a. Select Subject: "The World Around Us" / "हमारे चारों ओर की दुनिया" / "Science"
             const wrappers = Array.from(document.querySelectorAll('.scroller-cg-domain .custom-dropdown-wrapper, .custom-dropdown-wrapper, [class*="dropdown" i]')).filter(w => !isLanguageOrHeaderElement(w));
             for (const wrapper of wrappers) {
                 const header = wrapper.querySelector('.custom-dropdown-header, [class*="header" i], [class*="toggle" i], button');
                 if (header) {
-                    header.click();
+                    try { header.click(); } catch(e) {}
                     await sleep(350);
                     const items = Array.from(document.querySelectorAll('.scroller-cg-domain .custom-dropdown-item, .custom-dropdown-item, .dropdown-item, li')).filter(it => !isLanguageOrHeaderElement(it));
                     const targetDomain = items.find(el => {
-                        const txt = el.innerText.trim().toLowerCase();
-                        return txt.includes('world') || txt.includes('चारों ओर') || txt.includes('evs') || txt.includes(actSubject.slice(0, 4).toLowerCase());
-                    });
+                        const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
+                        return txt.includes('world') || txt.includes('चारों ओर') || txt.includes('evs') || txt.includes('science') || txt.includes('विज्ञान') || txt.includes(actSubject.slice(0, 4).toLowerCase());
+                    }) || items[0];
                     if (targetDomain) {
-                        targetDomain.click();
+                        try { targetDomain.click(); } catch(e) {}
                         await sleep(350);
                     }
                 }
@@ -3308,6 +3335,7 @@
                 });
             }
             logStatus('[Part-B] ✓ Step 2 (Subject & Competencies) verified.');
+            await clickStepNextButton();
             await sleep(600);
 
             // ─────────────────────────────────────────────────────────
@@ -3361,6 +3389,7 @@
                 }
             });
             logStatus('[Part-B] ✓ Step 3 (Activity & Assessment Qs) verified.');
+            await clickStepNextButton();
             await sleep(600);
 
             // ─────────────────────────────────────────────────────────
@@ -3474,6 +3503,7 @@
                 }
             });
             logStatus('[Part-B] ✓ Step 4 (Assessment Rubric) fully filled!');
+            await clickStepNextButton();
             await sleep(600);
 
             // ─────────────────────────────────────────────────────────
@@ -3508,6 +3538,7 @@
                 }
             });
             logStatus('[Part-B] ✓ Step 5 (Observational Notes & Challenges Grid) filled.');
+            await clickStepNextButton();
             await sleep(600);
 
             // ─────────────────────────────────────────────────────────
@@ -3708,9 +3739,14 @@
         });
 
         // Find one that is NOT currently active (doesn't have active class or arrow)
+        const getElClass = (element) => {
+            if (!element) return '';
+            const c = element.className;
+            return String(typeof c === 'string' ? c : (c?.baseVal || (element.getAttribute && element.getAttribute('class')) || '')).toLowerCase();
+        };
         const uncompletedAct = sidebarActItems.find(el => {
-            const cls = (el.className || '').toLowerCase();
-            const parentCls = (el.parentElement?.className || '').toLowerCase();
+            const cls = getElClass(el);
+            const parentCls = getElClass(el.parentElement);
             const isCurrent = cls.includes('active') || parentCls.includes('active') || el.innerText.includes('▶') || el.querySelector('.active');
             return !isCurrent;
         });

@@ -2738,7 +2738,11 @@
                                        lbl.includes('cwd') || resText.split(',').some(k => lbl.includes(k.trim()));
                 if (isResourceItem && !cb.checked) {
                     cb.click();
-                    cb.checked = true;
+                    if (!cb.checked) {
+                        const lbl = cb.closest('label') || cb.parentElement?.querySelector('label');
+                        if (lbl) lbl.click();
+                    }
+                    if (!cb.checked) cb.checked = true;
                     cb.dispatchEvent(new Event('input', { bubbles: true }));
                     cb.dispatchEvent(new Event('change', { bubbles: true }));
                 }
@@ -2755,7 +2759,11 @@
                                 lbl.includes('communication') || lbl.includes('confidence') || idx < 4;
             if (shouldCheck && !cb.checked) {
                 cb.click();
-                cb.checked = true;
+                if (!cb.checked) {
+                    const l = cb.closest('label') || cb.parentElement?.querySelector('label');
+                    if (l) l.click();
+                }
+                if (!cb.checked) cb.checked = true;
                 cb.dispatchEvent(new Event('input', { bubbles: true }));
                 cb.dispatchEvent(new Event('change', { bubbles: true }));
             }
@@ -3114,21 +3122,25 @@
                 twcBoxes.slice(0, 2).forEach(cb => {
                     if (!cb.checked) {
                         cb.click();
-                        cb.checked = true;
+                        if (!cb.checked) {
+                            const parent = cb.closest('label, .form-check, div[class*="check" i]');
+                            if (parent && parent !== cb) parent.click();
+                        }
+                        if (!cb.checked) cb.checked = true;
                         cb.dispatchEvent(new Event('input', { bubbles: true }));
                         cb.dispatchEvent(new Event('change', { bubbles: true }));
-                        const parent = cb.closest('label, .form-check, div[class*="check" i]');
-                        if (parent && parent !== cb) parent.click();
                     }
                 });
             } else if (allStep2Checkboxes.length > 0 && !allStep2Checkboxes.some(c => c.checked)) {
                 allStep2Checkboxes.slice(0, 2).forEach(cb => {
                     cb.click();
-                    cb.checked = true;
+                    if (!cb.checked) {
+                        const parent = cb.closest('label, .form-check, div[class*="check" i]');
+                        if (parent && parent !== cb) parent.click();
+                    }
+                    if (!cb.checked) cb.checked = true;
                     cb.dispatchEvent(new Event('input', { bubbles: true }));
                     cb.dispatchEvent(new Event('change', { bubbles: true }));
-                    const parent = cb.closest('label, .form-check, div[class*="check" i]');
-                    if (parent && parent !== cb) parent.click();
                 });
             }
             logStatus('[Part-B] ✓ Step 2 (Subject & Competencies) verified.');

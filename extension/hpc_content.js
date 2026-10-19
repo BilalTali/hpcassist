@@ -2451,7 +2451,7 @@
     async function fillPartA1(s) {
         logStatus(`[Part-A1] Filling Basic Profile & Attendance for ${s.name}...`);
         // 1. Admission Number (can be integer or integer and string)
-        let admVal = String(s.admission_no !== undefined && s.admission_no !== null ? s.admission_no : '').trim();
+        let admVal = String(s.admission_no !== undefined && s.admission_no !== null ? s.admission_no : (s.School_Admission_No || '')).trim();
         if ((s.login_id && admVal.toLowerCase() === s.login_id.toLowerCase()) || (s.apaar_id && admVal === s.apaar_id)) {
             admVal = '';
         }
@@ -2462,11 +2462,11 @@
         // 2. Mother tongue
         const mtContainer = Array.from(document.querySelectorAll('label')).find(l => l.innerText.includes('Mother Tongue'))?.closest('div');
         const mtInp = mtContainer?.querySelector('input');
-        if (mtInp) setNativeValue(mtInp, s.mother_tongue || 'Kashmiri');
+        if (mtInp) setNativeValue(mtInp, s.mother_tongue || s.Mother_Tongue || 'Kashmiri');
 
         // 3. Parent Name
         const pInp = document.querySelector('input[placeholder="Enter Father Name"], input[placeholder*="Father"]');
-        if (pInp) setNativeValue(pInp, s.parent_name || 'Parent');
+        if (pInp) setNativeValue(pInp, s.parent_name || s.Guardian_Name_Detail || 'Parent');
 
         // 4. Monthly Working Days (12 months: Apr - Mar)
         const monthKeys = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
@@ -2475,14 +2475,20 @@
 
         const r1Inputs = Array.from(document.querySelectorAll('tbody tr:nth-child(1) td input'));
         monthKeys.forEach((mKey, i) => {
-            const val = (s['work_' + mKey] !== undefined && s['work_' + mKey] !== '') ? s['work_' + mKey] : defaultWork[i];
+            const cap = mKey.charAt(0).toUpperCase() + mKey.slice(1);
+            const val = (s['work_' + mKey] !== undefined && s['work_' + mKey] !== '')
+                ? s['work_' + mKey]
+                : ((s['Working_Days_' + cap] !== undefined && s['Working_Days_' + cap] !== '') ? s['Working_Days_' + cap] : defaultWork[i]);
             if (r1Inputs[i]) setNativeValue(r1Inputs[i], val);
         });
 
         // 5. Monthly Present Days (12 months: Apr - Mar)
         const r2Inputs = Array.from(document.querySelectorAll('tbody tr:nth-child(2) td input'));
         monthKeys.forEach((mKey, i) => {
-            const val = (s['pres_' + mKey] !== undefined && s['pres_' + mKey] !== '') ? s['pres_' + mKey] : defaultPres[i];
+            const cap = mKey.charAt(0).toUpperCase() + mKey.slice(1);
+            const val = (s['pres_' + mKey] !== undefined && s['pres_' + mKey] !== '')
+                ? s['pres_' + mKey]
+                : ((s['Present_Days_' + cap] !== undefined && s['Present_Days_' + cap] !== '') ? s['Present_Days_' + cap] : defaultPres[i]);
             if (r2Inputs[i]) setNativeValue(r2Inputs[i], val);
         });
 
@@ -2971,20 +2977,20 @@
 
     async function fillPartB(s) {
         logStatus(`[Part-B] Deep step-by-step automation (1 to 6 & Finish) for ${s.name}...`);
-        const actSubject = s.act_subject || 'The World Around Us';
-        const actTitle = s.act_title || 'Nature Observation & Plant Seed Germination Study';
+        const actSubject = s.Act_Subject_Domain || s.Act1_Subject_Domain || s.act_subject || 'The World Around Us';
+        const actTitle = s.Act_Name || s.Act1_Name || s.act_title || 'Nature Observation & Plant Seed Germination Study';
         const actLevel = (s.act_level || 'proficient').toLowerCase();
-        const actAwr = (s.act_rubric_awareness || actLevel).toLowerCase();
-        const actSen = (s.act_rubric_sensitivity || actLevel).toLowerCase();
-        const actCre = (s.act_rubric_creativity || actLevel).toLowerCase();
-        const actDesc = s.act_desc || 'Observation of natural plant growth in school environment, measuring sprout heights, and recording soil factors';
-        const actLearnt = s.act_learnt || 'Learned plant germination stages, botanical measurement, and collaborative teamwork';
-        const actInteresting = s.act_interesting || 'Observing seeds sprout and recording growth measurements';
-        const actPractice = s.act_practice || 'Time management during daily data recording';
-        const actHelp = s.act_help || 'Advanced plant classification and collaborative experiment design';
-        const actSupportPlan = s.act_support_plan || 'Provide advanced learning challenges and continuous positive encouragement';
-        const peerName = s.act_peer_name || 'Ayaan Ahmad';
-        const peerFeedback = s.act_peer_feedback || 'Very supportive teammate during group work';
+        const actAwr = (s.Act_Rubric_Awareness_Level || s.Act1_Rubric_Awareness_Level || s.act_rubric_awareness || actLevel).toLowerCase();
+        const actSen = (s.Act_Rubric_Sensitivity_Level || s.Act1_Rubric_Sensitivity_Level || s.act_rubric_sensitivity || actLevel).toLowerCase();
+        const actCre = (s.Act_Rubric_Creativity_Level || s.Act1_Rubric_Creativity_Level || s.act_rubric_creativity || actLevel).toLowerCase();
+        const actDesc = s.Act_Description_Instructions || s.Act1_Description_Instructions || s.act_desc || 'Observation of natural plant growth in school environment, measuring sprout heights, and recording soil factors';
+        const actLearnt = s.SelfReflect_Learnt_Text || s.Self_Learnt || s.act_learnt || 'Learned plant germination stages, botanical measurement, and collaborative teamwork';
+        const actInteresting = s.SelfReflect_MostInteresting_Text || s.Self_MostInteresting || s.act_interesting || 'Observing seeds sprout and recording growth measurements';
+        const actPractice = s.SelfReflect_NeedPractice_Text || s.Self_NeedPractice || s.act_practice || 'Time management during daily data recording';
+        const actHelp = s.SelfReflect_HelpWith_Text || s.Self_HelpWith || s.act_help || 'Advanced plant classification and collaborative experiment design';
+        const actSupportPlan = s.TeacherFeedback_Progress_Further || s.Teacher_Help_Plan || s.act_support_plan || 'Provide advanced learning challenges and continuous positive encouragement';
+        const peerName = s.Peer_Student_Name || s.Peer1_Student_Name || s.act_peer_name || 'Ayaan Ahmad';
+        const peerFeedback = s.Peer_Overall_Remarks || s.Peer1_Remarks || s.act_peer_feedback || 'Very supportive teammate during group work';
 
         // ─────────────────────────────────────────────────────────────
         // Step Navigator: Clicks Step 1..6 (Immune to language & header)
@@ -3974,9 +3980,31 @@
             ? ['lang1', 'lang2', 'math', 'evs', 'art', 'pe', 'work']
             : ['l1', 'l2', 'l3', 'm', 'sci', 'soc', 'art', 'pe'];
 
+        const prepColMap = {
+            lang1: ['L1_Max_Marks_SA', 'L1_Marks_Obtained_SA'],
+            lang2: ['L2_Max_Marks_SA', 'L2_Marks_Obtained_SA'],
+            math:  ['Math_Max_Marks_SA', 'Math_Marks_Obtained_SA'],
+            evs:   ['TWC_Max_Marks_SA', 'TWC_Marks_Obtained_SA'],
+            art:   ['Art_Max_Marks_SA', 'Art_Marks_Obtained_SA'],
+            pe:    ['PE_Max_Marks_SA', 'PE_Marks_Obtained_SA'],
+        };
+        const midColMap = {
+            l1:  ['L1_Max_Marks_SA', 'L1_Marks_Obtained_SA'],
+            l2:  ['L2_Max_Marks_SA', 'L2_Marks_Obtained_SA'],
+            l3:  ['L3_Max_Marks_SA', 'L3_Marks_Obtained_SA'],
+            m:   ['Math_Max_Marks_SA', 'Math_Marks_Obtained_SA'],
+            sci: ['Science_Max_Marks_SA', 'Science_Marks_Obtained_SA'],
+            soc: ['SocialScience_Max_Marks_SA', 'SocialScience_Marks_Obtained_SA'],
+            art: ['Art_Max_Marks_SA', 'Art_Marks_Obtained_SA'],
+            pe:  ['PE_Max_Marks_SA', 'PE_Marks_Obtained_SA'],
+        };
+        const activeMap = isPrep ? prepColMap : midColMap;
+
         keys.forEach(k => {
-            const maxVal = (m[k] && m[k].max) || s['sub_' + k + '_max'] || s[k + '_max'] || '50';
-            const obtVal = (m[k] && m[k].obt) || s['sub_' + k + '_obt'] || s[k + '_obt'] || '42';
+            const mappedMaxCol = activeMap[k] ? s[activeMap[k][0]] : null;
+            const mappedObtCol = activeMap[k] ? s[activeMap[k][1]] : null;
+            const maxVal = mappedMaxCol || (m[k] && m[k].max) || s['sub_' + k + '_max'] || s[k + '_max'] || '50';
+            const obtVal = mappedObtCol || (m[k] && m[k].obt) || s['sub_' + k + '_obt'] || s[k + '_obt'] || '42';
             marksList.push(String(maxVal));
             marksList.push(String(obtVal));
         });

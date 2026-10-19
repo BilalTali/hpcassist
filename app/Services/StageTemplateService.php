@@ -40,7 +40,7 @@ class StageTemplateService
                 'portal_url'  => 'https://hpc.parakh.ncert.gov.in/en/hpc/preparatory-stage',
                 'color'       => '#3b82f6',
                 'accent_bg'   => 'FF2563EB',
-                'description' => 'Interactive All About Me, Peer (Peer 1 & 2) feedback, Language R1/R2, Maths, EVS, and Art/Work Ed.',
+                'description' => '176 NCERT Columns: Hand of Self-Reflection, Peer 1 & 2, Home Resources, Activity Rubrics, Curricular Competencies & SA Marks.',
             ],
             self::STAGE_MIDDLE => [
                 'slug'        => self::STAGE_MIDDLE,
@@ -50,7 +50,7 @@ class StageTemplateService
                 'portal_url'  => 'https://hpc.parakh.ncert.gov.in/en/hpc/middle-stage',
                 'color'       => '#f97316',
                 'accent_bg'   => 'FFEA580C',
-                'description' => 'All About Me, Ambition Card, Parent Partnership, 8 Curricular Subjects, HPC Credit Marks & Rubrics.',
+                'description' => '222 NCERT Columns: All About Me, Ambition Card, Parent Voice, Part-B Rubrics, 11 Curricular Domains, 8 SA Marks & HPC Credits.',
             ],
             self::STAGE_SECONDARY => [
                 'slug'        => self::STAGE_SECONDARY,
@@ -269,119 +269,25 @@ class StageTemplateService
     // ─────────────────────────────────────────────────────────────────────────
     protected function getPreparatorySections(): array
     {
-        return [
-            ['title' => '🔒 Locked Metadata',                                   'start' => 0,   'end' => 3,   'bg' => 'FF334155'],
-            ['title' => '📋 Part A(1): Student Profile & Attendance',          'start' => 4,   'end' => 41,  'bg' => 'FF1E293B'],
-            ['title' => '🌟 Part A(2): All About Me (Learner Profile)',         'start' => 42,  'end' => 52,  'bg' => 'FF0284C7'],
-            ['title' => '👥 Part A(3): Peer 1, Peer 2 & Parent Voice',          'start' => 53,  'end' => 64,  'bg' => 'FF0891B2'],
-            ['title' => '📖 Part B: Language 1 (R1) Progress',                 'start' => 65,  'end' => 71,  'bg' => 'FF059669'],
-            ['title' => '🗣️ Part B: Language 2 (R2) Progress',                 'start' => 72,  'end' => 78,  'bg' => 'FF16A34A'],
-            ['title' => '📐 Part B: Mathematics Progress',                     'start' => 79,  'end' => 85,  'bg' => 'FF2563EB'],
-            ['title' => '🌍 Part B: The World Around Us (EVS)',                 'start' => 86,  'end' => 92,  'bg' => 'FF7C3AED'],
-            ['title' => '🎨 Part B: Art Education & Physical Well-being',       'start' => 93,  'end' => 99,  'bg' => 'FFD97706'],
-            ['title' => '🛠️ Part B: Work Pre-Skills & Vocational Exposure',     'start' => 100, 'end' => 105, 'bg' => 'FFDC2626'],
-            ['title' => '📊 Part C: Annual Competency Summary & Marks',         'start' => 106, 'end' => 119, 'bg' => 'FF047857'],
-            ['title' => '✍️ Part C: Declaration & Final Narrative',             'start' => 120, 'end' => 121, 'bg' => 'FF334155'],
-        ];
+        return HpcPreparatoryStageSchema::getSections();
     }
 
     protected function getPreparatoryColumns(): array
     {
-        $cols = $this->getBaseMetadataColumns('"Grade 3,Grade 4,Grade 5"');
-
-        // Part A(2) All About Me & Self-Reflection (Columns AQ to BA)
-        $cols[] = ['key' => 'live_with', 'label' => 'I live with (A2)', 'width' => 24, 'type' => 'string', 'note' => 'e.g. My parents, siblings, and grandparents'];
-        $cols[] = ['key' => 'fav_dish', 'label' => 'My Favorite Food / Indian Dish (A2) *', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Dal Chawal, Rajma, Khichdi'];
-        $cols[] = ['key' => 'fav_game', 'label' => 'My Favorite Indigenous / Traditional Game (A2) *', 'width' => 34, 'type' => 'string', 'note' => 'e.g. Kho-Kho, Kabaddi, Gilli-Danda'];
-        $cols[] = ['key' => 'free_time', 'label' => 'In my free time I love (A2)', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Reading Panchatantra stories and sketching'];
-        $cols[] = ['key' => 'do_well', 'label' => 'Something I do really well (A2) *', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Solving math puzzles and recitation'];
-        $cols[] = ['key' => 'want_to_improve', 'label' => 'Something I want to improve in (A2)', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Neat handwriting and spelling'];
-        $cols[] = ['key' => 'responsible', 'label' => 'I am responsible (A2) *', 'width' => 24, 'type' => 'list', 'options' => '"all the time,most times,sometimes"', 'note' => 'all the time, most times, sometimes'];
-        $cols[] = ['key' => 'proud_of', 'label' => 'I feel proud of myself when (A2)', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Helping my classmate with reading'];
-        $cols[] = ['key' => 'goal_acad', 'label' => 'My Learning Goal this year (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Read 15 storybooks in English and Urdu'];
-        $cols[] = ['key' => 'goal_step', 'label' => 'Steps I will take to reach my goal (A2)', 'width' => 34, 'type' => 'string', 'note' => 'e.g. Read 2 pages every evening before bed'];
-        $cols[] = ['key' => 'good_deed', 'label' => 'A kind deed I did recently (A2)', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Shared my lunch with a friend who forgot hers'];
-
-        // Part A(3) Peer 1, Peer 2 & Parent Feedback (Columns BB to BM)
-        $cols[] = ['key' => 'peer1_name', 'label' => 'Peer 1: Reviewer Name *', 'width' => 22, 'type' => 'string', 'note' => 'First assigned peer'];
-        $cols[] = ['key' => 'peer1_helpful', 'label' => 'Peer 1: Is helpful and cooperative *', 'width' => 26, 'type' => 'list', 'options' => '"Always,Usually,Sometimes"', 'note' => 'Peer 1 feedback'];
-        $cols[] = ['key' => 'peer1_listens', 'label' => 'Peer 1: Listens to others in group *', 'width' => 26, 'type' => 'list', 'options' => '"Always,Usually,Sometimes"', 'note' => 'Peer 1 collaboration'];
-        $cols[] = ['key' => 'peer1_praise', 'label' => 'Peer 1: What I like most about friend', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Very cheerful and always shares pencils'];
-        $cols[] = ['key' => 'peer2_name', 'label' => 'Peer 2: Reviewer Name *', 'width' => 22, 'type' => 'string', 'note' => 'Second assigned peer'];
-        $cols[] = ['key' => 'peer2_helpful', 'label' => 'Peer 2: Works well in team activities *', 'width' => 26, 'type' => 'list', 'options' => '"Always,Usually,Sometimes"', 'note' => 'Peer 2 feedback'];
-        $cols[] = ['key' => 'peer2_praise', 'label' => 'Peer 2: Positive comment for friend', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Explains maths questions very patiently'];
-        $cols[] = ['key' => 'parent_reads_with', 'label' => 'Parent: Reads / discusses school at home *', 'width' => 30, 'type' => 'list', 'options' => '"Daily,Weekly,Occasionally,Rarely"', 'note' => 'Parent-teacher card'];
-        $cols[] = ['key' => 'parent_study_space', 'label' => 'Parent: Child has quiet space for study *', 'width' => 28, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Home environment'];
-        $cols[] = ['key' => 'parent_social_habits', 'label' => 'Parent: Child displays respectful behavior *', 'width' => 30, 'type' => 'list', 'options' => '"Always,Usually,Needs Guidance"', 'note' => 'Parent observation'];
-        $cols[] = ['key' => 'parent_support_needed', 'label' => 'Parent: Support requested from school', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Regular spelling practice worksheets'];
-        $cols[] = ['key' => 'parent_signature_status', 'label' => 'Parent PTA Consultation Done *', 'width' => 24, 'type' => 'list', 'options' => '"Completed,In Progress,Pending"', 'note' => 'SMC/PTA meeting status'];
-
-        // Part B Progress across 6 Curricular Learning Standards
-        $rubricOpts = '"Beginner,Proficient,Advanced"';
-        $prepSubjects = [
-            ['key' => 'lang1', 'name' => 'Language 1 (R1 - First Language)'],
-            ['key' => 'lang2', 'name' => 'Language 2 (R2 - Second Language)'],
-            ['key' => 'math',  'name' => 'Mathematics (Numbers, Geometry, Measurement)'],
-            ['key' => 'evs',   'name' => 'The World Around Us (EVS / Environment)'],
-            ['key' => 'art_pe','name' => 'Art Education & Physical Well-being'],
-        ];
-
-        foreach ($prepSubjects as $s) {
-            $k = $s['key'];
-            $n = $s['name'];
-            $cols[] = ['key' => "{$k}_act", 'label' => "Activity Title - {$n} *", 'width' => 30, 'type' => 'string', 'note' => 'e.g. Roleplay dialogue / Measurement project'];
-            $cols[] = ['key' => "{$k}_approach", 'label' => "Pedagogy Approach - {$n} *", 'width' => 26, 'type' => 'list', 'options' => '"Toy-Based Pedagogy,Art-Integrated,Sports-Integrated,Experiential Learning,Storytelling"', 'note' => 'Pedagogy used'];
-            $cols[] = ['key' => "{$k}_aware", 'label' => "Awareness - {$n} *", 'width' => 20, 'type' => 'list', 'options' => $rubricOpts, 'note' => 'Beginner, Proficient, Advanced'];
-            $cols[] = ['key' => "{$k}_sens", 'label' => "Sensitivity - {$n} *", 'width' => 20, 'type' => 'list', 'options' => $rubricOpts, 'note' => 'Beginner, Proficient, Advanced'];
-            $cols[] = ['key' => "{$k}_creat", 'label' => "Creativity - {$n} *", 'width' => 20, 'type' => 'list', 'options' => $rubricOpts, 'note' => 'Beginner, Proficient, Advanced'];
-            $cols[] = ['key' => "{$k}_self_rate", 'label' => "Student Self-Rating - {$n} *", 'width' => 24, 'type' => 'list', 'options' => '"Enjoyed Fully,Good Effort,Faced Challenge"', 'note' => 'Learner self reflection'];
-            $cols[] = ['key' => "{$k}_teacher_feedback", 'label' => "Teacher Strength & Guidance - {$n}", 'width' => 35, 'type' => 'string', 'note' => 'Observational feedback'];
-        }
-
-        // Work Pre-Skills / Vocational Exposure (Bagless Days & Hands-on Crafts)
-        $cols[] = ['key' => 'work_skill_act', 'label' => 'Work Pre-Skill Activity Title *', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Clay pottery / Paper craft / Kitchen garden'];
-        $cols[] = ['key' => 'work_skill_hours', 'label' => 'Bagless Days / Activity Hours *', 'width' => 24, 'type' => 'integer', 'note' => 'Total hours engaged (e.g. 10)'];
-        $cols[] = ['key' => 'work_skill_aware', 'label' => 'Awareness: Tool & Material Handling *', 'width' => 24, 'type' => 'list', 'options' => $rubricOpts, 'note' => 'Beginner, Proficient, Advanced'];
-        $cols[] = ['key' => 'work_skill_sens', 'label' => 'Sensitivity: Care for Materials *', 'width' => 24, 'type' => 'list', 'options' => $rubricOpts, 'note' => 'Beginner, Proficient, Advanced'];
-        $cols[] = ['key' => 'work_skill_creat', 'label' => 'Creativity: Originality in Craft *', 'width' => 24, 'type' => 'list', 'options' => $rubricOpts, 'note' => 'Beginner, Proficient, Advanced'];
-        $cols[] = ['key' => 'work_skill_notes', 'label' => 'Craft Observations & Pride', 'width' => 30, 'type' => 'string', 'note' => 'Joy of making'];
-
-        // Part C Annual Marks & Summative Assessment (6 Subjects: Max & Obtained)
-        $marksSubjs = [
-            ['key' => 'lang1', 'name' => 'Language 1 (R1)'],
-            ['key' => 'lang2', 'name' => 'Language 2 (R2)'],
-            ['key' => 'math',  'name' => 'Mathematics'],
-            ['key' => 'evs',   'name' => 'The World Around Us (EVS)'],
-            ['key' => 'art',   'name' => 'Art Education'],
-            ['key' => 'pe',    'name' => 'Physical Education'],
-            ['key' => 'work',  'name' => 'Work Experience'],
-        ];
-
-        foreach ($marksSubjs as $ms) {
-            $k = $ms['key'];
-            $n = $ms['name'];
-            $cols[] = ['key' => "sub_{$k}_max", 'label' => "Max Marks - {$n} *", 'width' => 16, 'type' => 'integer', 'note' => 'Default 50'];
-            $cols[] = ['key' => "sub_{$k}_obt", 'label' => "Marks Obtained - {$n} *", 'width' => 18, 'type' => 'integer', 'note' => 'Marks scored (0 to Max)'];
-        }
-
-        // Declaration & Final Narrative
-        $cols[] = ['key' => 'teacher_declaration', 'label' => 'Teacher Certification *', 'width' => 22, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Declaration of authenticity'];
-        $cols[] = ['key' => 'holistic_remarks', 'label' => 'Overall Annual Progress Remarks *', 'width' => 45, 'type' => 'string', 'note' => 'Holistic progress summary across all dimensions'];
-
-        return $cols;
+        return HpcPreparatoryStageSchema::getColumns();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 3. MIDDLE STAGE (Class 6 - 8) - Current Complete Production Model
+    // 3. MIDDLE STAGE (Class 6 - 8) - Official 222 NCERT PARAKH Model
     // ─────────────────────────────────────────────────────────────────────────
     protected function getMiddleSections(): array
     {
-        return (new \App\Http\Controllers\HpcTeacherController())->getEvaluationSections();
+        return HpcMiddleStageSchema::getSections();
     }
 
     protected function getMiddleColumns(): array
     {
-        return (new \App\Http\Controllers\HpcTeacherController())->getEvaluationColumns();
+        return HpcMiddleStageSchema::getColumns();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -563,10 +469,12 @@ class StageTemplateService
     protected function buildInstructionsSheet(Spreadsheet $spreadsheet, string $stage): void
     {
         $sheet = $spreadsheet->createSheet();
+        $stage = self::normalizeStage($stage);
         $stageInfo = self::getStages()[$stage];
         $sheet->setTitle('Instructions & Rules');
 
-        $title = "HPCAssist - {$stageInfo['title']} ({$stageInfo['grade_range']}) Assessment Template Instructions";
+        $colCount = ($stage === self::STAGE_MIDDLE) ? 222 : (($stage === self::STAGE_PREPARATORY) ? 176 : 147);
+        $title = "HPCAssist - {$stageInfo['title']} ({$stageInfo['grade_range']}) Assessment Template (Official NCERT {$colCount} Columns)";
         $sheet->setCellValue('A1', $title);
         $sheet->mergeCells('A1:D1');
         $sheet->getStyle('A1')->applyFromArray([
@@ -574,21 +482,22 @@ class StageTemplateService
             'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF1E293B']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
         ]);
-        $sheet->getRowDimension(1)->setRowHeight(32);
+        $sheet->getRowDimension(1)->setRowHeight(34);
 
         $rules = [
-            ['Part / Section', 'Field Types & Scope', 'Validation Rules & Format', 'Permitted Values / Guidance for Teachers'],
-            ['Workbook Overview', '3-Sheet Structure', 'Sheet 1 is for Manual Entry (blank evaluations). Sheet 2 is Pre-Filled (baseline 100% complete data). Sheet 3 is Instructions.', 'Choose Sheet 1 to type your own evaluations, or Sheet 2 to tweak pre-filled evaluations.'],
-            ['🔒 Locked Metadata', 'Columns A to D (APAAR ID, Login ID, Name, Status)', 'Unique identifiers synchronized with the PARAKH portal roster. Do not edit Login ID or APAAR ID.', 'Columns A, B, D are collapsed by default in Focus Mode. Click [+] above Student Name in Excel to view them.'],
-            ['📋 Part A(1): Profile & Attendance', 'Columns E to AP (Admission No, Profile, Monthly Attendance Apr-Mar)', 'School Admission number is mandatory. Monthly working days and present days are arranged neck-to-neck for each month (Apr to Mar).', 'Present Days must be <= Working Days (0-31). Total Working, Present, and Attendance % calculate automatically.'],
-            ['🌟 Part A(2): All About Me', 'Columns AQ to BB (Preparatory: Name, Age, Likes/Dislikes, Strengths, Favorites, Aspirations; Middle: Columns AQ to BP)', 'Learner self-reflection, strengths, areas to improve, favorite foods/festivals, aspirations, and year goals.', 'All fields accept realistic learner voice statements.'],
-            ['🎯 Part A(3): Ambition Card', 'Columns BQ to BZ (Career Exploration, Mentor Guidance)', 'Student career dream, steps to achieve, 5 key skills, focus subjects, habits to cultivate, mentor teacher name and guidance plan.', 'Realistic career pathways (Doctor, Engineer, Teacher, Scientist, Artist, Civil Servant, Entrepreneur).'],
-            ['🤝 Part A(4): Parent Partnership', 'Columns CA to CJ (Home Resources, Child Understanding, Support Plan)', 'Home learning materials (Yes/No), Parent understanding of child (Yes, Sometimes, No, Not Sure), Support areas needed (Yes/No), and Home support plan.', 'Checkboxes: Yes / No; Radio smileys: Yes, Sometimes, No, Not Sure; Home plan text.'],
-            ['🔬 Part B: Holistic Activity 1 & 2', 'Columns CK to CY (Academic Domain & Co-Curricular / Creative)', 'Pedagogical approach (Art-Integrated, Sports-Integrated, Toy-Based, Inquiry-Based), activity title, description, NCF rubrics (Awareness, Sensitivity, Creativity), reflection, peer review, teacher feedback.', 'Rubric rating levels: Beginner, Proficient, Advanced. Self-effort: Yes / No. Peer praise and teacher support plan.'],
-            ['📊 Part C: Curricular Assessment', 'Columns CZ to DY (Domain Competency Performance Levels)', 'Year-end formative and summative achievement levels across core curriculum learning outcomes.', 'Assessment levels: Beginner, Proficient, Advanced.'],
-            ['🎯 Part D: HPC Credit Marks Grid', 'Columns DZ to EO (8 Core Subject Marks)', 'Summative Assessment marks for each of the 8 subjects. Max Marks (default 50) and Marks Obtained.', 'Obtained Marks must be an integer between 0 and Max Marks (e.g. 40 to 48 out of 50).'],
-            ['✍️ Part E: Declaration & Remarks', 'Columns EP to EQ (Teacher Certification & Annual Holistic Remarks)', 'Teacher declaration certifying entered evaluation data and annual holistic summary remark.', 'Declaration: Yes / No. Holistic remark summarizing overall development, cognitive growth, and social maturity.'],
+            ['Section / Category', 'Visual Badge & Color', 'Classification & Excel Behavior', 'Teacher Instructions & Portal Alignment'],
+            ['Workbook Structure', '📑 Sheet Tabs', '3 Distinct Sheets: Manual Entry, Pre-Filled, and Instructions', 'Sheet 1 (Manual Entry): Clean template for manual teacher input with active formulas and dropdowns. Sheet 2 (Pre-Filled): 100% complete compliant baseline ready for 1-click submission. Sheet 3: This instruction sheet.'],
+            ['🔒 Student Identity', '🔒 [LOCKED] (Slate #F1F5F9)', 'Synced directly from PARAKH Portal roster. Read-only.', 'Includes School Admission No, Date of Birth, Gender, APAAR ID, HPC Login ID, Disability ID, Grade, Section. Synchronized with portal; do not alter IDs.'],
+            ['⚙️ Calculated Fields', '⚙️ [FORMULA] (Soft Blue #E0F2FE)', 'Live Excel formulas (=SUM, =IF, =ROUND). Read-only.', 'Automatically calculates Total Working Days, Present Days, Attendance %, Absence count, Total SA Max/Obtained Marks, and HPC Credit Points. Updates automatically as you type!'],
+            ['⚡ Smart Auto Defaults', '⚡ [AUTO] (Clean White #FFFFFF)', 'Pre-filled with NCERT standard baselines & dropdowns.', 'Medium of Instruction, Area Type, Mother Tongue, standard attendance days (~90-95%), home learning resources, parent feedback, and NCF rubrics (default Proficient/Advanced). Fully editable.'],
+            ['✏️ Teacher Input', '✏️ [INPUT] (Soft Yellow #FEF9C3)', 'Teacher evaluation action items and marks entry.', 'Summative Assessment (SA) Marks Obtained (0 to Max), observational notes, student goals, and peer feedback. Highlighted in soft yellow for quick teacher review.'],
         ];
+
+        if ($stage === self::STAGE_MIDDLE) {
+            $rules[] = ['Middle Stage (Classes 6-8)', '222 Columns Total', '14 Assessment Sections', 'Part 1: Student Identity (cols 1-9) | Part 2: Profile (cols 10-14) | Part 3: Working Days Apr-Mar (cols 15-26) | Part 4: Present Days Apr-Mar (cols 27-38) | Part 5: Attendance Summary (cols 39-44) | Part 6: All About Me & Goals (cols 45-70) | Part 7: Ambition Card (cols 71-80) | Part 8: Home Resources (cols 81-90) | Part 9: Parent Partnership (cols 91-105) | Part 10: Holistic Activity 1 (cols 106-128) | Part 11: Self/Peer Feedback (cols 129-154) | Part 12: 11 Curricular Domains (cols 155-198) | Part 13: 8 SA Marks (cols 199-216) | Part 14: HPC Credits (cols 217-222).'];
+        } elseif ($stage === self::STAGE_PREPARATORY) {
+            $rules[] = ['Preparatory Stage (Classes 3-5)', '176 Columns Total', '13 Assessment Sections', 'Part 1: Student Identity (cols 1-9) | Part 2: Profile (cols 10-14) | Part 3: Working Days Apr-Mar (cols 15-26) | Part 4: Present Days Apr-Mar (cols 27-38) | Part 5: Attendance Summary (cols 39-44) | Part 6: Hand of Self-Reflection & All About Me (cols 45-72) | Part 7: Home Resources (cols 73-82) | Part 8: Parent Partnership (cols 83-97) | Part 9: Holistic Activity 1 (cols 98-120) | Part 10: Self & Peer 1/2 Reflection (cols 121-146) | Part 11: 3 Curricular Domains (cols 147-158) | Part 12: 6 SA Marks (cols 159-172) | Part 13: HPC Credits (cols 173-176).'];
+        }
 
         foreach ($rules as $rIdx => $row) {
             $rowNum = $rIdx + 3;
@@ -613,9 +522,9 @@ class StageTemplateService
         }
 
         $sheet->getColumnDimension('A')->setWidth(26);
-        $sheet->getColumnDimension('B')->setWidth(38);
-        $sheet->getColumnDimension('C')->setWidth(50);
-        $sheet->getColumnDimension('D')->setWidth(55);
+        $sheet->getColumnDimension('B')->setWidth(34);
+        $sheet->getColumnDimension('C')->setWidth(46);
+        $sheet->getColumnDimension('D')->setWidth(65);
     }
 
     /**
@@ -972,13 +881,22 @@ class StageTemplateService
                 $colLetter = $this->indexToColumnLetter($cIdx);
                 $val = $starterRow[$cIdx] ?? '';
 
-                if (in_array($col['key'], ['admission_no', 'apaar_id', 'login_id'], true)) {
+                $isExplicitString = in_array($col['key'], [
+                    'admission_no', 'apaar_id', 'login_id', 'roll_no',
+                    'School_Admission_No', 'APAAR_ID', 'HPC_Login_ID', 'UDID_Disability_ID', 'Date_of_Birth'
+                ], true);
+
+                if ($isExplicitString) {
                     $evalSheet->setCellValueExplicit("{$colLetter}{$rowNum}", (string)$val, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
                 } else {
                     $evalSheet->setCellValue("{$colLetter}{$rowNum}", $val);
                 }
 
                 if (($col['type'] ?? '') === 'list' && !empty($col['options'])) {
+                    $formula = (string)$col['options'];
+                    if (!str_starts_with($formula, '"') && !str_starts_with($formula, '=')) {
+                        $formula = '"' . $formula . '"';
+                    }
                     $validation = $evalSheet->getCell("{$colLetter}{$rowNum}")->getDataValidation();
                     $validation->setType(DataValidation::TYPE_LIST);
                     $validation->setErrorStyle(DataValidation::STYLE_INFORMATION);
@@ -987,19 +905,40 @@ class StageTemplateService
                     $validation->setShowInputMessage(true);
                     $validation->setPromptTitle('Select Option');
                     $validation->setPrompt('Click the dropdown arrow to pick an option.');
-                    $validation->setFormula1($col['options']);
+                    $validation->setFormula1($formula);
                 }
 
-                $isObt    = str_ends_with($col['key'], '_obt');
-                $isLocked = in_array($col['type'], ['locked', 'calc']);
+                $classification = $col['classification'] ?? ($col['type'] ?? '');
+                $isCalc   = ($classification === 'calc' || ($col['type'] ?? '') === 'calc');
+                $isLocked = ($classification === 'locked' || ($col['type'] ?? '') === 'locked');
+                $isInput  = ($classification === 'input' || str_ends_with($col['key'], '_obt') || str_contains($col['key'], 'Marks_Obtained'));
 
-                $cellBg    = $isObt ? 'FFFEFCE8' : ($isLocked ? 'FFF1F5F9' : 'FFFFFFFF');
-                $cellColor = $isObt ? 'FF0F172A' : ($isLocked ? 'FF475569' : 'FF1E293B');
+                if ($isCalc) {
+                    $cellBg    = 'FFE0F2FE'; // Soft blue
+                    $cellColor = 'FF0369A1'; // Ocean blue text
+                    $borderCol = 'FFBAE6FD';
+                    $isBold    = true;
+                } elseif ($isLocked) {
+                    $cellBg    = 'FFF1F5F9'; // Soft slate
+                    $cellColor = 'FF475569'; // Slate text
+                    $borderCol = 'FFE2E8F0';
+                    $isBold    = true;
+                } elseif ($isInput) {
+                    $cellBg    = 'FFFEF9C3'; // Soft yellow
+                    $cellColor = 'FF854D0E'; // Amber text
+                    $borderCol = 'FFFDE047';
+                    $isBold    = true;
+                } else {
+                    $cellBg    = 'FFFFFFFF'; // Clean white
+                    $cellColor = 'FF1E293B'; // Dark slate text
+                    $borderCol = 'FFE2E8F0';
+                    $isBold    = false;
+                }
 
                 $evalSheet->getStyle("{$colLetter}{$rowNum}")->applyFromArray([
-                    'font'      => ['bold' => ($isObt || $isLocked), 'color' => ['argb' => $cellColor]],
+                    'font'      => ['bold' => $isBold, 'color' => ['argb' => $cellColor]],
                     'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $cellBg]],
-                    'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => $isObt ? 'FFFDE047' : 'FFE2E8F0']]],
+                    'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => $borderCol]]],
                     'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
                 ]);
             }
@@ -1281,11 +1220,30 @@ class StageTemplateService
     public function getStarterRowForStage(string $stage, int $sIdx, array $st, array $defaultWorkMap, array $defaultMax, int $rowNum, array $options = []): array
     {
         $stage = self::normalizeStage($stage);
+        $autoFill = $options['auto_fill'] ?? true;
+
+        if ($stage === self::STAGE_MIDDLE) {
+            $adm = $this->resolveAdmissionNumber($st, $sIdx);
+            if (!empty($adm)) {
+                $st['admission_no'] = $adm;
+                $st['School_Admission_No'] = $adm;
+            }
+            return HpcMiddleStageSchema::buildStarterRow($sIdx, $st, $defaultWorkMap, $defaultMax, $rowNum, $autoFill, $options);
+        }
+
+        if ($stage === self::STAGE_PREPARATORY) {
+            $adm = $this->resolveAdmissionNumber($st, $sIdx);
+            if (!empty($adm)) {
+                $st['admission_no'] = $adm;
+                $st['School_Admission_No'] = $adm;
+            }
+            return HpcPreparatoryStageSchema::buildStarterRow($sIdx, $st, $defaultWorkMap, $defaultMax, $rowNum, $autoFill, $options);
+        }
+
         $columns = $this->getStageColumns($stage);
 
         $useGlobal = $options['use_global_activities'] ?? true;
         $presetKey = $options['activity_preset'] ?? null;
-        $autoFill  = $options['auto_fill'] ?? true;
 
         $globalPresets = $this->getGlobalActivities($stage);
         $globalAct = ($presetKey && isset($globalPresets[$presetKey]))

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HPC Assist - Portal Sync & Automation",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "description": "UDISE+ student data sync and PARAKH HPC portal automated submission & 15-part teacher evaluation assistant.",
   "permissions": [
     "storage"

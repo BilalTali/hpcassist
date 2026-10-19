@@ -199,29 +199,48 @@
 
     function setNativeValue(element, value) {
         if (!element) return;
+        value = String(value ?? '');
         element.focus();
         if (element.isContentEditable || element.getAttribute('contenteditable') === 'true' || element.getAttribute('role') === 'textbox') {
             element.innerText = value;
             element.textContent = value;
-            element.dispatchEvent(new Event('input', { bubbles: true }));
-            element.dispatchEvent(new Event('change', { bubbles: true }));
+            element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
             element.dispatchEvent(new Event('blur', { bubbles: true }));
             return;
         }
-        const proto = Object.getPrototypeOf(element);
-        const set = Object.getOwnPropertyDescriptor(proto, 'value')?.set ||
-                    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
-                    Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+        const tracker = element._valueTracker;
+        if (tracker) {
+            tracker.setValue('__REACT_BYPASS_' + Math.random());
+        }
+        const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
+                    Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set ||
+                    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), 'value')?.set;
         if (set) {
             set.call(element, value);
         } else {
             element.value = value;
         }
-        if (element._valueTracker) {
-            element._valueTracker.setValue('');
+        element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+        try {
+            element.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: value }));
+        } catch(e) {}
+
+        // Direct React synthetic event invocation
+        const rPropsKey = Object.keys(element).find(k => k.startsWith('__reactProps'));
+        if (rPropsKey && element[rPropsKey]) {
+            if (typeof element[rPropsKey].onChange === 'function') {
+                try {
+                    element[rPropsKey].onChange({ target: element, currentTarget: element, preventDefault: () => {}, stopPropagation: () => {} });
+                } catch(e) {}
+            }
+            if (typeof element[rPropsKey].onInput === 'function') {
+                try {
+                    element[rPropsKey].onInput({ target: element, currentTarget: element, preventDefault: () => {}, stopPropagation: () => {} });
+                } catch(e) {}
+            }
         }
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
         element.dispatchEvent(new Event('blur', { bubbles: true }));
     }
 
@@ -2465,6 +2484,12 @@
     }
 
     async function fillPartA1(s) {
+        logStatus(`[Part-A1] Waiting for Basic Profile & Attendance inputs for ${s.name}...`);
+        for (let w = 0; w < 16; w++) {
+            const hasInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]), select')).filter(el => !isLanguageOrHeaderElement(el)).length > 2;
+            if (hasInputs) break;
+            await sleep(500);
+        }
         logStatus(`[Part-A1] Filling Basic Profile & Attendance for ${s.name}...`);
         // 1. Admission Number (can be integer or integer and string)
         let admVal = String(s.admission_no !== undefined && s.admission_no !== null ? s.admission_no : (s.School_Admission_No || '')).trim();
@@ -2529,7 +2554,16 @@
     }
 
     async function fillPartA2(s) {
-        logStatus(`[Part-A2] Filling All About Me & Self-Reflection for ${s.name}...`);
+        logStatus(`[Part-A2] Waiting for form inputs to render for ${s.name}...`);
+
+        // Wait up to 8 seconds (16 x 500ms) for fillable inputs to mount in DOM
+        let textElements = [];
+        for (let w = 0; w < 16; w++) {
+            textElements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, [contenteditable="true"], [role="textbox"]')).filter(el => !isLanguageOrHeaderElement(el));
+            if (textElements.length > 0) break;
+            await sleep(500);
+        }
+        logStatus(`[Part-A2] Found ${textElements.length} fillable input(s). Filling All About Me & Self-Reflection for ${s.name}...`);
 
         // Context-aware rules map covering both Preparatory "Hand of Self-Reflection" and Middle Stage fields
         const rules = [
@@ -2547,40 +2581,64 @@
                 val: s.dont_like || 'Fighting, shouting, and loud noises'
             },
             {
-                keys: ["like to", "things i like", "i like", "love to", "मुझे पसंद", "पसंद है"],
-                val: s.like_to || s.free_time || s.AboutMe_Free_Time_Doing || 'Reading storybooks, drawing nature, and playing outdoors'
+                keys: ["like to", "things i like", "i like", "love to", "मुझे पसंद", "पसंद है", "ring"],
+                val: s.Hand_Reflection_Ring_LikeTo || s.like_to || s.free_time || s.AboutMe_Free_Time_Doing || 'Reading storybooks, drawing nature, and playing outdoors'
             },
             {
-                keys: ["want to improve", "improve in", "could improve", "do better", "could do better", "improve my skill", "skill of", "improve my skills of", "कौशल में सुधार", "सुधार करना", "सुधार"],
-                val: s.want_to_improve || s.do_better || s.AboutMe_Could_Do_Better_Specially || 'Revision planning and cursive handwriting speed'
+                keys: ["want to improve", "improve in", "could improve", "do better", "could do better", "improve my skill", "skill of", "improve my skills of", "कौशल में सुधार", "सुधार करना", "सुधार", "middle"],
+                val: s.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || s.do_better || s.AboutMe_Could_Do_Better_Specially || 'Revision planning and cursive handwriting speed'
             },
             {
-                keys: ["no good at", "not good at", "am not good", "struggle with", "cannot do", "अच्छा नहीं हूँ", "कठिनाई"],
-                val: s.not_good_at || 'Drawing complex diagrams and spelling long words'
+                keys: ["no good at", "not good at", "am not good", "struggle with", "cannot do", "अच्छा नहीं हूँ", "कठिनाई", "index"],
+                val: s.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Drawing complex diagrams and spelling long words'
             },
             {
-                keys: ["good at", "really well", "do well", "very well", "i do well", "i am good", "अच्छा हूँ", "अच्छा करता", "निपुण"],
-                val: s.good_at || s.do_well || s.AboutMe_Do_Very_Well || 'Solving numerical puzzles and explaining concepts to classmates'
+                keys: ["good at", "really well", "do well", "very well", "i do well", "i am good", "अच्छा हूँ", "अच्छा करता", "निपुण", "thumb"],
+                val: s.Hand_Reflection_Thumb_GoodAt || s.good_at || s.do_well || s.AboutMe_Do_Very_Well || 'Solving numerical puzzles and explaining concepts to classmates'
             },
             {
                 keys: ["foods", "fruits", "dish", "food", "favourite food", "favorite food", "पसंदीदा भोजन", "फल", "व्यंजन"],
-                val: s.fav_food || s.fav_dish || 'Dal Chawal, Apples, and seasonal fresh fruits'
+                val: s.Favorite_Food || s.fav_food || s.fav_dish || 'Dal Chawal, Apples, and seasonal fresh fruits'
+            },
+            {
+                keys: ["game", "toy", "favourite game", "favorite game", "traditional game", "खेल"],
+                val: s.Favorite_Games || s.fav_game || s.fav_toy || 'Kho-Kho and Badminton'
             },
             {
                 keys: ["festival", "favourite festival", "favorite festival", "त्योहार", "पर्व"],
-                val: s.fav_festival || 'Eid-ul-Fitr and National Festivals'
+                val: s.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr and National Festivals'
             },
             {
-                keys: ["grow up", "when i grow up", "want to be", "aspire to be", "बड़ा होकर", "बनना चाहता"],
-                val: s.grow_up_be || s.ambition || s.Ambition_Goal || 'Software Engineer'
+                keys: ["grow up", "when i grow up", "want to be", "aspire to be", "बड़ा होकर", "बनना चाहता", "little"],
+                val: s.Hand_Reflection_Little_Aspiration || s.grow_up_be || s.ambition || s.Ambition_Goal || 'Software Engineer'
             },
             {
                 keys: ["inspires", "person who inspires", "inspires me", "प्रेरणा स्रोत", "प्रेरित"],
-                val: s.person_inspires || 'Dr. A.P.J. Abdul Kalam and my teacher'
+                val: s.General_Reflection_Prompt_1 || s.person_inspires || 'Dr. A.P.J. Abdul Kalam and my teacher'
             },
             {
                 keys: ["three things", "learn this school year", "want to learn", "learn this year", "सीखना चाहता", "तीन बातें"],
-                val: s.learn_this_year || s.sch_learn1 || '1. Science models 2. Fast division math 3. Fluent English reading'
+                val: s.General_Reflection_Prompt_2 || s.learn_this_year || s.sch_learn1 || '1. Science models 2. Fast division math 3. Fluent English reading'
+            },
+            {
+                keys: ["reflection 3", "general reflection 3", "prompt 3"],
+                val: s.General_Reflection_Prompt_3 || 'Active participation in group discussions and sports activities'
+            },
+            {
+                keys: ["reflection 4", "general reflection 4", "prompt 4"],
+                val: s.General_Reflection_Prompt_4 || 'Regular revision and asking questions when in doubt'
+            },
+            {
+                keys: ["observation 1", "observation statement 1", "statement 1"],
+                val: s.Observation_Statement_Row_1 || 'Consistently shows high enthusiasm in collaborative activities and group tasks.'
+            },
+            {
+                keys: ["observation 2", "observation statement 2", "statement 2"],
+                val: s.Observation_Statement_Row_2 || 'Demonstrates strong empathy and helpful attitude towards peers.'
+            },
+            {
+                keys: ["observation 3", "observation statement 3", "statement 3"],
+                val: s.Observation_Statement_Row_3 || 'Shows keen observational skills and curiosity during science experiments.'
             },
 
             // ── Middle Stage & Shared Context Rules ──
@@ -2591,10 +2649,6 @@
             {
                 keys: ["stay at", "address", "location", "stay", "रहता", "स्थान", "पता"],
                 val: s.stay_at || s.AboutMe_Stay_At || 'Family home in rural district'
-            },
-            {
-                keys: ["game", "toy", "favourite game", "favorite game", "traditional game", "खेल"],
-                val: s.fav_game || s.fav_toy || 'Kho-Kho and Badminton'
             },
             {
                 keys: ["free time", "in my free time", "leisure", "खाली समय", "खाली समय में"],
@@ -2683,13 +2737,15 @@
         rules.forEach(rule => {
             const matchedEl = allTextNodes.find(el => {
                 const t = (el.innerText || el.textContent || '').trim().toLowerCase();
-                return rule.keys.some(k => t.includes(k)) && t.length < 150 && el.children.length <= 1;
+                return rule.keys.some(k => t.includes(k)) && t.length < 300 && !el.querySelector('input, textarea');
             });
             if (matchedEl) {
-                const container = matchedEl.closest('div, li, fieldset, tr') || matchedEl.parentElement;
-                const targetInput = container?.querySelector('input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]') ||
-                                    matchedEl.nextElementSibling?.querySelector('input, textarea, [contenteditable="true"]') ||
-                                    (matchedEl.nextElementSibling?.matches('input, textarea, [contenteditable="true"]') ? matchedEl.nextElementSibling : null);
+                const container = matchedEl.closest('.form-group, .card, .field, .input-group, div, li, fieldset, tr') || matchedEl.parentElement;
+                let targetInput = container?.querySelector('input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]');
+                if (!targetInput) {
+                    targetInput = matchedEl.nextElementSibling?.querySelector('input, textarea, [contenteditable="true"]') ||
+                                  (matchedEl.nextElementSibling?.matches('input, textarea, [contenteditable="true"]') ? matchedEl.nextElementSibling : null);
+                }
                 if (targetInput && !isLanguageOrHeaderElement(targetInput)) {
                     setNativeValue(targetInput, rule.val);
                 }
@@ -2697,7 +2753,8 @@
         });
 
         // 2. Scan all inputs, textareas, and contenteditable elements (excluding headers & language toggles)
-        const textElements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, [contenteditable="true"], [role="textbox"]')).filter(el => !isLanguageOrHeaderElement(el));
+        textElements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, [contenteditable="true"], [role="textbox"]')).filter(el => !isLanguageOrHeaderElement(el));
+        let filledCount = 0;
         textElements.forEach((el, idx) => {
             const lbl = getFieldLabel(el);
             if (lbl.includes('search') || el.type === 'search') return;
@@ -2705,9 +2762,13 @@
             const matchedRule = rules.find(r => r.keys.some(k => lbl.includes(k)));
             if (matchedRule) {
                 setNativeValue(el, matchedRule.val);
+                filledCount++;
             } else if (!el.value || el.value.trim() === '') {
                 const fallbackVal = (rules[idx] ? rules[idx].val : null) || 'Active and positive participation demonstrated throughout the year.';
                 setNativeValue(el, fallbackVal);
+                filledCount++;
+            } else {
+                filledCount++;
             }
         });
 
@@ -2741,15 +2802,24 @@
             }
         });
 
+        logStatus(`[Part-A2] ✓ Successfully filled ${filledCount} field(s) in Part-A2.`);
         await sleep(800);
     }
 
     async function fillPreparatoryPartA3(s) {
+        logStatus(`[Part-A3: Preparatory] Waiting for inputs, feelings & review elements for ${s.name}...`);
+
+        // Wait up to 8 seconds (16 x 500ms) for form elements to mount
+        for (let w = 0; w < 16; w++) {
+            const interactive = Array.from(document.querySelectorAll('input, textarea, [role="radio"], .appropriate-option-select, [class*="option-select" i]')).filter(el => !isLanguageOrHeaderElement(el));
+            if (interactive.length > 2) break;
+            await sleep(500);
+        }
         logStatus(`[Part-A3: Preparatory] Filling Feelings, Peer 1, Peer 2 & Parent Feedback for ${s.name}...`);
         
         // 1. Peer Reviewer & Student Names (Peer 1 & Peer 2)
-        const p1Name = s.peer1_name || 'Ayaan Ahmad';
-        const p2Name = s.peer2_name || 'Zaid Farooq';
+        const p1Name = s.Peer1_Target_Friend_Name || s.Peer1_Student_Name || s.peer1_name || 'Ayaan Ahmad';
+        const p2Name = s.Peer2_Target_Friend_Name || s.Peer2_Student_Name || s.peer2_name || 'Zaid Farooq';
         const stName = s.name || s.my_name || 'Student';
 
         const textInputs = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])')).filter(inp => !isLanguageOrHeaderElement(inp));
@@ -2800,7 +2870,6 @@
             const list = group.radios;
             if (list.length > 0 && !list.some(r => r.checked || r.getAttribute('aria-checked') === 'true')) {
                 const pTxt = group.pText.toLowerCase();
-                // If question is "curriculum difficult" (Q3 under How can I know your child better)
                 const isCurriculumDiff = pTxt.includes('difficult') || pTxt.includes('कठिन') || pTxt.includes('curriculum');
                 let target;
                 if (isCurriculumDiff) {
@@ -2821,25 +2890,41 @@
             }
         });
 
-        // Also handle smiley li or button selection if custom UI
-        const optionLists = Array.from(document.querySelectorAll('.appropriate-option-select, .smiley-options, ul.options-list, [class*="option-select" i]')).filter(el => !isLanguageOrHeaderElement(el));
-        optionLists.forEach(ul => {
-            const lis = Array.from(ul.querySelectorAll('li, div[role="button"], button')).filter(el => !isLanguageOrHeaderElement(el));
-            if (lis.length > 0 && !lis.some(li => li.classList.contains('active') || li.classList.contains('selected'))) {
-                const pTxt = (ul.closest('tr, [role="row"], fieldset, .card')?.innerText || '').toLowerCase();
-                const isCurriculumDiff = pTxt.includes('difficult') || pTxt.includes('कठिन');
-                let targetLi;
-                if (isCurriculumDiff) {
-                    targetLi = lis.find(li => /no|नहीं|sometimes|कभी-कभी/i.test(li.innerText || '')) || lis[Math.min(1, lis.length - 1)];
-                } else {
-                    targetLi = lis.find(li => /yes|always|हाँ|हमेशा/i.test(li.innerText || '')) || lis[0];
+        // Direct table row scan for smileys or list buttons
+        document.querySelectorAll('tbody tr, [role="row"]').forEach(tr => {
+            if (isLanguageOrHeaderElement(tr)) return;
+            const radios = Array.from(tr.querySelectorAll('input[type="radio"], [role="radio"]'));
+            if (radios.length > 0 && !radios.some(r => r.checked || r.getAttribute('aria-checked') === 'true')) {
+                const rowTxt = tr.innerText.toLowerCase();
+                const isDiff = rowTxt.includes('difficult') || rowTxt.includes('कठिन');
+                const target = isDiff ? (radios.find(r => /no|नहीं|sometimes/i.test(r.value || '')) || radios[Math.min(1, radios.length - 1)]) : (radios.find(r => /yes|हाँ|always/i.test(r.value || '')) || radios[0]);
+                if (target) {
+                    target.click();
+                    target.checked = true;
+                    target.dispatchEvent(new Event('change', { bubbles: true }));
                 }
-                if (targetLi) targetLi.click();
+                return;
+            }
+
+            const clickableOpts = Array.from(tr.querySelectorAll('li, div[role="button"], button, .option-item, [class*="smiley" i], img, svg')).filter(el => {
+                if (isLanguageOrHeaderElement(el)) return false;
+                const parent = el.closest('td:last-child, td:nth-child(3), td:nth-child(4), .options, .options-list, ul');
+                return !!parent;
+            });
+            if (clickableOpts.length >= 2) {
+                const hasSelected = clickableOpts.some(o => o.classList.contains('active') || o.classList.contains('selected') || o.closest('.active, .selected'));
+                if (!hasSelected) {
+                    const rowTxt = tr.innerText.toLowerCase();
+                    const isDiff = rowTxt.includes('difficult') || rowTxt.includes('कठिन');
+                    const target = isDiff ? clickableOpts[Math.min(1, clickableOpts.length - 1)] : clickableOpts[0];
+                    if (target) {
+                        target.click();
+                    }
+                }
             }
         });
 
         // 3. Home Resources Checkboxes ("Your Child Matters! Tick the resources available to your child at home")
-        // Books and Magazines, Newspaper, Toys Games and Sports, Phone and Computer, Internet, Radio, Broadcast, T.V., Resources for CWD
         const resText = (s.parent_home_resources || s.home_resources || 'books, newspaper, toys, games, sports, phone, computer, internet, radio, broadcast, tv').toLowerCase();
         document.querySelectorAll('.childrens-resources li, .resources-available li, [class*="resource" i] li, fieldset li, div.form-check').forEach(li => {
             if (isLanguageOrHeaderElement(li)) return;
@@ -2865,7 +2950,6 @@
         });
 
         // 4. Child Support Needs Checkboxes ("My child needs support with...")
-        // Oral communication (R1 or R2), Reading, Numbers and Math, Self-confidence, Working with children, Working independently at home, Other subject areas
         document.querySelectorAll('.need-children-support-check input[type="checkbox"], input[type="checkbox"][name*="support"], [class*="support" i] input[type="checkbox"]').forEach((cb, idx) => {
             if (isLanguageOrHeaderElement(cb)) return;
             const parent = cb.closest('label, li, div');
@@ -2885,7 +2969,7 @@
         });
 
         // 5. Parent feedback textareas & specify inputs ("Specify: Write here.")
-        const feedbackText = s.parent_support_specify || s.parent_support_needed || s.parent_feedback || 'Provide 30 minutes of guided reading and daily arithmetic practice worksheets at home.';
+        const feedbackText = s.Parent_Support_Other_Specify_Text || s.parent_support_specify || s.parent_support_needed || s.parent_feedback || 'Provide 30 minutes of guided reading and daily arithmetic practice worksheets at home.';
         document.querySelectorAll('textarea, input[placeholder*="Write here" i], input[placeholder*="specify" i]').forEach(ta => {
             if (isLanguageOrHeaderElement(ta)) return;
             if (!ta.value || ta.value.trim() === '') {
@@ -2898,6 +2982,12 @@
     }
 
     async function fillPartA3(s) {
+        logStatus(`[Part-A3] Waiting for Ambition Card elements for ${s.name}...`);
+        for (let w = 0; w < 16; w++) {
+            const hasInputs = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, [contenteditable="true"]')).filter(el => !isLanguageOrHeaderElement(el)).length > 0;
+            if (hasInputs) break;
+            await sleep(500);
+        }
         logStatus(`[Part-A3] Filling Ambition Card for ${s.name}...`);
 
         const ambitionRules = [
@@ -2948,10 +3038,10 @@
         ambitionRules.forEach(rule => {
             const matchedEl = allTextNodes.find(el => {
                 const t = (el.innerText || el.textContent || '').trim().toLowerCase();
-                return rule.keys.some(k => t.includes(k)) && t.length < 120 && el.children.length <= 1;
+                return rule.keys.some(k => t.includes(k)) && t.length < 300 && !el.querySelector('input, textarea');
             });
             if (matchedEl) {
-                const container = matchedEl.closest('div, li, fieldset, tr') || matchedEl.parentElement;
+                const container = matchedEl.closest('div, li, fieldset, tr, .card, .form-group') || matchedEl.parentElement;
                 const targetInput = container?.querySelector('input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]') ||
                                     matchedEl.nextElementSibling?.querySelector('input, textarea, [contenteditable="true"]') ||
                                     (matchedEl.nextElementSibling?.matches('input, textarea, [contenteditable="true"]') ? matchedEl.nextElementSibling : null);
@@ -4269,6 +4359,7 @@
 
         if (isPartA1) {
             await fillPartA1(s);
+            await sleep(1000);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;
@@ -4282,6 +4373,7 @@
 
         if (isPartA2) {
             await fillPartA2(s);
+            await sleep(1000);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;
@@ -4300,6 +4392,7 @@
             } else {
                 await fillPartA3(s);
             }
+            await sleep(1000);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;
@@ -4311,6 +4404,7 @@
 
         if (isPartA4) {
             await fillPartA4(s);
+            await sleep(1000);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;
@@ -4322,6 +4416,7 @@
 
         if (isPartB) {
             await fillPartB(s);
+            await sleep(1000);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;
@@ -4332,6 +4427,7 @@
 
         if (isPartC) {
             await fillPartC(s);
+            await sleep(1000);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;

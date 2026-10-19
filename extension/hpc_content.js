@@ -4456,22 +4456,97 @@
             return;
         }
 
-        // Open Action Dropdown
-        const dropdownHeader = targetRow.querySelector('.custom-dropdown-header');
-        if (dropdownHeader) {
-            dropdownHeader.click();
+        // Strategy 1: Direct link inside targetRow
+        const directLink = targetRow.querySelector('a[href*="/hpc/"], a[href*="part-"], a[href*="student"]');
+        if (directLink) {
+            logStatus(`Opening evaluation link for ${s.name}...`);
+            localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
+            directLink.click();
+            scheduleTeacherEvaluationStep(2500);
+            await sleep(3000);
+            return;
+        }
+
+        // Strategy 2: Locate Action / 3-dots button in the row's Action cell
+        const lastCell = targetRow.cells ? targetRow.cells[targetRow.cells.length - 1] : targetRow.querySelector('td:last-child');
+        const actionBtn = (lastCell ? lastCell.querySelector('button, [role="button"], .dropdown-toggle, .custom-dropdown-header, [class*="action" i], [class*="menu" i], [class*="btn" i], a') : null)
+            || targetRow.querySelector('.custom-dropdown-header, [class*="action" i] button, [class*="dropdown" i] button, button:has(svg), button');
+
+        if (actionBtn) {
+            try { actionBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+            await sleep(200);
+
+            // React props trigger
+            const rKey = Object.keys(actionBtn).find(k => k.startsWith('__reactProps'));
+            if (rKey && actionBtn[rKey]?.onClick) {
+                try { actionBtn[rKey].onClick({ preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
+            }
+            actionBtn.focus();
+            actionBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
+            actionBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+            actionBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
+            actionBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+            actionBtn.click();
+            try { HTMLElement.prototype.click.call(actionBtn); } catch(e) {}
             await sleep(500);
 
-            const items = Array.from(document.querySelectorAll('.custom-dropdown-item'));
-            const actionItem = items.find(it => /open|edit/i.test(it.innerText.trim()));
+            // Look for menu items across the entire DOM (including React portals/drawers)
+            const candidateItems = Array.from(document.querySelectorAll(
+                '.custom-dropdown-item, .dropdown-item, [role="menuitem"], .dropdown-menu a, .dropdown-menu button, ' +
+                '[class*="menu" i] a, [class*="menu" i] button, [class*="menu" i] li, [class*="popover" i] li, ' +
+                'ul[role="menu"] li, .options-list li, div[role="button"], a, button'
+            )).filter(el => {
+                if (isLanguageOrHeaderElement(el)) return false;
+                if (el.closest('.top-steps, .stage-stepper, #hpc-status-widget')) return false;
+                const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
+                return /^(open|edit|fill|start|evaluate|view|खोलें|संपादित|मूल्यांकन|शुरू)(\s+(form|evaluation|hpc|student))?$/i.test(txt) ||
+                       (txt.includes('edit') && !txt.includes('profile')) ||
+                       (txt.includes('open') && !txt.includes('drawer')) ||
+                       txt.includes('मूल्यांकन');
+            });
+
+            const actionItem = candidateItems[0];
             if (actionItem) {
                 logStatus(`Opening evaluation form for ${s.name}...`);
                 localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
+                const itKey = Object.keys(actionItem).find(k => k.startsWith('__reactProps'));
+                if (itKey && actionItem[itKey]?.onClick) {
+                    try { actionItem[itKey].onClick({ preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
+                }
+                actionItem.focus();
                 actionItem.click();
+                try { HTMLElement.prototype.click.call(actionItem); } catch(e) {}
                 scheduleTeacherEvaluationStep(2500);
                 await sleep(3000);
                 return;
             }
+
+            // Fallback: If no specific "Open/Edit" text matched, pick the first option from the opened dropdown
+            const anyMenuItem = Array.from(document.querySelectorAll('.dropdown-menu a, .dropdown-menu button, .dropdown-menu li, [role="menu"] [role="menuitem"], [class*="dropdown" i] ul li, .custom-dropdown-menu li')).find(el => {
+                if (isLanguageOrHeaderElement(el)) return false;
+                const txt = String(el.innerText || el.textContent || '').trim();
+                return txt.length > 0 && txt.length < 35;
+            });
+            if (anyMenuItem) {
+                logStatus(`Clicking menu item "${anyMenuItem.innerText.trim()}" for ${s.name}...`);
+                localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
+                anyMenuItem.click();
+                scheduleTeacherEvaluationStep(2500);
+                await sleep(3000);
+                return;
+            }
+        }
+
+        // Strategy 3: Click student name cell or link directly
+        const nameCell = targetRow.cells ? targetRow.cells[2] : null;
+        if (nameCell) {
+            const clickEl = nameCell.querySelector('a, button, span[role="button"]') || nameCell;
+            logStatus(`Attempting to open via student name cell for ${s.name}...`);
+            localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
+            clickEl.click();
+            scheduleTeacherEvaluationStep(2500);
+            await sleep(3000);
+            return;
         }
 
         logStatus(`⚠️ Could not click Open/Edit for ${s.name}. Please open manually.`);

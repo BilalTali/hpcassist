@@ -37,6 +37,16 @@ class HpcTeacherController extends Controller
 
     public function dashboard(Request $request)
     {
+        // Auto-run any pending migrations on production server seamlessly
+        try {
+            if (! \Illuminate\Support\Facades\Schema::hasColumn('users', 'role') || 
+                ! \Illuminate\Support\Facades\Schema::hasColumn('students', 'udise_code')) {
+                \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('HPC Dashboard auto-migrate notice: ' . $e->getMessage());
+        }
+
         $storagePath = config('hpc.storage_path');
         $schoolsData = $this->getSchoolsData();
         $activeSchool = $this->getActiveSchool();
@@ -959,11 +969,28 @@ class HpcTeacherController extends Controller
                     'act_strength' => $rowValues['act_strength'] ?? $rowValues['act_teach_strength'] ?? 'Collaboration',
                     'act_barriers' => $rowValues['act_barriers'] ?? $rowValues['act_teach_barrier'] ?? 'None',
                     'act_support_plan' => $rowValues['act_support_plan'] ?? 'Provide advanced learning challenges and continuous encouragement',
-                    // Hand of Self-Reflection (Preparatory & Middle)
-                    'dont_like' => $rowValues['dont_like'] ?? 'Fighting, shouting, and loud noises',
-                    'like_to' => $rowValues['like_to'] ?? $rowValues['free_time'] ?? 'Reading storybooks, drawing nature, and playing outdoors',
-                    'good_at' => $rowValues['good_at'] ?? $rowValues['do_well'] ?? 'Solving arithmetic puzzles and reciting poems',
-                    'not_good_at' => $rowValues['not_good_at'] ?? $rowValues['want_to_improve'] ?? 'Neat cursive handwriting and spelling long words',
+                    // Hand of Self-Reflection & All About Me (Preparatory & Middle)
+                    'my_name'          => $rowValues['my_name'] ?? $name,
+                    'my_age'           => $rowValues['my_age'] ?? '9',
+                    'dont_like'        => $rowValues['dont_like'] ?? 'Fighting, shouting, and loud noises',
+                    'like_to'          => $rowValues['like_to'] ?? $rowValues['free_time'] ?? 'Reading storybooks, drawing nature, and playing outdoors',
+                    'want_to_improve'  => $rowValues['want_to_improve'] ?? $rowValues['do_better'] ?? 'Neat cursive handwriting and fast mental math',
+                    'not_good_at'      => $rowValues['not_good_at'] ?? 'Drawing complex diagrams and spelling long words',
+                    'good_at'          => $rowValues['good_at'] ?? $rowValues['do_well'] ?? 'Solving arithmetic puzzles and reciting poems',
+                    'fav_food'         => $rowValues['fav_food'] ?? $rowValues['fav_dish'] ?? 'Dal Chawal, Apples, and seasonal fresh fruits',
+                    'fav_festival'     => $rowValues['fav_festival'] ?? 'Eid-ul-Fitr and National Festivals',
+                    'grow_up_be'       => $rowValues['grow_up_be'] ?? $rowValues['ambition'] ?? 'Doctor / Space Scientist',
+                    'person_inspires'  => $rowValues['person_inspires_and_learn'] ?? $rowValues['person_inspires'] ?? 'Dr. A.P.J. Abdul Kalam and my teacher',
+                    'learn_this_year'  => $rowValues['person_inspires_and_learn'] ?? $rowValues['learn_this_year'] ?? '1. Science models 2. Fast division math 3. Fluent English reading',
+                    // Preparatory Part A(3) Peer & Parent Feedback
+                    'peer1_name'       => $rowValues['peer1_name'] ?? 'Ayaan Ahmad',
+                    'peer1_feedback'   => $rowValues['peer1_feedback'] ?? 'Yes',
+                    'peer2_name'       => $rowValues['peer2_name'] ?? 'Zaid Farooq',
+                    'peer2_feedback'   => $rowValues['peer2_feedback'] ?? 'Yes',
+                    'home_resources'   => $rowValues['parent_home_resources'] ?? 'Books, Newspaper, Toys, Phone/Computer, Internet, TV',
+                    'child_needs_support' => $rowValues['parent_support_areas'] ?? 'Reading, Numbers and Math, Oral communication',
+                    'parent_support_needed' => $rowValues['parent_support_specify'] ?? 'Provide 30 minutes of guided reading and arithmetic practice at home',
+                    'data'             => $rowValues,
                 ]);
 
                 $preview[] = $rowItem;

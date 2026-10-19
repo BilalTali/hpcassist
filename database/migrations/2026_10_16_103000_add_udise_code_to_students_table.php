@@ -21,12 +21,20 @@ return new class extends Migration
         });
 
         // Backfill existing records from the parent school's udise_code
-        DB::statement("
-            UPDATE students 
-            JOIN schools ON students.school_id = schools.id 
-            SET students.udise_code = schools.udise_code 
-            WHERE students.udise_code IS NULL OR students.udise_code = ''
-        ");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("
+                UPDATE students 
+                JOIN schools ON students.school_id = schools.id 
+                SET students.udise_code = schools.udise_code 
+                WHERE students.udise_code IS NULL OR students.udise_code = ''
+            ");
+        } else {
+            DB::statement("
+                UPDATE students 
+                SET udise_code = (SELECT schools.udise_code FROM schools WHERE schools.id = students.school_id)
+                WHERE students.udise_code IS NULL OR students.udise_code = ''
+            ");
+        }
     }
 
     /**

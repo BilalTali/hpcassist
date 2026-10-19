@@ -542,17 +542,24 @@
                                 @if(!empty($preview))
                                     @foreach($preview as $p)
                                         @php
+                                            if (!is_array($p)) continue;
                                             $isDemo = !empty($p['is_demo']);
-                                            $stText = trim($p['status'] ?? '');
+                                            $stText = is_scalar($p['status'] ?? null) ? trim((string)$p['status']) : '';
                                             $stLower = strtolower($stText);
                                             $isCompleted = !empty($p['is_completed']) || str_contains($stLower, 'completed') || str_contains($stLower, 'success');
                                             $isUnderProcess = str_contains($stLower, 'process') || str_contains($stLower, 'progress');
                                             $hasErrors = !empty($p['errors']);
+
+                                            $rowNum = is_scalar($p['row'] ?? null) ? $p['row'] : '-';
+                                            $loginIdVal = is_scalar($p['login_id'] ?? null) ? $p['login_id'] : '';
+                                            $nameVal = is_scalar($p['name'] ?? null) && !empty($p['name']) ? $p['name'] : (!empty($p['name']) && is_array($p['name']) ? implode(' ', array_filter($p['name'], 'is_scalar')) : 'Student');
+                                            $gradeVal = is_scalar($p['grade'] ?? null) && !empty($p['grade']) ? $p['grade'] : 'Grade 6';
+                                            $sectionVal = is_scalar($p['section'] ?? null) && !empty($p['section']) ? $p['section'] : 'A';
                                         @endphp
                                         <tr class="hover:bg-slate-50/80">
-                                            <td class="px-3 py-2 font-mono text-slate-400">{{ $p['row'] ?? '-' }}</td>
-                                            <td class="px-3 py-2 font-mono font-bold text-slate-800">{{ $p['login_id'] ?? '' }}</td>
-                                            <td class="px-3 py-2 font-bold text-slate-900">{{ $p['name'] ?? '' }}</td>
+                                            <td class="px-3 py-2 font-mono text-slate-400">{{ $rowNum }}</td>
+                                            <td class="px-3 py-2 font-mono font-bold text-slate-800">{{ $loginIdVal }}</td>
+                                            <td class="px-3 py-2 font-bold text-slate-900">{{ $nameVal }}</td>
                                             <td class="px-3 py-2">
                                                 @if($isDemo)
                                                     <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">📖 Demo Guide</span>
@@ -576,7 +583,7 @@
                                                 @elseif($isUnderProcess)
                                                     <span class="text-blue-700 font-semibold">In Progress on portal — Ready for submission</span>
                                                 @else
-                                                    <span>Grade: {{ $p['grade'] ?? 'Grade 6' }} | Section: {{ $p['section'] ?? 'A' }}</span>
+                                                    <span>Grade: {{ $gradeVal }} | Section: {{ $sectionVal }}</span>
                                                 @endif
                                             </td>
                                         </tr>

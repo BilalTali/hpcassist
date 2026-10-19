@@ -289,32 +289,33 @@ class StageTemplateService
     {
         $cols = $this->getBaseMetadataColumns('"Grade 3,Grade 4,Grade 5"');
 
-        // Part A(2) All About Me (Learner Profile)
-        $cols[] = ['key' => 'live_with', 'label' => 'I live with (A2)', 'width' => 24, 'type' => 'string', 'note' => 'e.g. My parents, siblings, and grandparents'];
-        $cols[] = ['key' => 'fav_dish', 'label' => 'My Favorite Food / Indian Dish (A2) *', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Dal Chawal, Rajma, Khichdi'];
-        $cols[] = ['key' => 'fav_game', 'label' => 'My Favorite Indigenous / Traditional Game (A2) *', 'width' => 34, 'type' => 'string', 'note' => 'e.g. Kho-Kho, Kabaddi, Gilli-Danda'];
-        $cols[] = ['key' => 'free_time', 'label' => 'In my free time I love (A2)', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Reading Panchatantra stories and sketching'];
-        $cols[] = ['key' => 'do_well', 'label' => 'Something I do really well (A2) *', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Solving math puzzles and recitation'];
-        $cols[] = ['key' => 'want_to_improve', 'label' => 'Something I want to improve in (A2)', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Neat handwriting and spelling'];
-        $cols[] = ['key' => 'responsible', 'label' => 'I am responsible (A2) *', 'width' => 24, 'type' => 'list', 'options' => '"all the time,most times,sometimes"', 'note' => 'all the time, most times, sometimes'];
-        $cols[] = ['key' => 'proud_of', 'label' => 'I feel proud of myself when (A2)', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Helping my classmate with reading'];
-        $cols[] = ['key' => 'goal_acad', 'label' => 'My Learning Goal this year (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Read 15 storybooks in English and Urdu'];
-        $cols[] = ['key' => 'goal_step', 'label' => 'Steps I will take to reach my goal (A2)', 'width' => 34, 'type' => 'string', 'note' => 'e.g. Read 2 pages every evening before bed'];
-        $cols[] = ['key' => 'good_deed', 'label' => 'A kind deed I did recently (A2)', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Shared my lunch with a friend who forgot hers'];
+        // Part A(2) All About Me & Self-Reflection (Columns AQ to BA)
+        $cols[] = ['key' => 'my_name', 'label' => 'My name is (A2) *', 'width' => 26, 'type' => 'string', 'note' => 'Student full name'];
+        $cols[] = ['key' => 'my_age', 'label' => 'I am ... years old (A2) *', 'width' => 22, 'type' => 'integer', 'note' => 'Student age in years (e.g. 9 or 10)'];
+        $cols[] = ['key' => 'dont_like', 'label' => 'I don\'t like to (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Fighting, shouting, and loud noises'];
+        $cols[] = ['key' => 'like_to', 'label' => 'I like to (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Reading storybooks, drawing nature, and playing outdoors'];
+        $cols[] = ['key' => 'want_to_improve', 'label' => 'I would like to improve my skills of (A2) *', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Neat cursive handwriting and fast mental math'];
+        $cols[] = ['key' => 'not_good_at', 'label' => 'I am not good at (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Drawing complex diagrams and spelling long words'];
+        $cols[] = ['key' => 'good_at', 'label' => 'I am good at (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Solving arithmetic puzzles and reciting poems'];
+        $cols[] = ['key' => 'fav_food', 'label' => 'Favourite foods, fruits (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Dal Chawal, Apples, and seasonal fresh fruits'];
+        $cols[] = ['key' => 'fav_festival', 'label' => 'Favourite festival (A2) *', 'width' => 26, 'type' => 'string', 'note' => 'e.g. Eid, Diwali, Navroz'];
+        $cols[] = ['key' => 'grow_up_be', 'label' => 'When I grow up I want to be (A2) *', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Doctor / Space Scientist / Teacher'];
+        $cols[] = ['key' => 'person_inspires_and_learn', 'label' => 'One person who inspires me / Things I want to learn this year (A2) *', 'width' => 48, 'type' => 'string', 'note' => 'e.g. Dr. A.P.J. Abdul Kalam | 1. Science models 2. Fast division math 3. Fluent English reading'];
 
-        // Part A(3) Peer 1, Peer 2 & Parent Feedback
-        $cols[] = ['key' => 'peer1_name', 'label' => 'Peer 1: Reviewer Name *', 'width' => 22, 'type' => 'string', 'note' => 'First assigned peer'];
-        $cols[] = ['key' => 'peer1_helpful', 'label' => 'Peer 1: Is helpful and cooperative *', 'width' => 26, 'type' => 'list', 'options' => '"Always,Usually,Sometimes"', 'note' => 'Peer 1 feedback'];
-        $cols[] = ['key' => 'peer1_listens', 'label' => 'Peer 1: Listens to others in group *', 'width' => 26, 'type' => 'list', 'options' => '"Always,Usually,Sometimes"', 'note' => 'Peer 1 collaboration'];
-        $cols[] = ['key' => 'peer1_praise', 'label' => 'Peer 1: What I like most about friend', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Very cheerful and always shares pencils'];
-        $cols[] = ['key' => 'peer2_name', 'label' => 'Peer 2: Reviewer Name *', 'width' => 22, 'type' => 'string', 'note' => 'Second assigned peer'];
-        $cols[] = ['key' => 'peer2_helpful', 'label' => 'Peer 2: Works well in team activities *', 'width' => 26, 'type' => 'list', 'options' => '"Always,Usually,Sometimes"', 'note' => 'Peer 2 feedback'];
-        $cols[] = ['key' => 'peer2_praise', 'label' => 'Peer 2: Positive comment for friend', 'width' => 30, 'type' => 'string', 'note' => 'e.g. Explains maths questions very patiently'];
-        $cols[] = ['key' => 'parent_reads_with', 'label' => 'Parent: Reads / discusses school at home *', 'width' => 30, 'type' => 'list', 'options' => '"Daily,Weekly,Occasionally,Rarely"', 'note' => 'Parent-teacher card'];
-        $cols[] = ['key' => 'parent_study_space', 'label' => 'Parent: Child has quiet space for study *', 'width' => 28, 'type' => 'list', 'options' => '"Yes,No"', 'note' => 'Home environment'];
-        $cols[] = ['key' => 'parent_social_habits', 'label' => 'Parent: Child displays respectful behavior *', 'width' => 30, 'type' => 'list', 'options' => '"Always,Usually,Needs Guidance"', 'note' => 'Parent observation'];
-        $cols[] = ['key' => 'parent_support_needed', 'label' => 'Parent: Support requested from school', 'width' => 32, 'type' => 'string', 'note' => 'e.g. Regular spelling practice worksheets'];
-        $cols[] = ['key' => 'parent_signature_status', 'label' => 'Parent PTA Consultation Done *', 'width' => 24, 'type' => 'list', 'options' => '"Completed,In Progress,Pending"', 'note' => 'SMC/PTA meeting status'];
+        // Part A(3) Feelings at School, Peer Review & Parent Feedback (Columns BB to BM)
+        $rateOpts = '"Yes,Sometimes,No,Not Sure"';
+        $cols[] = ['key' => 'feel_at_school', 'label' => 'How do I feel at school? (Self Q1-7) *', 'width' => 32, 'type' => 'list', 'options' => $rateOpts, 'note' => 'Talks about feelings, calm during difficulties, understands friends, respects views'];
+        $cols[] = ['key' => 'peer1_name', 'label' => 'Peer 1: Friend\'s Name *', 'width' => 22, 'type' => 'string', 'note' => 'First assigned classmate'];
+        $cols[] = ['key' => 'peer1_feedback', 'label' => 'Peer 1 Feedback (Q1-6: Expresses feelings, calm, caring) *', 'width' => 34, 'type' => 'list', 'options' => $rateOpts, 'note' => 'Friend can talk about feelings, calm self, respects views, helps make up after fight'];
+        $cols[] = ['key' => 'peer2_name', 'label' => 'Peer 2: Friend\'s Name *', 'width' => 22, 'type' => 'string', 'note' => 'Second assigned classmate'];
+        $cols[] = ['key' => 'peer2_feedback', 'label' => 'Peer 2 Feedback (Q1-6: Expresses feelings, calm, caring) *', 'width' => 34, 'type' => 'list', 'options' => $rateOpts, 'note' => 'Friend can talk about feelings, calm self, respects views, helps make up after fight'];
+        $cols[] = ['key' => 'parent_school_space', 'label' => 'Parent Q1-2: School welcoming, safe & participates *', 'width' => 32, 'type' => 'list', 'options' => $rateOpts, 'note' => 'Child finds school safe space & participates actively'];
+        $cols[] = ['key' => 'parent_curriculum_progress', 'label' => 'Parent Q3-5: Grade-level progress & school support *', 'width' => 34, 'type' => 'list', 'options' => $rateOpts, 'note' => 'Child making good progress and getting needed support'];
+        $cols[] = ['key' => 'parent_child_empathy', 'label' => 'Parent Q6-11: Calms self, expresses feelings & empathy *', 'width' => 34, 'type' => 'list', 'options' => $rateOpts, 'note' => 'Child talks about feelings, calms self, respects others views, helps friends'];
+        $cols[] = ['key' => 'parent_home_resources', 'label' => 'Your Child Matters: Home Resources Available *', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Books, Newspaper, Toys, Phone/Computer, Internet, TV'];
+        $cols[] = ['key' => 'parent_support_areas', 'label' => 'My child needs support with (Subjects / Skills) *', 'width' => 38, 'type' => 'string', 'note' => 'e.g. Reading, Numbers and Math, Oral communication, Self-confidence'];
+        $cols[] = ['key' => 'parent_support_specify', 'label' => 'Support Specifics (Write here) *', 'width' => 45, 'type' => 'string', 'note' => 'e.g. Regular evening reading revision and daily arithmetic practice worksheets'];
+        $cols[] = ['key' => 'parent_signature_status', 'label' => 'Parent SMC / PTA Consultation Done *', 'width' => 26, 'type' => 'list', 'options' => '"Completed,In Progress,Pending"', 'note' => 'Parent consultation meeting status'];
 
         // Part B Progress across 6 Curricular Learning Standards
         $rubricOpts = '"Beginner,Proficient,Advanced"';
@@ -723,7 +724,7 @@ class StageTemplateService
             ['Workbook Overview', '3-Sheet Structure', 'Sheet 1 is for Manual Entry (blank evaluations). Sheet 2 is Pre-Filled (baseline 100% complete data). Sheet 3 is Instructions.', 'Choose Sheet 1 to type your own evaluations, or Sheet 2 to tweak pre-filled evaluations.'],
             ['🔒 Locked Metadata', 'Columns A to D (APAAR ID, Login ID, Name, Status)', 'Unique identifiers synchronized with the PARAKH portal roster. Do not edit Login ID or APAAR ID.', 'Columns A, B, D are collapsed by default in Focus Mode. Click [+] above Student Name in Excel to view them.'],
             ['📋 Part A(1): Profile & Attendance', 'Columns E to AP (Admission No, Profile, Monthly Attendance Apr-Mar)', 'School Admission number is mandatory. Monthly working days and present days are arranged neck-to-neck for each month (Apr to Mar).', 'Present Days must be <= Working Days (0-31). Total Working, Present, and Attendance % calculate automatically.'],
-            ['🌟 Part A(2): All About Me', 'Columns AQ to BP (Learner Voice, Strengths, Habits, Goal Setting)', 'Student living arrangement, leisure hobbies, self-responsibility levels, areas of improvement, peer friends, and personal/academic goals.', 'Responsibility: All the time, Most times, Sometimes. Realistic student-voice descriptions.'],
+            ['🌟 Part A(2): All About Me', 'Columns AQ to BB (Preparatory: Name, Age, Likes/Dislikes, Strengths, Favorites, Aspirations; Middle: Columns AQ to BP)', 'Learner self-reflection, strengths, areas to improve, favorite foods/festivals, aspirations, and year goals.', 'All fields accept realistic learner voice statements.'],
             ['🎯 Part A(3): Ambition Card', 'Columns BQ to BZ (Career Exploration, Mentor Guidance)', 'Student career dream, steps to achieve, 5 key skills, focus subjects, habits to cultivate, mentor teacher name and guidance plan.', 'Realistic career pathways (Doctor, Engineer, Teacher, Scientist, Artist, Civil Servant, Entrepreneur).'],
             ['🤝 Part A(4): Parent Partnership', 'Columns CA to CJ (Home Resources, Child Understanding, Support Plan)', 'Home learning materials (Yes/No), Parent understanding of child (Yes, Sometimes, No, Not Sure), Support areas needed (Yes/No), and Home support plan.', 'Checkboxes: Yes / No; Radio smileys: Yes, Sometimes, No, Not Sure; Home plan text.'],
             ['🔬 Part B: Holistic Activity 1 & 2', 'Columns CK to CY (Academic Domain & Co-Curricular / Creative)', 'Pedagogical approach (Art-Integrated, Sports-Integrated, Toy-Based, Inquiry-Based), activity title, description, NCF rubrics (Awareness, Sensitivity, Creativity), reflection, peer review, teacher feedback.', 'Rubric rating levels: Beginner, Proficient, Advanced. Self-effort: Yes / No. Peer praise and teacher support plan.'],
@@ -1654,7 +1655,11 @@ class StageTemplateService
                 }
                 $vals[] = $firstOpt;
             } elseif ($type === 'integer') {
-                $vals[] = 10 + ($i % 15);
+                if ($k === 'my_age' || $k === 'student_age') {
+                    $vals[] = 9 + ($sIdx % 2); // 9 or 10 years old for Preparatory
+                } else {
+                    $vals[] = 10 + ($i % 15);
+                }
             } else {
                 $vals[] = $this->getSampleTextForField($k, $name, $stage);
             }
@@ -1667,6 +1672,22 @@ class StageTemplateService
     {
         $fn = explode(' ', trim($studentName))[0];
         return match($key) {
+            'my_name', 'st_name_a2' => $studentName,
+            'my_age', 'student_age' => (string)($stage === self::STAGE_PREPARATORY ? '9' : '12'),
+            'dont_like' => 'Fighting, shouting, and loud noises',
+            'like_to'   => 'Reading storybooks, drawing nature, and playing outdoors',
+            'want_to_improve' => 'Neat cursive handwriting and fast mental math',
+            'not_good_at' => 'Drawing complex diagrams and spelling long words',
+            'good_at'   => 'Solving arithmetic puzzles and reciting poems',
+            'fav_food', 'fav_dish' => 'Dal Chawal, Apples, and seasonal fresh fruits',
+            'fav_festival' => 'Eid-ul-Fitr and National Festivals',
+            'grow_up_be', 'aspire_to_be' => 'Doctor / Space Scientist',
+            'person_inspires', 'inspires_me' => 'Dr. A.P.J. Abdul Kalam and my teacher',
+            'person_inspires_and_learn' => 'Dr. A.P.J. Abdul Kalam | 1. Science models 2. Math puzzles 3. Fluent English reading',
+            'learn_this_year', 'three_things_learn' => '1. Science models 2. Fast division math 3. Fluent English reading',
+            'parent_home_resources' => 'Books, Newspaper, Toys, Phone/Computer, Internet, TV',
+            'parent_support_areas'  => 'Reading, Numbers and Math, Oral communication, Self-confidence',
+            'parent_support_specify', 'parent_support_needed' => 'Provide 30 minutes of guided reading and arithmetic practice at home',
             'live_with' => 'Parents, grandparents and sister',
             'stay_at'   => 'Sugin, Budgam',
             'fav_food', 'fav_dish' => 'Dal Chawal and fresh seasonal fruits',

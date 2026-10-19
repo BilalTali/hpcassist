@@ -131,10 +131,19 @@
 
     function isLanguageOrHeaderElement(el) {
         if (!el) return false;
-        if (el.closest('header, nav, .navbar, .top-bar, .header, #hpc-status-widget, [class*="navbar" i], [class*="topbar" i], [class*="header" i]')) {
+        if (el.closest('#hpc-status-widget')) return true;
+        if (el.closest('header, nav, .navbar, .top-bar, .header, [class*="navbar" i], [class*="topbar" i], [class*="app-header" i], [class*="main-header" i]')) {
+            return true;
+        }
+        // Exclude top-level horizontal stage breadcrumbs (1 A(1), 2 A(2), 3 A(3), 4 B, 5 C, 6 HPC Credit)
+        if (el.closest('.top-steps, .stage-stepper, .stage-navigation, .breadcrumb, [class*="breadcrumb" i]')) {
             return true;
         }
         const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+        // Explicit top stage indicators
+        if (/^([1-6]\s*)?(a\(?[1-4]\)?|hpc\s*credit|hpc\s*क्रेडिट)$/i.test(txt)) {
+            return true;
+        }
         const id = (el.id || '').toLowerCase();
         const cls = (el.className || '').toLowerCase();
         const name = (el.name || '').toLowerCase();
@@ -1126,7 +1135,7 @@
                         ${activeLabel}
                         <span style="color: #1e40af; font-weight: 700; margin-left: 4px;">${progressCount}</span>
                     </span>
-                    <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.2.8</span>
+                    <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.3.0</span>
                     <span style="font-size: 9px; padding: 2px 7px; border-radius: 8px; font-weight: 700; background: ${isAnyRunning ? '#dbeafe' : '#dcfce7'}; color: ${isAnyRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isAnyRunning ? '#bfdbfe' : '#bbf7d0'};">
                         ${isAnyRunning ? '⚡ RUNNING' : 'READY'}
                     </span>
@@ -1161,7 +1170,7 @@
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="font-size: 16px;">👩‍🏫</span>
                             <strong style="font-weight: 800; font-size: 13px; color: #0f172a; letter-spacing: -0.2px;">Teacher Evaluation</strong>
-                            <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.2.8</span>
+                            <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.3.0</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 10px; background: ${isTeacherRunning ? '#dbeafe' : '#dcfce7'}; color: ${isTeacherRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isTeacherRunning ? '#bfdbfe' : '#bbf7d0'}; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
@@ -1249,7 +1258,7 @@
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span style="font-size: 16px;">🚀</span>
                         <strong style="font-weight: 800; font-size: 13px; color: #0f172a; letter-spacing: -0.2px;">HPC Assist Submitter</strong>
-                        <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.2.8</span>
+                        <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.3.0</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="font-size: 10px; background: ${isRunning ? '#dbeafe' : '#dcfce7'}; color: ${isRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isRunning ? '#bfdbfe' : '#bbf7d0'}; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
@@ -2443,88 +2452,115 @@
 
         // Context-aware rules map covering both Preparatory "Hand of Self-Reflection" and Middle Stage fields
         const rules = [
+            // ── Preparatory Stage 12 Part A(2) Prompts (English & Hindi) ──
             {
-                keys: ["don't like", "dont like", "do not like", "dislike", "not like", "no like"],
+                keys: ["my name is", "my name", "name is", "मेरा नाम"],
+                val: s.my_name || s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Student'
+            },
+            {
+                keys: ["years old", "i am ... years old", "years of age", "वर्ष", "उम्र"],
+                val: String(s.my_age || s.age || '9')
+            },
+            {
+                keys: ["don't like", "dont like", "do not like", "dislike", "not like", "no like", "पसंद नहीं", "नापसंद"],
                 val: s.dont_like || 'Fighting, shouting, and loud noises'
             },
             {
-                keys: ["no good at", "not good at", "am not good", "struggle with", "cannot do"],
-                val: s.not_good_at || s.want_to_improve || 'Neat cursive handwriting and spelling long words'
-            },
-            {
-                keys: ["good at", "really well", "do well", "i am good"],
-                val: s.do_well || s.good_at || 'Solving arithmetic puzzles and reciting poems'
-            },
-            {
-                keys: ["like to", "things i like", "i like", "love to"],
+                keys: ["like to", "things i like", "i like", "love to", "मुझे पसंद", "पसंद है"],
                 val: s.like_to || s.free_time || 'Reading storybooks, drawing nature, and playing outdoors'
             },
             {
-                keys: ["want to improve", "improve in", "could improve", "do better", "improve my skill", "skill of"],
+                keys: ["want to improve", "improve in", "could improve", "do better", "improve my skill", "skill of", "improve my skills of", "कौशल में सुधार", "सुधार करना"],
                 val: s.want_to_improve || s.do_better || 'Neat cursive handwriting and fast mental math'
             },
             {
-                keys: ["live with", "stay with", "living with"],
+                keys: ["no good at", "not good at", "am not good", "struggle with", "cannot do", "अच्छा नहीं हूँ", "कठिनाई"],
+                val: s.not_good_at || 'Drawing complex diagrams and spelling long words'
+            },
+            {
+                keys: ["good at", "really well", "do well", "i am good", "अच्छा हूँ", "निपुण"],
+                val: s.good_at || s.do_well || 'Solving arithmetic puzzles and reciting poems'
+            },
+            {
+                keys: ["foods", "fruits", "dish", "food", "favourite food", "favorite food", "पसंदीदा भोजन", "फल", "व्यंजन"],
+                val: s.fav_food || s.fav_dish || 'Dal Chawal, Apples, and seasonal fresh fruits'
+            },
+            {
+                keys: ["festival", "favourite festival", "favorite festival", "त्योहार", "पर्व"],
+                val: s.fav_festival || 'Eid-ul-Fitr and National Festivals'
+            },
+            {
+                keys: ["grow up", "when i grow up", "want to be", "aspire to be", "बड़ा होकर", "बनना चाहता"],
+                val: s.grow_up_be || s.ambition || 'Doctor / Space Scientist'
+            },
+            {
+                keys: ["inspires", "person who inspires", "inspires me", "प्रेरणा स्रोत", "प्रेरित"],
+                val: s.person_inspires || 'Dr. A.P.J. Abdul Kalam and my teacher'
+            },
+            {
+                keys: ["three things", "learn this school year", "want to learn", "learn this year", "सीखना चाहता", "तीन बातें"],
+                val: s.learn_this_year || s.sch_learn1 || '1. Science models 2. Fast division math 3. Fluent English reading'
+            },
+
+            // ── Middle Stage & Shared Context Rules ──
+            {
+                keys: ["live with", "stay with", "living with", "रहता हूँ"],
                 val: s.live_with || 'My parents, siblings, and grandparents'
             },
             {
-                keys: ["dish", "food", "favourite food", "favorite food"],
-                val: s.fav_dish || s.fav_food || 'Dal Chawal and fresh seasonal fruits'
-            },
-            {
-                keys: ["game", "toy", "favourite game", "favorite game", "traditional game"],
+                keys: ["game", "toy", "favourite game", "favorite game", "traditional game", "खेल"],
                 val: s.fav_game || s.fav_toy || 'Kho-Kho and Badminton'
             },
             {
-                keys: ["free time", "in my free time", "leisure"],
+                keys: ["free time", "in my free time", "leisure", "खाली समय"],
                 val: s.free_time || 'Reading storybooks and sketching'
             },
             {
-                keys: ["proud of", "feel proud", "proud"],
+                keys: ["proud of", "feel proud", "proud", "गर्व"],
                 val: s.proud_of || s.feel_proud || 'Helping classmates and completing my assignments'
             },
             {
-                keys: ["learning goal", "academic goal", "goal this year", "goal"],
+                keys: ["learning goal", "academic goal", "goal this year", "goal", "लक्ष्य"],
                 val: s.goal_acad || s.acad_goal || 'Read 15 storybooks in English and Urdu'
             },
             {
-                keys: ["steps i will take", "action step", "goal_step", "steps"],
+                keys: ["steps i will take", "action step", "goal_step", "steps", "कदम"],
                 val: s.goal_step || s.acad_step1 || 'Read 2 pages every evening before bed'
             },
             {
-                keys: ["kind deed", "good deed", "deed i did", "deed"],
+                keys: ["kind deed", "good deed", "deed i did", "deed", "अच्छा काम"],
                 val: s.good_deed || 'Shared my lunch with a friend who forgot hers'
             },
             {
-                keys: ["stay at", "address", "location"],
+                keys: ["stay at", "address", "location", "स्थान"],
                 val: s.stay_at || 'Sugin, Budgam'
             },
             {
-                keys: ["friend name", "friend"],
+                keys: ["friend name", "friend", "दोस्त का नाम"],
                 val: s.friend_name || s.peer1_name || 'Ayaan Ahmad'
             },
             {
-                keys: ["friend age", "age"],
+                keys: ["friend age", "दोस्त की उम्र"],
                 val: String(s.friend_age || '10')
             },
             {
-                keys: ["help with", "teacher help", "help"],
+                keys: ["help with", "teacher help", "help", "मदद"],
                 val: s.help_with || s.teacher_help || 'Advanced math puzzles and science experiments'
             },
             {
-                keys: ["teacher know", "about me"],
+                keys: ["teacher know", "about me", "शिक्षक"],
                 val: s.teacher_know || 'I am enthusiastic about collaborative group projects'
             },
             {
-                keys: ["care about", "care others"],
+                keys: ["care about", "care others", "दूसरों की परवाह"],
                 val: s.care_others || 'Helping peers with notes and sharing resources'
             },
             {
-                keys: ["sch_learn", "learnt in school", "learnt at school"],
+                keys: ["sch_learn", "learnt in school", "learnt at school", "स्कूल में सीखा"],
                 val: s.sch_learn1 || 'Basic arithmetic formulas and regional folktales'
             },
             {
-                keys: ["out_learn", "outside school", "learnt outside"],
+                keys: ["out_learn", "outside school", "learnt outside", "स्कूल के बाहर"],
                 val: s.out_learn1 || 'Organic kitchen gardening and cycling'
             }
         ];
@@ -2596,68 +2632,145 @@
     async function fillPreparatoryPartA3(s) {
         logStatus(`[Part-A3: Preparatory] Filling Feelings, Peer 1, Peer 2 & Parent Feedback for ${s.name}...`);
         
-        // 1. Peer Reviewer Names
+        // 1. Peer Reviewer & Student Names (Peer 1 & Peer 2)
         const p1Name = s.peer1_name || 'Ayaan Ahmad';
-        const p2Name = s.peer2_name || 'Zaid Ahmad';
-        const textInputs = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])'));
-        if (textInputs.length >= 2) {
-            setNativeValue(textInputs[0], p1Name);
-            setNativeValue(textInputs[1], p2Name);
-        } else if (textInputs.length === 1) {
-            setNativeValue(textInputs[0], p1Name);
+        const p2Name = s.peer2_name || 'Zaid Farooq';
+        const stName = s.name || s.my_name || 'Student';
+
+        const textInputs = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])')).filter(inp => !isLanguageOrHeaderElement(inp));
+        let friendIdx = 0;
+        textInputs.forEach(inp => {
+            const lbl = (getFieldLabel(inp) || '').toLowerCase();
+            const ph = (inp.placeholder || '').toLowerCase();
+            if (lbl.includes('my name') || ph.includes('my name') || ((lbl.includes('name') || ph.includes('name')) && !lbl.includes('friend') && !lbl.includes('peer') && !ph.includes('friend') && !ph.includes('peer'))) {
+                setNativeValue(inp, stName);
+            } else if (lbl.includes('friend') || ph.includes('friend') || lbl.includes('peer') || ph.includes('peer')) {
+                if (lbl.includes('2') || ph.includes('2')) {
+                    setNativeValue(inp, p2Name);
+                } else if (lbl.includes('1') || ph.includes('1')) {
+                    setNativeValue(inp, p1Name);
+                } else {
+                    setNativeValue(inp, friendIdx === 0 ? p1Name : p2Name);
+                    friendIdx++;
+                }
+            }
+        });
+
+        // Fallback for friend inputs if not matched by label
+        const remainingFriendInputs = textInputs.filter(inp => {
+            const lbl = (getFieldLabel(inp) || '').toLowerCase();
+            const ph = (inp.placeholder || '').toLowerCase();
+            return (lbl.includes('friend') || lbl.includes('peer') || ph.includes('friend') || ph.includes('peer')) && (!inp.value || inp.value.trim() === '');
+        });
+        if (remainingFriendInputs.length >= 2) {
+            setNativeValue(remainingFriendInputs[0], p1Name);
+            setNativeValue(remainingFriendInputs[1], p2Name);
+        } else if (remainingFriendInputs.length === 1) {
+            setNativeValue(remainingFriendInputs[0], p1Name);
         }
 
-        // 2. Select radio / smiley options across all questions (Feelings, Peer 1, Peer 2, Parent Feedback)
+        // 2. Select radio / smiley options across all questions (Feelings at School Q1-7, Peer 1 Q1-6, Peer 2 Q1-6, Parent Q1-11)
         const radioGroups = {};
-        document.querySelectorAll('input[type="radio"]').forEach(r => {
-            const name = r.name || 'group';
-            if (!radioGroups[name]) radioGroups[name] = [];
-            radioGroups[name].push(r);
+        document.querySelectorAll('input[type="radio"], [role="radio"]').forEach(r => {
+            if (isLanguageOrHeaderElement(r)) return;
+            const rect = r.getBoundingClientRect();
+            const parent = r.closest('tr, [role="row"], fieldset, [role="radiogroup"], .form-group, .card, .row, li');
+            const pText = (parent ? parent.innerText.slice(0, 60) : '');
+            const key = r.name || pText || `y_${Math.round(rect.top / 22)}`;
+            if (!radioGroups[key]) radioGroups[key] = { radios: [], pText };
+            radioGroups[key].radios.push(r);
         });
+
         Object.values(radioGroups).forEach(group => {
-            if (group.length > 0 && !group.some(r => r.checked)) {
-                const target = group.find(r => /yes|always|positive|1|agree|proficient/i.test(r.value || r.id || '')) || group[0];
-                target.click();
-                target.dispatchEvent(new Event('change', { bubbles: true }));
+            const list = group.radios;
+            if (list.length > 0 && !list.some(r => r.checked || r.getAttribute('aria-checked') === 'true')) {
+                const pTxt = group.pText.toLowerCase();
+                // If question is "curriculum difficult" (Q3 under How can I know your child better)
+                const isCurriculumDiff = pTxt.includes('difficult') || pTxt.includes('कठिन') || pTxt.includes('curriculum');
+                let target;
+                if (isCurriculumDiff) {
+                    target = list.find(r => /no|नहीं|sometimes|कभी-कभी/i.test(r.value || r.id || '')) || list[Math.min(1, list.length - 1)];
+                } else {
+                    target = list.find(r => /yes|always|positive|1|agree|proficient|हाँ|हमेशा/i.test(r.value || r.id || '')) || list[0];
+                }
+                if (target) {
+                    try { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+                    target.click();
+                    target.checked = true;
+                    target.setAttribute('aria-checked', 'true');
+                    target.dispatchEvent(new Event('input', { bubbles: true }));
+                    target.dispatchEvent(new Event('change', { bubbles: true }));
+                    const parentLabel = target.closest('label, td, div');
+                    if (parentLabel && parentLabel !== target) parentLabel.click();
+                }
             }
         });
 
         // Also handle smiley li or button selection if custom UI
-        const optionLists = Array.from(document.querySelectorAll('.appropriate-option-select, .smiley-options, ul.options-list'));
+        const optionLists = Array.from(document.querySelectorAll('.appropriate-option-select, .smiley-options, ul.options-list, [class*="option-select" i]')).filter(el => !isLanguageOrHeaderElement(el));
         optionLists.forEach(ul => {
-            const lis = Array.from(ul.querySelectorAll('li, div[role="button"], button'));
+            const lis = Array.from(ul.querySelectorAll('li, div[role="button"], button')).filter(el => !isLanguageOrHeaderElement(el));
             if (lis.length > 0 && !lis.some(li => li.classList.contains('active') || li.classList.contains('selected'))) {
-                const targetLi = lis.find(li => /yes|always/i.test(li.innerText || '')) || lis[0];
-                targetLi.click();
+                const pTxt = (ul.closest('tr, [role="row"], fieldset, .card')?.innerText || '').toLowerCase();
+                const isCurriculumDiff = pTxt.includes('difficult') || pTxt.includes('कठिन');
+                let targetLi;
+                if (isCurriculumDiff) {
+                    targetLi = lis.find(li => /no|नहीं|sometimes|कभी-कभी/i.test(li.innerText || '')) || lis[Math.min(1, lis.length - 1)];
+                } else {
+                    targetLi = lis.find(li => /yes|always|हाँ|हमेशा/i.test(li.innerText || '')) || lis[0];
+                }
+                if (targetLi) targetLi.click();
             }
         });
 
-        // 3. Home Resources Checkboxes
-        document.querySelectorAll('.childrens-resources li, .resources-available li').forEach(li => {
+        // 3. Home Resources Checkboxes ("Your Child Matters! Tick the resources available to your child at home")
+        // Books and Magazines, Newspaper, Toys Games and Sports, Phone and Computer, Internet, Radio, Broadcast, T.V., Resources for CWD
+        const resText = (s.parent_home_resources || s.home_resources || 'books, newspaper, toys, games, sports, phone, computer, internet, radio, broadcast, tv').toLowerCase();
+        document.querySelectorAll('.childrens-resources li, .resources-available li, [class*="resource" i] li, fieldset li, div.form-check').forEach(li => {
+            if (isLanguageOrHeaderElement(li)) return;
             const lbl = (li.innerText || '').toLowerCase();
             const cb = li.querySelector('input[type="checkbox"]');
-            if (cb && (lbl.includes('book') || lbl.includes('toy') || lbl.includes('phone') || lbl.includes('internet') || lbl.includes('tv') || lbl.includes('radio'))) {
-                if (!cb.checked) {
+            if (cb) {
+                const isResourceItem = lbl.includes('book') || lbl.includes('magazine') || lbl.includes('newspaper') ||
+                                       lbl.includes('toy') || lbl.includes('game') || lbl.includes('sport') ||
+                                       lbl.includes('phone') || lbl.includes('computer') || lbl.includes('internet') ||
+                                       lbl.includes('radio') || lbl.includes('broadcast') || lbl.includes('t.v') || lbl.includes('tv') ||
+                                       lbl.includes('cwd') || resText.split(',').some(k => lbl.includes(k.trim()));
+                if (isResourceItem && !cb.checked) {
                     cb.click();
+                    cb.checked = true;
+                    cb.dispatchEvent(new Event('input', { bubbles: true }));
                     cb.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             }
         });
 
-        // 4. Child Support Needs Checkboxes
-        document.querySelectorAll('.need-children-support-check input[type="checkbox"], input[type="checkbox"][name*="support"]').forEach((cb, idx) => {
-            if (idx < 3 && !cb.checked) {
+        // 4. Child Support Needs Checkboxes ("My child needs support with...")
+        // Oral communication (R1 or R2), Reading, Numbers and Math, Self-confidence, Working with children, Working independently at home, Other subject areas
+        document.querySelectorAll('.need-children-support-check input[type="checkbox"], input[type="checkbox"][name*="support"], [class*="support" i] input[type="checkbox"]').forEach((cb, idx) => {
+            if (isLanguageOrHeaderElement(cb)) return;
+            const parent = cb.closest('label, li, div');
+            const lbl = (parent?.innerText || '').toLowerCase();
+            const shouldCheck = lbl.includes('reading') || lbl.includes('math') || lbl.includes('number') ||
+                                lbl.includes('communication') || lbl.includes('confidence') || idx < 4;
+            if (shouldCheck && !cb.checked) {
                 cb.click();
+                cb.checked = true;
+                cb.dispatchEvent(new Event('input', { bubbles: true }));
                 cb.dispatchEvent(new Event('change', { bubbles: true }));
             }
         });
 
-        // 5. Parent feedback textareas
-        const feedbackText = s.parent_support_needed || s.parent_feedback || 'Child is highly motivated and supported with reading and hands-on learning at home';
-        document.querySelectorAll('textarea').forEach(ta => {
-            setNativeValue(ta, feedbackText);
+        // 5. Parent feedback textareas & specify inputs ("Specify: Write here.")
+        const feedbackText = s.parent_support_specify || s.parent_support_needed || s.parent_feedback || 'Provide 30 minutes of guided reading and daily arithmetic practice worksheets at home.';
+        document.querySelectorAll('textarea, input[placeholder*="Write here" i], input[placeholder*="specify" i]').forEach(ta => {
+            if (isLanguageOrHeaderElement(ta)) return;
+            if (!ta.value || ta.value.trim() === '') {
+                setNativeValue(ta, feedbackText);
+            }
         });
 
+        logStatus('[Part-A3: Preparatory] ✓ Completed feelings, peer reviews, home resources & parent support.');
         await sleep(800);
     }
 
@@ -2812,51 +2925,87 @@
         const goToStep = async (stepNum, keywords = []) => {
             logStatus(`[Part-B] Activating Step ${stepNum}...`);
 
+            // Dictionary of keywords for Steps 1 to 6 (English & Hindi)
+            const stepDefs = {
+                1: ['activity details', 'details', 'गतिविधि विवरण', 'विवरण'],
+                2: ['subject', 'cg', 'competenc', 'विषय', 'क्षमता'],
+                3: ['activity & assessment', 'assessment qs', 'questions', 'मूल्यांकन प्रश्न', 'प्रश्न'],
+                4: ['assessment rubric', 'rubric', 'मूल्यांकन रूब्रिक', 'रूब्रिक'],
+                5: ['observational notes', 'notes', 'अवलोकन नोट्स', 'नोट्स', 'अवलोकन'],
+                6: ['self assessment', 'self', 'स्व-मूल्यांकन', 'मूल्यांकन']
+            };
+            const currentKeywords = [...(stepDefs[stepNum] || []), ...keywords];
+
+            // 0. Primary PARAKH Stepper: `.activate-tab-pills`
+            const pills = Array.from(document.querySelectorAll('.activate-tab-pills div[role="button"], .activate-tab-pills > div, .activate-tab-pills > button, .activate-tab-pills li')).filter(el => !isLanguageOrHeaderElement(el));
+            const pillTarget = pills[stepNum - 1];
+
+            // Check if Step num is ALREADY the active step on screen!
+            const mainContent = document.querySelector('.card-body, .content, .main-content, [class*="step-content" i], [class*="content" i]');
+            const headerCheck = Array.from((mainContent || document).querySelectorAll('h1, h2, h3, h4, h5, .step-header, .title, strong')).find(h => {
+                if (h.closest('.sidebar, [class*="sidebar" i], [class*="activity-list" i]')) return false;
+                const ht = (h.innerText || '').trim().toLowerCase();
+                const hasNum = new RegExp(`(^|\\s|\\()${stepNum}(\\)|\\s|\\.|:)`).test(ht);
+                const hasKw = currentKeywords.some(kw => ht.includes(kw));
+                return hasNum && hasKw;
+            });
+            if (headerCheck) {
+                logStatus(`[Part-B] Step ${stepNum} is already active on screen.`);
+                return true;
+            }
+
             // Safe elements: STRICTLY exclude headers, navbars, breadcrumbs, and widget
             const safeElements = Array.from(document.querySelectorAll('div, button, li, a, [role="tab"], [role="button"]')).filter(el => {
                 if (isLanguageOrHeaderElement(el)) return false;
-                if (el.closest('.breadcrumb, [class*="breadcrumb" i]')) return false;
+                if (el.closest('.top-steps, .stage-stepper, .stage-navigation, .breadcrumb, [class*="breadcrumb" i]')) return false;
                 const t = (el.innerText || '').trim().replace(/\s+/g, ' ');
                 if (t.length < 1 || t.length > 70) return false;
+                if (/\ba\([1-4]\)|hpc\s*credit/i.test(t)) return false;
                 return true;
             });
 
-            // 1. Primary: Match middle-column step container starting with stepNum (e.g. "1 Activity...", "1 गतिविधि...", "1")
-            let match = safeElements.find(el => {
-                const t = (el.innerText || '').trim().replace(/\s+/g, ' ');
-                const startsWithNum = new RegExp(`^\\s*\\(?${stepNum}\\)?[\\s\\.\\-\\–\\:]+`).test(t) || t === String(stepNum);
-                const parentText = (el.parentElement?.innerText || '') + ' ' + (el.parentElement?.parentElement?.innerText || '');
-                const isInStepList = parentText.includes(String(stepNum === 1 ? 2 : 1)) || parentText.includes('6');
-                return startsWithNum && isInStepList;
-            });
-
-            // 2. Secondary: Keyword match (English or Hindi)
-            if (!match && keywords.length > 0) {
+            // 1. Primary: Use pillTarget or match middle-column step container starting with stepNum
+            let match = pillTarget;
+            if (!match) {
                 match = safeElements.find(el => {
-                    const t = (el.innerText || '').trim().toLowerCase();
-                    const hasNum = new RegExp(`(^|\\s|\\()${stepNum}(\\)|\\s|$)`).test(t) || t.startsWith(String(stepNum));
-                    const hasKw = keywords.some(k => t.includes(k.toLowerCase()));
-                    return hasNum && hasKw;
+                    const t = (el.innerText || '').trim().replace(/\s+/g, ' ');
+                    const startsWithNum = new RegExp(`^\\s*\\(?${stepNum}\\)?[\\s\\.\\-\\–\\:]+`).test(t);
+                    const hasKw = currentKeywords.some(k => t.toLowerCase().includes(k.toLowerCase()));
+                    return startsWithNum && hasKw;
                 });
             }
 
-            // 3. Tertiary: Circle badge with exact digit stepNum in the step list
+            // 2. Secondary: Circle badge or exact number inside stepper list
             if (!match) {
                 const badge = safeElements.find(el => {
                     const t = (el.innerText || '').trim();
                     if (t !== String(stepNum) || el.children.length > 0) return false;
-                    const pText = (el.parentElement?.parentElement?.innerText || '');
-                    return (pText.includes('1') && pText.includes('2')) || pText.includes('6');
+                    const pText = (el.parentElement?.parentElement?.innerText || '').toLowerCase();
+                    return currentKeywords.some(k => pText.includes(k.toLowerCase()));
                 });
                 if (badge) {
                     match = badge.closest('button, [role="tab"], [role="button"], li, div') || badge.parentElement;
                 }
             }
 
+            // 3. Fallback: match by keywords alone
+            if (!match && currentKeywords.length > 0) {
+                match = safeElements.find(el => {
+                    const t = (el.innerText || '').trim().toLowerCase();
+                    return currentKeywords.some(k => t.includes(k.toLowerCase())) && el.children.length <= 2;
+                });
+            }
+
             if (match) {
                 const clickable = match.closest('button, [role="tab"], [role="button"], li') || match;
                 try { clickable.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
                 await sleep(250);
+
+                // Dispatch React props onClick if available
+                const rPropsKey = Object.keys(clickable).find(k => k.startsWith('__reactProps'));
+                if (rPropsKey && clickable[rPropsKey]?.onClick) {
+                    try { clickable[rPropsKey].onClick({ preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
+                }
 
                 clickable.focus();
                 clickable.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
@@ -2909,18 +3058,18 @@
             await goToStep(2, ['Subject', 'CG', 'Competencies', 'विषय', 'क्षमता']);
             await sleep(600);
 
-            // Custom Dropdowns (Domain / Subject / CG) - strictly exclude header/nav!
-            const wrappers = Array.from(document.querySelectorAll('.custom-dropdown-wrapper, .scroller-cg-domain .custom-dropdown-wrapper')).filter(w => !isLanguageOrHeaderElement(w));
+            // 2a. Select Subject: "The World Around Us" / "हमारे चारों ओर की दुनिया"
+            const wrappers = Array.from(document.querySelectorAll('.scroller-cg-domain .custom-dropdown-wrapper, .custom-dropdown-wrapper, [class*="dropdown" i]')).filter(w => !isLanguageOrHeaderElement(w));
             for (const wrapper of wrappers) {
-                const header = wrapper.querySelector('.custom-dropdown-header');
+                const header = wrapper.querySelector('.custom-dropdown-header, [class*="header" i], [class*="toggle" i], button');
                 if (header) {
                     header.click();
                     await sleep(350);
-                    const items = Array.from(document.querySelectorAll('.custom-dropdown-item')).filter(it => !isLanguageOrHeaderElement(it));
+                    const items = Array.from(document.querySelectorAll('.scroller-cg-domain .custom-dropdown-item, .custom-dropdown-item, .dropdown-item, li')).filter(it => !isLanguageOrHeaderElement(it));
                     const targetDomain = items.find(el => {
                         const txt = el.innerText.trim().toLowerCase();
-                        return txt.includes('world') || txt.includes('चारों ओर') || txt.includes(actSubject.slice(0, 4).toLowerCase());
-                    }) || items[0];
+                        return txt.includes('world') || txt.includes('चारों ओर') || txt.includes('evs') || txt.includes(actSubject.slice(0, 4).toLowerCase());
+                    });
                     if (targetDomain) {
                         targetDomain.click();
                         await sleep(350);
@@ -2928,29 +3077,59 @@
                 }
             }
 
-            // Native Select Dropdowns - strictly exclude language selects!
+            // Native Select Dropdowns (Subject)
             document.querySelectorAll('select').forEach(sel => {
                 if (isLanguageOrHeaderElement(sel)) return;
-                if (!sel.value || sel.selectedIndex <= 0) {
-                    sel.selectedIndex = Math.min(1, sel.options.length - 1);
+                const options = Array.from(sel.options);
+                const targetOpt = options.find(o => /world|चारों ओर|evs/i.test(o.text || '')) || options[Math.min(1, options.length - 1)];
+                if (targetOpt && sel.value !== targetOpt.value) {
+                    sel.value = targetOpt.value;
                     sel.dispatchEvent(new Event('input', { bubbles: true }));
                     sel.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             });
 
-            // Competencies checkboxes
-            const cpts = Array.from(document.querySelectorAll('input[type="checkbox"]')).filter(cb => !isLanguageOrHeaderElement(cb));
-            if (cpts.length > 0 && !cpts.some(c => c.checked)) {
-                cpts[0].click();
-                cpts[0].checked = true;
-                cpts[0].dispatchEvent(new Event('input', { bubbles: true }));
-                cpts[0].dispatchEvent(new Event('change', { bubbles: true }));
-                if (cpts[1]) {
-                    cpts[1].click();
-                    cpts[1].checked = true;
-                    cpts[1].dispatchEvent(new Event('input', { bubbles: true }));
-                    cpts[1].dispatchEvent(new Event('change', { bubbles: true }));
+            // 2b. Expand Curricular Goal accordion if collapsed (e.g. TWCG1, TWCG)
+            const cgHeaders = Array.from(document.querySelectorAll('.accordion-header, .accordion-button, .scroller-container [role="button"], [class*="accordion" i], [class*="collapse" i]')).filter(h => !isLanguageOrHeaderElement(h));
+            cgHeaders.forEach(h => {
+                const txt = (h.innerText || '').toLowerCase();
+                if (txt.includes('twcg1') || txt.includes('twcg 1') || txt.includes('explores and engages') || txt.includes('प्राकृतिक और सामाजिक')) {
+                    const isCollapsed = h.classList.contains('collapsed') || h.getAttribute('aria-expanded') === 'false';
+                    if (isCollapsed) {
+                        try { h.click(); } catch(e) {}
+                    }
                 }
+            });
+            await sleep(350);
+
+            // 2c. Competencies checkboxes: Curricular Goals TWCG1 to TWCG7 & Competencies TWC1.1 to TWC7.Others
+            const allStep2Checkboxes = Array.from(document.querySelectorAll('.scroller-container input[name="cpt"], input[name="cpt"], input[type="checkbox"]')).filter(cb => !isLanguageOrHeaderElement(cb));
+            const twcBoxes = allStep2Checkboxes.filter(cb => {
+                const parent = cb.closest('li, tr, [role="row"], div, label');
+                const t = (parent?.innerText || '').toLowerCase();
+                return t.includes('twc') || t.includes('1.1') || t.includes('1.2') || t.includes('observes') || t.includes('natural') || t.includes('relationships');
+            });
+
+            if (twcBoxes.length > 0) {
+                twcBoxes.slice(0, 2).forEach(cb => {
+                    if (!cb.checked) {
+                        cb.click();
+                        cb.checked = true;
+                        cb.dispatchEvent(new Event('input', { bubbles: true }));
+                        cb.dispatchEvent(new Event('change', { bubbles: true }));
+                        const parent = cb.closest('label, .form-check, div[class*="check" i]');
+                        if (parent && parent !== cb) parent.click();
+                    }
+                });
+            } else if (allStep2Checkboxes.length > 0 && !allStep2Checkboxes.some(c => c.checked)) {
+                allStep2Checkboxes.slice(0, 2).forEach(cb => {
+                    cb.click();
+                    cb.checked = true;
+                    cb.dispatchEvent(new Event('input', { bubbles: true }));
+                    cb.dispatchEvent(new Event('change', { bubbles: true }));
+                    const parent = cb.closest('label, .form-check, div[class*="check" i]');
+                    if (parent && parent !== cb) parent.click();
+                });
             }
             logStatus('[Part-B] ✓ Step 2 (Subject & Competencies) verified.');
             await sleep(600);
@@ -3253,7 +3432,49 @@
             // ─────────────────────────────────────────────────────────
             // 7. THEN FINISH: Click "Finish Activity" / गतिविधि पूर्ण करें
             // ─────────────────────────────────────────────────────────
-            logStatus('[Part-B] Clicking "Finish Activity" button...');
+            logStatus('[Part-B] Finalizing and Clicking "Finish Activity" button...');
+
+            // Synchronize React state safety net if React Fiber exists
+            try {
+                const btn = document.querySelector('.hpc-finish-activity-btn');
+                const fKey = btn ? Object.keys(btn).find(k => k.startsWith('__reactFiber')) : null;
+                let f = fKey ? btn[fKey] : null;
+                while (f && f.type?.name !== 'S') f = f.return;
+                let cur = f ? f.memoizedState : null;
+                while (cur) {
+                    if (cur.memoizedState && typeof cur.memoizedState === 'object' && cur.memoizedState.cpt) {
+                        const prev = cur.memoizedState;
+                        const next = {
+                            ...prev,
+                            activity: prev.activity && prev.activity.length ? prev.activity : [1, 2],
+                            any_other: ['', '', ''],
+                            ast: [1, 2, 3],
+                            bar: [9],
+                            awr: ['Demonstrates good awareness', 'Demonstrates strong awareness', 'Demonstrates exceptional awareness', actAwr],
+                            sen: ['Shows sensitivity', 'Shows great sensitivity', 'Shows excellent sensitivity', actSen],
+                            cre: ['Displays creative thinking', 'Displays innovative creativity', 'Displays high creativity', actCre],
+                            desc: [actDesc, 'Achieved all learning objectives successfully.'],
+                            ml: [actLearnt, 'Developed practical confidence.', 'Collaborated actively.', actInteresting],
+                            slr: ['Student actively engaged throughout.', actPractice, 'Completed assignments joyfully.'],
+                            spt: [actSupportPlan, 'Continue encouragement.'],
+                            tf: ['2', '2', '2'],
+                            mpa: [0, 1],
+                            mps: [0, 1],
+                            mpc: [0, 1],
+                            ppa: [0],
+                            pps: [0],
+                            ppc: [0],
+                            pf: [peerName, '8', 'A', peerFeedback, 'Cooperative and helpful', 'Positive']
+                        };
+                        if (cur.queue?.dispatch) cur.queue.dispatch(next);
+                        break;
+                    }
+                    cur = cur.next;
+                }
+            } catch (e) {
+                console.warn('[HPC Assist] React Fiber state sync note:', e);
+            }
+
             const finishBtns = Array.from(document.querySelectorAll('button, a[role="button"], .btn')).filter(b => {
                 if (isLanguageOrHeaderElement(b)) return false;
                 const t = (b.innerText || '').trim().toLowerCase();
@@ -3263,6 +3484,11 @@
             if (finishBtn && !finishBtn.disabled) {
                 try { finishBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
                 await sleep(400);
+
+                const pk = Object.keys(finishBtn).find(k => k.startsWith('__reactProps'));
+                if (pk && finishBtn[pk]?.onClick) {
+                    try { finishBtn[pk].onClick({ preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
+                }
 
                 finishBtn.focus();
                 finishBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
@@ -3498,7 +3724,7 @@
         });
 
         // ── 4. SMART FORM-WIDE RADIO GROUPING (Row-by-Row fallback) ──
-        const allPartCRadios = Array.from(document.querySelectorAll('input[type="radio"], [role="radio"], .form-check-input'));
+        const allPartCRadios = Array.from(document.querySelectorAll('input[type="radio"], [role="radio"], .form-check-input')).filter(r => !isLanguageOrHeaderElement(r));
         const partCGroups = [];
 
         allPartCRadios.forEach(r => {
@@ -3547,6 +3773,7 @@
 
         // ── 5. ALL SELECT DROPDOWNS ──
         document.querySelectorAll('select').forEach(sel => {
+            if (isLanguageOrHeaderElement(sel)) return;
             if (!sel.value || sel.value === '' || sel.selectedIndex <= 0) {
                 const opts = Array.from(sel.options);
                 const match = opts.find(o => /proficient|advanced|yes|always|2|3|completed/i.test(o.text || o.value)) || opts[1] || opts[0];
@@ -3560,6 +3787,7 @@
         // ── 6. ALL TEXTAREAS AND INPUTS ──
         const defaultFeedback = s.remarks || s.annual_holistic_remarks || s.holistic_remarks || 'Demonstrates strong conceptual awareness, active curiosity, consistent effort, and positive collaboration.';
         document.querySelectorAll('textarea').forEach(ta => {
+            if (isLanguageOrHeaderElement(ta)) return;
             if (!ta.value || ta.value.trim().length === 0) {
                 setNativeValue(ta, defaultFeedback);
             }
@@ -3570,12 +3798,14 @@
         if (hasNotesTab) {
             await sleep(500);
             document.querySelectorAll('select').forEach(sel => {
+                if (isLanguageOrHeaderElement(sel)) return;
                 if (!sel.value || sel.selectedIndex <= 0) {
                     sel.selectedIndex = Math.min(1, sel.options.length - 1);
                     sel.dispatchEvent(new Event('change', { bubbles: true }));
                 }
             });
             document.querySelectorAll('textarea').forEach(ta => {
+                if (isLanguageOrHeaderElement(ta)) return;
                 if (!ta.value) setNativeValue(ta, defaultFeedback);
             });
         }
@@ -3584,6 +3814,7 @@
         if (hasSelfTab) {
             await sleep(500);
             document.querySelectorAll('input[type="radio"]').forEach((r, idx) => {
+                if (isLanguageOrHeaderElement(r)) return;
                 if (!r.checked && (idx % 2 === 0 || r.value === 'yes' || r.value === '1')) {
                     r.click();
                     r.checked = true;
@@ -3591,6 +3822,7 @@
                 }
             });
             document.querySelectorAll('textarea').forEach(ta => {
+                if (isLanguageOrHeaderElement(ta)) return;
                 if (!ta.value) setNativeValue(ta, 'I enjoyed exploring new concepts and working with my peers.');
             });
         }
@@ -3823,10 +4055,12 @@
 
         // ── PART A3 ──
         const isPartA3 = url.includes('/part-a3') || url.includes('/part-a(3)') || url.includes('/part-a-3') ||
-                         pageHeading.includes('part - a(3)') || pageHeading.includes('part a(3)') || pageHeading.includes('part - a3');
+                         pageHeading.includes('part - a(3)') || pageHeading.includes('part a(3)') || pageHeading.includes('part - a3') ||
+                         pageText.includes('how do i feel at school') || pageText.includes('peer feedback') || pageText.includes('your child matters');
 
         if (isPartA3) {
-            const isPrep = url.includes('preparatory') || (s && String(s.grade || s.class || s.stage || '').match(/^[345]|prep/i));
+            const isPrep = url.includes('preparatory') || (s && String(s.grade || s.class || s.stage || '').match(/^[345]|prep/i)) ||
+                           pageText.includes('how do i feel at school') || pageText.includes('your child matters');
             if (isPrep) {
                 await fillPreparatoryPartA3(s);
             } else {

@@ -104,10 +104,13 @@ class HpcTeacherController extends Controller
         $preview = file_exists($previewFile) ? (json_decode(file_get_contents($previewFile), true) ?? []) : [];
         if (!empty($preview)) {
             $preview = array_values(array_filter($preview, function ($p) {
+                if (!is_array($p)) return false;
+                $name = is_array($p['name'] ?? null) ? implode(' ', $p['name']) : (string)($p['name'] ?? '');
+                $loginId = is_array($p['login_id'] ?? null) ? '' : (string)($p['login_id'] ?? '');
                 return empty($p['is_demo']) &&
-                    ($p['login_id'] ?? '') !== 'DEMO_SAMPLE' &&
-                    stripos($p['name'] ?? '', 'SAMPLE') === false &&
-                    stripos($p['name'] ?? '', 'DEMO') === false;
+                    $loginId !== 'DEMO_SAMPLE' &&
+                    stripos($name, 'SAMPLE') === false &&
+                    stripos($name, 'DEMO') === false;
             }));
         }
 
@@ -1202,11 +1205,14 @@ class HpcTeacherController extends Controller
 
         $all = json_decode(file_get_contents($previewFile), true) ?: [];
         $validStudents = array_values(array_filter($all, function ($s) {
+            if (!is_array($s)) return false;
+            $name = is_array($s['name'] ?? null) ? implode(' ', $s['name']) : (string)($s['name'] ?? '');
+            $loginId = is_array($s['login_id'] ?? null) ? '' : (string)($s['login_id'] ?? '');
             return empty($s['errors']) &&
                 empty($s['is_demo']) &&
-                ($s['login_id'] ?? '') !== 'DEMO_SAMPLE' &&
-                stripos($s['name'] ?? '', 'SAMPLE') === false &&
-                stripos($s['name'] ?? '', 'DEMO') === false;
+                $loginId !== 'DEMO_SAMPLE' &&
+                stripos($name, 'SAMPLE') === false &&
+                stripos($name, 'DEMO') === false;
         }));
 
         return response()->json([

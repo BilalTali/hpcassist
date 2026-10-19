@@ -7,25 +7,24 @@ use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 class HpcMiddleStageSchema
 {
     /**
-     * Grouping of all 223 columns into 14 distinct assessment sections
+     * Grouping of all 223 columns into 13 distinct assessment sections
      */
     public static function getSections(): array
     {
         return [
             ['title' => '🔒 Part 1: Student Identity (Locked)', 'start' => 0, 'end' => 9, 'bg' => 'FF0F172A'],
             ['title' => '👤 Part 2: Medium & Guardian Profile', 'start' => 10, 'end' => 14, 'bg' => 'FF1E40AF'],
-            ['title' => '📅 Part 3: Monthly Working Days (Apr–Mar)', 'start' => 15, 'end' => 26, 'bg' => 'FF0369A1'],
-            ['title' => '📅 Part 4: Monthly Present Days (Apr–Mar)', 'start' => 27, 'end' => 38, 'bg' => 'FF0284C7'],
-            ['title' => '📈 Part 5: Attendance Summary & Leave (Auto)', 'start' => 39, 'end' => 44, 'bg' => 'FF0D9488'],
-            ['title' => '🌱 Part 6: Part-A2 All About Me & Goal Setting', 'start' => 45, 'end' => 70, 'bg' => 'FF6D28D9'],
-            ['title' => '🚀 Part 7: Part-A3 My Ambition Card', 'start' => 71, 'end' => 80, 'bg' => 'FF7C3AED'],
-            ['title' => '🏡 Part 8: Part-A4 Home Learning Resources', 'start' => 81, 'end' => 90, 'bg' => 'FFBE185D'],
-            ['title' => '🤝 Part 9: Part-A4 Parent Partnership & Feedback', 'start' => 91, 'end' => 105, 'bg' => 'FFB91C1C'],
-            ['title' => '🎨 Part 10: Part-B Holistic Activity 1 & Rubrics', 'start' => 106, 'end' => 128, 'bg' => 'FFD97706'],
-            ['title' => '🌟 Part 11: Part-B Self/Peer Reflection & Feedback', 'start' => 129, 'end' => 154, 'bg' => 'FFEA580C'],
-            ['title' => '📊 Part 12: Part-C Curricular Domains (11 Subj x 4)', 'start' => 155, 'end' => 198, 'bg' => 'FF059669'],
-            ['title' => '🎯 Part 13: Part-D Summative Assessment Marks (SA)', 'start' => 199, 'end' => 216, 'bg' => 'FF047857'],
-            ['title' => '✍️ Part 14: Part-E HPC Credit Points & Declaration', 'start' => 217, 'end' => 222, 'bg' => 'FF334155'],
+            ['title' => '📅 Part 3: Monthly Attendance (Working vs Present Days Apr–Mar)', 'start' => 15, 'end' => 38, 'bg' => 'FF0369A1'],
+            ['title' => '📈 Part 4: Attendance Summary & Leave (Auto)', 'start' => 39, 'end' => 44, 'bg' => 'FF0D9488'],
+            ['title' => '🌱 Part 5: Part-A2 All About Me & Goal Setting', 'start' => 45, 'end' => 70, 'bg' => 'FF6D28D9'],
+            ['title' => '🚀 Part 6: Part-A3 My Ambition Card', 'start' => 71, 'end' => 80, 'bg' => 'FF7C3AED'],
+            ['title' => '🏡 Part 7: Part-A4 Home Learning Resources', 'start' => 81, 'end' => 90, 'bg' => 'FFBE185D'],
+            ['title' => '🤝 Part 8: Part-A4 Parent Partnership & Feedback', 'start' => 91, 'end' => 105, 'bg' => 'FFB91C1C'],
+            ['title' => '🎨 Part 9: Part-B Holistic Activity 1 & Rubrics', 'start' => 106, 'end' => 128, 'bg' => 'FFD97706'],
+            ['title' => '🌟 Part 10: Part-B Self/Peer Reflection & Feedback', 'start' => 129, 'end' => 154, 'bg' => 'FFEA580C'],
+            ['title' => '📊 Part 11: Part-C Curricular Domains (11 Subj x 4)', 'start' => 155, 'end' => 198, 'bg' => 'FF059669'],
+            ['title' => '🎯 Part 12: Part-D Summative Assessment Marks (SA)', 'start' => 199, 'end' => 216, 'bg' => 'FF047857'],
+            ['title' => '✍️ Part 13: Part-E HPC Credit Points & Declaration', 'start' => 217, 'end' => 222, 'bg' => 'FF334155'],
         ];
     }
 
@@ -41,10 +40,10 @@ class HpcMiddleStageSchema
 
         return [
             ['key' => 'Student_Name', 'label' => '🔒 [LOCKED] Student Name', 'type' => 'locked', 'width' => 24, 'note' => 'Official full name of student (for identification)', 'classification' => 'locked'],
+            ['key' => 'APAAR_ID', 'label' => '🔒 [LOCKED] APAAR ID', 'type' => 'locked', 'width' => 20, 'note' => 'Official 12-digit APAAR ID / Aadhaar for student identification', 'classification' => 'locked'],
             ['key' => 'School_Admission_No', 'label' => '🔒 [LOCKED] School Admission No', 'type' => 'locked', 'width' => 20, 'note' => 'Official school admission / roll number', 'classification' => 'locked'],
             ['key' => 'Date_of_Birth', 'label' => '🔒 [LOCKED] Date of Birth', 'type' => 'locked', 'width' => 20, 'note' => 'Student Date of Birth (YYYY-MM-DD)', 'classification' => 'locked'],
             ['key' => 'Gender', 'label' => '🔒 [LOCKED] Gender', 'type' => 'list', 'options' => "Male,Female,Other", 'width' => 20, 'note' => 'Student Gender (Male / Female / Other)', 'classification' => 'locked'],
-            ['key' => 'APAAR_ID', 'label' => '🔒 [LOCKED] APAAR ID', 'type' => 'locked', 'width' => 20, 'note' => 'Official 12-digit APAAR ID / Aadhaar for student identification', 'classification' => 'locked'],
             ['key' => 'HPC_Login_ID', 'label' => '🔒 [LOCKED] HPC Login ID', 'type' => 'locked', 'width' => 20, 'note' => 'Unique student login ID assigned by PARAKH portal', 'classification' => 'locked'],
             ['key' => 'UDID_Disability_ID', 'label' => '🔒 [LOCKED] UDID Disability ID', 'type' => 'locked', 'width' => 20, 'note' => 'Disability ID if applicable (or blank)', 'classification' => 'locked'],
             ['key' => 'Grade', 'label' => '🔒 [LOCKED] Grade', 'type' => 'list', 'options' => "Grade 6,Grade 7,Grade 8", 'width' => 20, 'note' => 'Class / Grade (Grade 6, Grade 7, Grade 8)', 'classification' => 'locked'],
@@ -55,35 +54,37 @@ class HpcMiddleStageSchema
             ['key' => 'Mother_Tongue', 'label' => '⚡ [AUTO] Mother Tongue', 'type' => 'list', 'options' => '"Kashmiri,Urdu,Hindi,English,Dogri,Punjabi,Other"', 'width' => 18, 'note' => 'Student mother tongue', 'classification' => 'auto'],
             ['key' => 'Parent_Guardian_Role', 'label' => '⚡ [AUTO] Parent Guardian Role', 'type' => 'list', 'options' => '"Father,Mother,Guardian (Other than Parents)"', 'width' => 22, 'note' => 'Father / Mother / Guardian', 'classification' => 'auto'],
             ['key' => 'Guardian_Name_Detail', 'label' => '⚡ [AUTO] Guardian Name Detail', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
+
+            // Monthly Attendance: Working Days vs Present Days side-by-side for each month (Apr–Mar)
             ['key' => 'Working_Days_Apr', 'label' => '⚡ [AUTO] Working Days - Apr', 'type' => 'integer', 'width' => 16, 'note' => 'Official Apr working days', 'classification' => 'auto'],
+            ['key' => 'Present_Days_Apr', 'label' => '⚡ [AUTO] Present Days - Apr', 'type' => 'integer', 'width' => 16, 'note' => 'Student Apr present days', 'classification' => 'auto'],
             ['key' => 'Working_Days_May', 'label' => '⚡ [AUTO] Working Days - May', 'type' => 'integer', 'width' => 16, 'note' => 'Official May working days', 'classification' => 'auto'],
+            ['key' => 'Present_Days_May', 'label' => '⚡ [AUTO] Present Days - May', 'type' => 'integer', 'width' => 16, 'note' => 'Student May present days', 'classification' => 'auto'],
             ['key' => 'Working_Days_Jun', 'label' => '⚡ [AUTO] Working Days - Jun', 'type' => 'integer', 'width' => 16, 'note' => 'Official Jun working days', 'classification' => 'auto'],
+            ['key' => 'Present_Days_Jun', 'label' => '⚡ [AUTO] Present Days - Jun', 'type' => 'integer', 'width' => 16, 'note' => 'Student Jun present days', 'classification' => 'auto'],
             ['key' => 'Working_Days_Jul', 'label' => '⚡ [AUTO] Working Days - Jul', 'type' => 'integer', 'width' => 16, 'note' => 'Official Jul working days', 'classification' => 'auto'],
+            ['key' => 'Present_Days_Jul', 'label' => '⚡ [AUTO] Present Days - Jul', 'type' => 'integer', 'width' => 16, 'note' => 'Student Jul present days', 'classification' => 'auto'],
             ['key' => 'Working_Days_Aug', 'label' => '⚡ [AUTO] Working Days - Aug', 'type' => 'integer', 'width' => 16, 'note' => 'Official Aug working days', 'classification' => 'auto'],
+            ['key' => 'Present_Days_Aug', 'label' => '⚡ [AUTO] Present Days - Aug', 'type' => 'integer', 'width' => 16, 'note' => 'Student Aug present days', 'classification' => 'auto'],
             ['key' => 'Working_Days_Sep', 'label' => '⚡ [AUTO] Working Days - Sep', 'type' => 'integer', 'width' => 16, 'note' => 'Official Sep working days', 'classification' => 'auto'],
+            ['key' => 'Present_Days_Sep', 'label' => '⚡ [AUTO] Present Days - Sep', 'type' => 'integer', 'width' => 16, 'note' => 'Student Sep present days', 'classification' => 'auto'],
             ['key' => 'Working_Days_Oct', 'label' => '⚡ [AUTO] Working Days - Oct', 'type' => 'integer', 'width' => 16, 'note' => 'Official Oct working days', 'classification' => 'auto'],
+            ['key' => 'Present_Days_Oct', 'label' => '⚡ [AUTO] Present Days - Oct', 'type' => 'integer', 'width' => 16, 'note' => 'Student Oct present days', 'classification' => 'auto'],
             ['key' => 'Working_Days_Nov', 'label' => '⚡ [AUTO] Working Days - Nov', 'type' => 'integer', 'width' => 16, 'note' => 'Official Nov working days', 'classification' => 'auto'],
+            ['key' => 'Present_Days_Nov', 'label' => '⚡ [AUTO] Present Days - Nov', 'type' => 'integer', 'width' => 16, 'note' => 'Student Nov present days', 'classification' => 'auto'],
             ['key' => 'Working_Days_Dec', 'label' => '⚡ [AUTO] Working Days - Dec', 'type' => 'integer', 'width' => 16, 'note' => 'Official Dec working days', 'classification' => 'auto'],
+            ['key' => 'Present_Days_Dec', 'label' => '⚡ [AUTO] Present Days - Dec', 'type' => 'integer', 'width' => 16, 'note' => 'Student Dec present days', 'classification' => 'auto'],
             ['key' => 'Working_Days_Jan', 'label' => '⚡ [AUTO] Working Days - Jan', 'type' => 'integer', 'width' => 16, 'note' => 'Official Jan working days', 'classification' => 'auto'],
+            ['key' => 'Present_Days_Jan', 'label' => '⚡ [AUTO] Present Days - Jan', 'type' => 'integer', 'width' => 16, 'note' => 'Student Jan present days', 'classification' => 'auto'],
             ['key' => 'Working_Days_Feb', 'label' => '⚡ [AUTO] Working Days - Feb', 'type' => 'integer', 'width' => 16, 'note' => 'Official Feb working days', 'classification' => 'auto'],
+            ['key' => 'Present_Days_Feb', 'label' => '⚡ [AUTO] Present Days - Feb', 'type' => 'integer', 'width' => 16, 'note' => 'Student Feb present days', 'classification' => 'auto'],
             ['key' => 'Working_Days_Mar', 'label' => '⚡ [AUTO] Working Days - Mar', 'type' => 'integer', 'width' => 16, 'note' => 'Official Mar working days', 'classification' => 'auto'],
-            ['key' => 'Present_Days_Apr', 'label' => '⚡ [AUTO] Present Days - Apr', 'type' => 'integer', 'width' => 16, 'note' => 'Student Apr present days (<= Working Days)', 'classification' => 'auto'],
-            ['key' => 'Present_Days_May', 'label' => '⚡ [AUTO] Present Days - May', 'type' => 'integer', 'width' => 16, 'note' => 'Student May present days (<= Working Days)', 'classification' => 'auto'],
-            ['key' => 'Present_Days_Jun', 'label' => '⚡ [AUTO] Present Days - Jun', 'type' => 'integer', 'width' => 16, 'note' => 'Student Jun present days (<= Working Days)', 'classification' => 'auto'],
-            ['key' => 'Present_Days_Jul', 'label' => '⚡ [AUTO] Present Days - Jul', 'type' => 'integer', 'width' => 16, 'note' => 'Student Jul present days (<= Working Days)', 'classification' => 'auto'],
-            ['key' => 'Present_Days_Aug', 'label' => '⚡ [AUTO] Present Days - Aug', 'type' => 'integer', 'width' => 16, 'note' => 'Student Aug present days (<= Working Days)', 'classification' => 'auto'],
-            ['key' => 'Present_Days_Sep', 'label' => '⚡ [AUTO] Present Days - Sep', 'type' => 'integer', 'width' => 16, 'note' => 'Student Sep present days (<= Working Days)', 'classification' => 'auto'],
-            ['key' => 'Present_Days_Oct', 'label' => '⚡ [AUTO] Present Days - Oct', 'type' => 'integer', 'width' => 16, 'note' => 'Student Oct present days (<= Working Days)', 'classification' => 'auto'],
-            ['key' => 'Present_Days_Nov', 'label' => '⚡ [AUTO] Present Days - Nov', 'type' => 'integer', 'width' => 16, 'note' => 'Student Nov present days (<= Working Days)', 'classification' => 'auto'],
-            ['key' => 'Present_Days_Dec', 'label' => '⚡ [AUTO] Present Days - Dec', 'type' => 'integer', 'width' => 16, 'note' => 'Student Dec present days (<= Working Days)', 'classification' => 'auto'],
-            ['key' => 'Present_Days_Jan', 'label' => '⚡ [AUTO] Present Days - Jan', 'type' => 'integer', 'width' => 16, 'note' => 'Student Jan present days (<= Working Days)', 'classification' => 'auto'],
-            ['key' => 'Present_Days_Feb', 'label' => '⚡ [AUTO] Present Days - Feb', 'type' => 'integer', 'width' => 16, 'note' => 'Student Feb present days (<= Working Days)', 'classification' => 'auto'],
-            ['key' => 'Present_Days_Mar', 'label' => '⚡ [AUTO] Present Days - Mar', 'type' => 'integer', 'width' => 16, 'note' => 'Student Mar present days (<= Working Days)', 'classification' => 'auto'],
-            ['key' => 'Total_Working_Days', 'label' => '⚙️ [FORMULA] Total Working Days', 'type' => 'calc', 'width' => 22, 'note' => 'Formula: =SUM(O{row}:Z{row})', 'classification' => 'calc'],
-            ['key' => 'Total_Present_Days', 'label' => '⚙️ [FORMULA] Total Present Days', 'type' => 'calc', 'width' => 22, 'note' => 'Formula: =SUM(AA{row}:AL{row})', 'classification' => 'calc'],
-            ['key' => 'Overall_Attendance_Percentage', 'label' => '⚙️ [FORMULA] Overall Attendance Percentage', 'type' => 'calc', 'width' => 22, 'note' => 'Formula: =IF(AM{row}>0, ROUND((AN{row}/AM{row})*100, 1) & "%", "")', 'classification' => 'calc'],
+            ['key' => 'Present_Days_Mar', 'label' => '⚡ [AUTO] Present Days - Mar', 'type' => 'integer', 'width' => 16, 'note' => 'Student Mar present days', 'classification' => 'auto'],
+            ['key' => 'Total_Working_Days', 'label' => '⚙️ [FORMULA] Total Working Days', 'type' => 'calc', 'width' => 22, 'note' => 'Total academic working days', 'classification' => 'calc'],
+            ['key' => 'Total_Present_Days', 'label' => '⚙️ [FORMULA] Total Present Days', 'type' => 'calc', 'width' => 22, 'note' => 'Total student present days', 'classification' => 'calc'],
+            ['key' => 'Overall_Attendance_Percentage', 'label' => '⚙️ [FORMULA] Overall Attendance Percentage', 'type' => 'calc', 'width' => 22, 'note' => 'Formula: =(Present/Working)*100', 'classification' => 'calc'],
             ['key' => 'Low_Attendance_Reason', 'label' => '⚡ [AUTO] Low Attendance Reason', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
-            ['key' => 'Total_Absence_Count', 'label' => '⚙️ [FORMULA] Total Absence Count', 'type' => 'calc', 'width' => 22, 'note' => 'Formula: =MAX(0, AM{row}-AN{row})', 'classification' => 'calc'],
+            ['key' => 'Total_Absence_Count', 'label' => '⚙️ [FORMULA] Total Absence Count', 'type' => 'calc', 'width' => 22, 'note' => 'Formula: =MAX(0, Working-Present)', 'classification' => 'calc'],
             ['key' => 'Student_Interests', 'label' => '⚡ [AUTO] Student Interests', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
             ['key' => 'AboutMe_Live_With', 'label' => '⚡ [AUTO] AboutMe Live With', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
             ['key' => 'AboutMe_Stay_At', 'label' => '⚡ [AUTO] AboutMe Stay At', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
@@ -308,12 +309,12 @@ class HpcMiddleStageSchema
 
         $vals = [];
 
-        // 1 to 10: Locked Identity (Including Student Name & APAAR ID for clear identification)
+        // 1 to 10: Locked Identity (Col A: Student Name, Col B: APAAR ID)
         $vals[] = $name;
+        $vals[] = $apaarId;
         $vals[] = $admNo;
         $vals[] = $dob;
         $vals[] = $gender;
-        $vals[] = $apaarId;
         $vals[] = $loginId;
         $vals[] = $udid;
         $vals[] = $grade;
@@ -327,22 +328,17 @@ class HpcMiddleStageSchema
         $vals[] = ($sIdx % 2 === 0) ? 'Father' : 'Mother';
         $vals[] = 'Guardian of ' . explode(' ', trim($name))[0];
 
-        // 16 to 27: Working Days (Apr to Mar)
-        foreach ($months as $mIdx => $m) {
-            $w = $defaultWorkMap[$m] ?? $defaultWorkDays[$mIdx];
-            $vals[] = $w;
-        }
-
-        // 28 to 39: Present Days (Apr to Mar)
+        // 16 to 39: Monthly Attendance (Working Days vs Present Days side-by-side for each month)
         foreach ($months as $mIdx => $m) {
             $w = $defaultWorkMap[$m] ?? $defaultWorkDays[$mIdx];
             $p = $autoFill ? max(0, $w - ($sIdx % 3 === 0 ? 1 : 2)) : '';
+            $vals[] = $w;
             $vals[] = $p;
         }
 
-        // 40 to 45: Attendance Summary
-        $vals[] = "=SUM({$k2c['Working_Days_Apr']}{$rowNum}:{$k2c['Working_Days_Mar']}{$rowNum})";
-        $vals[] = "=SUM({$k2c['Present_Days_Apr']}{$rowNum}:{$k2c['Present_Days_Mar']}{$rowNum})";
+        // 40 to 45: Attendance Summary Formulas
+        $vals[] = "=SUM(" . implode(',', array_map(fn($m) => "{$k2c['Working_Days_' . ucfirst($m)]}{$rowNum}", $months)) . ")";
+        $vals[] = "=SUM(" . implode(',', array_map(fn($m) => "{$k2c['Present_Days_' . ucfirst($m)]}{$rowNum}", $months)) . ")";
         $vals[] = "=IF({$k2c['Total_Working_Days']}{$rowNum}>0, ROUND(({$k2c['Total_Present_Days']}{$rowNum}/{$k2c['Total_Working_Days']}{$rowNum})*100, 1) & \"%\", \"\")";
         $vals[] = $autoFill ? 'Satisfactory regular attendance maintained throughout session' : '';
         $vals[] = "=MAX(0, {$k2c['Total_Working_Days']}{$rowNum}-{$k2c['Total_Present_Days']}{$rowNum})";

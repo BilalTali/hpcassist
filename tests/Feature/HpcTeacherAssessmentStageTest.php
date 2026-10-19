@@ -14,15 +14,20 @@ class HpcTeacherAssessmentStageTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_middle_stage_schema_has_exact_223_columns_and_14_sections(): void
+    public function test_middle_stage_schema_has_exact_223_columns_and_13_sections(): void
     {
         $columns = HpcMiddleStageSchema::getColumns();
         $this->assertCount(223, $columns);
         $this->assertEquals('Student_Name', $columns[0]['key']);
-        $this->assertEquals('APAAR_ID', $columns[4]['key']);
+        $this->assertEquals('APAAR_ID', $columns[1]['key']);
+        $this->assertEquals('School_Admission_No', $columns[2]['key']);
+        $this->assertEquals('Working_Days_Apr', $columns[15]['key']);
+        $this->assertEquals('Present_Days_Apr', $columns[16]['key']);
+        $this->assertEquals('Working_Days_May', $columns[17]['key']);
+        $this->assertEquals('Present_Days_May', $columns[18]['key']);
 
         $sections = HpcMiddleStageSchema::getSections();
-        $this->assertCount(14, $sections);
+        $this->assertCount(13, $sections);
 
         $starterRow = HpcMiddleStageSchema::buildStarterRow(
             0,
@@ -34,11 +39,12 @@ class HpcTeacherAssessmentStageTest extends TestCase
         );
         $this->assertCount(223, $starterRow);
         $this->assertEquals('Ayaan Ahmad', $starterRow[0]);
+        $this->assertEquals('998877665544', $starterRow[1]);
 
         $normalized = HpcMiddleStageSchema::normalizeStudentRow([
             'Student_Name'        => 'Ayaan Ahmad',
-            'School_Admission_No' => 'ADM-101',
             'APAAR_ID'            => '998877665544',
+            'School_Admission_No' => 'ADM-101',
             'HPC_Login_ID'        => 'MID001',
             'L1_Max_Marks_SA'     => 50,
             'L1_Marks_Obtained_SA'=> 45,
@@ -53,15 +59,20 @@ class HpcTeacherAssessmentStageTest extends TestCase
         $this->assertEquals(48, $normalized['marks']['math']['obt']);
     }
 
-    public function test_preparatory_stage_schema_has_exact_177_columns_and_13_sections(): void
+    public function test_preparatory_stage_schema_has_exact_177_columns_and_12_sections(): void
     {
         $columns = HpcPreparatoryStageSchema::getColumns();
         $this->assertCount(177, $columns);
         $this->assertEquals('Student_Name', $columns[0]['key']);
-        $this->assertEquals('APAAR_ID', $columns[4]['key']);
+        $this->assertEquals('APAAR_ID', $columns[1]['key']);
+        $this->assertEquals('School_Admission_No', $columns[2]['key']);
+        $this->assertEquals('Working_Days_Apr', $columns[15]['key']);
+        $this->assertEquals('Present_Days_Apr', $columns[16]['key']);
+        $this->assertEquals('Working_Days_May', $columns[17]['key']);
+        $this->assertEquals('Present_Days_May', $columns[18]['key']);
 
         $sections = HpcPreparatoryStageSchema::getSections();
-        $this->assertCount(13, $sections);
+        $this->assertCount(12, $sections);
 
         $starterRow = HpcPreparatoryStageSchema::buildStarterRow(
             0,
@@ -73,6 +84,7 @@ class HpcTeacherAssessmentStageTest extends TestCase
         );
         $this->assertCount(177, $starterRow);
         $this->assertEquals('Maryam Jan', $starterRow[0]);
+        $this->assertEquals('998877665545', $starterRow[1]);
 
         $normalized = HpcPreparatoryStageSchema::normalizeStudentRow([
             'Student_Name'        => 'Maryam Jan',

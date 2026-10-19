@@ -40,6 +40,51 @@ Route::get('/system/clear-view-cache', function () {
     return response()->json(['ok' => true, 'message' => 'Compiled views and cache cleared successfully']);
 });
 
+Route::get('/system/migrate-now', function () {
+    try {
+        \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+        $output = \Illuminate\Support\Facades\Artisan::output();
+        return response()->json([
+            'ok' => true,
+            'output' => $output,
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'ok' => false,
+            'error' => $e->getMessage(),
+            'file' => $e->getFile() . ':' . $e->getLine(),
+        ], 500);
+    }
+});
+
+Route::get('/system/diagnose-teacher', function (\Illuminate\Http\Request $request) {
+    try {
+        $user = \App\Models\User::first();
+        if ($user) {
+            \Illuminate\Support\Facades\Auth::login($user);
+        }
+        $controller = app(\App\Http\Controllers\HpcTeacherController::class);
+        $res = $controller->dashboard($request);
+        if ($res instanceof \Illuminate\View\View) {
+            $html = $res->render();
+            return response()->json([
+                'ok' => true,
+                'user' => $user?->email,
+                'role' => $user?->role,
+                'html_length' => strlen($html),
+            ]);
+        }
+        return response()->json(['ok' => true, 'response' => get_class($res)]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'ok' => false,
+            'error' => $e->getMessage(),
+            'file' => $e->getFile() . ':' . $e->getLine(),
+            'trace' => array_slice(explode("\n", $e->getTraceAsString()), 0, 10),
+        ], 500);
+    }
+});
+
 Route::middleware('auth')->group(function () {
     // ── School Central Dashboard ──────────────────────────────────────────────
     Route::get('/dashboard', function () {

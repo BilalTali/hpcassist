@@ -63,7 +63,7 @@ Route::get('/system/diagnose-teacher', function (\Illuminate\Http\Request $reque
         if ($user) {
             \Illuminate\Support\Facades\Auth::login($user);
         }
-        $controller = app(\App\Http\Controllers\HpcTeacherController::class);
+        $controller = app(HpcTeacherController::class);
         $res = $controller->dashboard($request);
         if ($res instanceof \Illuminate\View\View) {
             $html = $res->render();

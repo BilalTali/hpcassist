@@ -165,7 +165,10 @@
     function isLanguageOrHeaderElement(el) {
         if (!el) return false;
         if (el.closest('#hpc-status-widget')) return true;
-        if (el.closest('header, nav, .navbar, .top-bar, .header, [class*="navbar" i], [class*="topbar" i], [class*="app-header" i], [class*="main-header" i]')) {
+        if (el.closest('header, nav, .navbar, .top-bar, .header, [class*="navbar" i], [class*="topbar" i], [class*="app-header" i], [class*="main-header" i], [class*="site-header" i], [id*="header" i], [id*="navbar" i]')) {
+            return true;
+        }
+        if (el.closest('.language-select, .language-switcher, [class*="lang" i], [id*="lang" i], [aria-label*="language" i], [aria-label*="भाषा" i], [title*="language" i]')) {
             return true;
         }
         // Exclude top-level horizontal stage breadcrumbs (1 A(1), 2 A(2), 3 A(3), 4 B, 5 C, 6 HPC Credit)
@@ -180,7 +183,11 @@
         const id = (el.id || '').toLowerCase();
         const cls = (el.className || '').toLowerCase();
         const name = (el.name || '').toLowerCase();
-        if (id.includes('lang') || cls.includes('lang') || name.includes('lang') || id.includes('screen-reader')) return true;
+        const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+        const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+        const title = (el.getAttribute('title') || '').toLowerCase();
+        if (id.includes('lang') || cls.includes('lang') || name.includes('lang') || ariaLabel.includes('lang') || title.includes('lang') || id.includes('screen-reader')) return true;
+        if (placeholder.includes('search') || name.includes('search') || id.includes('search')) return true;
         if (txt === 'en' || txt === 'hi' || txt === 'hindi' || txt === 'english' || txt.includes('भाषा') || txt.includes('language') || txt.includes('स्क्रीन रीडर')) return true;
         return false;
     }
@@ -2527,7 +2534,7 @@
                 val: s.my_name || s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Student'
             },
             {
-                keys: ["years old", "i am ... years old", "years of age", "वर्ष", "उम्र"],
+                keys: ["years old", "i am ... years old", "years of age", "वर्ष", "उम्र", "आयु"],
                 val: String(s.my_age || s.age || '9')
             },
             {
@@ -2536,19 +2543,19 @@
             },
             {
                 keys: ["like to", "things i like", "i like", "love to", "मुझे पसंद", "पसंद है"],
-                val: s.like_to || s.free_time || 'Reading storybooks, drawing nature, and playing outdoors'
+                val: s.like_to || s.free_time || s.AboutMe_Free_Time_Doing || 'Reading storybooks, drawing nature, and playing outdoors'
             },
             {
-                keys: ["want to improve", "improve in", "could improve", "do better", "improve my skill", "skill of", "improve my skills of", "कौशल में सुधार", "सुधार करना"],
-                val: s.want_to_improve || s.do_better || 'Neat cursive handwriting and fast mental math'
+                keys: ["want to improve", "improve in", "could improve", "do better", "could do better", "improve my skill", "skill of", "improve my skills of", "कौशल में सुधार", "सुधार करना", "सुधार"],
+                val: s.want_to_improve || s.do_better || s.AboutMe_Could_Do_Better_Specially || 'Revision planning and cursive handwriting speed'
             },
             {
                 keys: ["no good at", "not good at", "am not good", "struggle with", "cannot do", "अच्छा नहीं हूँ", "कठिनाई"],
                 val: s.not_good_at || 'Drawing complex diagrams and spelling long words'
             },
             {
-                keys: ["good at", "really well", "do well", "i am good", "अच्छा हूँ", "निपुण"],
-                val: s.good_at || s.do_well || 'Solving arithmetic puzzles and reciting poems'
+                keys: ["good at", "really well", "do well", "very well", "i do well", "i am good", "अच्छा हूँ", "अच्छा करता", "निपुण"],
+                val: s.good_at || s.do_well || s.AboutMe_Do_Very_Well || 'Solving numerical puzzles and explaining concepts to classmates'
             },
             {
                 keys: ["foods", "fruits", "dish", "food", "favourite food", "favorite food", "पसंदीदा भोजन", "फल", "व्यंजन"],
@@ -2560,7 +2567,7 @@
             },
             {
                 keys: ["grow up", "when i grow up", "want to be", "aspire to be", "बड़ा होकर", "बनना चाहता"],
-                val: s.grow_up_be || s.ambition || 'Doctor / Space Scientist'
+                val: s.grow_up_be || s.ambition || s.Ambition_Goal || 'Software Engineer'
             },
             {
                 keys: ["inspires", "person who inspires", "inspires me", "प्रेरणा स्रोत", "प्रेरित"],
@@ -2573,88 +2580,120 @@
 
             // ── Middle Stage & Shared Context Rules ──
             {
-                keys: ["live with", "stay with", "living with", "रहता हूँ"],
-                val: s.live_with || 'My parents, siblings, and grandparents'
+                keys: ["live with", "stay with", "living with", "who do you live", "रहता हूँ", "किसके साथ"],
+                val: s.live_with || s.AboutMe_Live_With || 'My parents, siblings, and grandparents'
+            },
+            {
+                keys: ["stay at", "address", "location", "stay", "रहता", "स्थान", "पता"],
+                val: s.stay_at || s.AboutMe_Stay_At || 'Family home in rural district'
             },
             {
                 keys: ["game", "toy", "favourite game", "favorite game", "traditional game", "खेल"],
                 val: s.fav_game || s.fav_toy || 'Kho-Kho and Badminton'
             },
             {
-                keys: ["free time", "in my free time", "leisure", "खाली समय"],
-                val: s.free_time || 'Reading storybooks and sketching'
+                keys: ["free time", "in my free time", "leisure", "खाली समय", "खाली समय में"],
+                val: s.free_time || s.AboutMe_Free_Time_Doing || s.like_to || 'Reading storybooks, drawing landscapes, and playing sports'
             },
             {
-                keys: ["proud of", "feel proud", "proud", "गर्व"],
-                val: s.proud_of || s.feel_proud || 'Helping classmates and completing my assignments'
+                keys: ["care about", "care others", "care for others", "दूसरों की परवाह", "देखभाल"],
+                val: s.care_others || s.AboutMe_Care_About_Others_By || 'Sharing study notes and listening patiently to peers'
             },
             {
-                keys: ["learning goal", "academic goal", "goal this year", "goal", "लक्ष्य"],
-                val: s.goal_acad || s.acad_goal || 'Read 15 storybooks in English and Urdu'
+                keys: ["proud of", "feel proud", "proud", "गर्व", "गर्व महसूस"],
+                val: s.feel_proud || s.proud_of || s.AboutMe_Proud_Of_Myself_When || 'Solving difficult science and math problems independently'
             },
             {
-                keys: ["steps i will take", "action step", "goal_step", "steps", "कदम"],
-                val: s.goal_step || s.acad_step1 || 'Read 2 pages every evening before bed'
+                keys: ["learning goal", "academic goal", "goal this year", "acad goal", "शैक्षणिक लक्ष्य", "लक्ष्य"],
+                val: s.acad_goal || s.goal_acad || s.Academic_Goal || 'Master algebraic concepts and score above 90% in Science and Math'
+            },
+            {
+                keys: ["academic goal importance", "why is this goal important", "goal importance", "महत्व"],
+                val: s.acad_goal_importance || s.Academic_Goal_Importance || 'Important for future scientific research'
+            },
+            {
+                keys: ["step 1", "steps i will take (step 1)", "goal_step", "action step", "कदम 1"],
+                val: s.acad_step1 || s.goal_step || s.Academic_Goal_Step_1 || 'Read 2 pages every evening before bed'
+            },
+            {
+                keys: ["step 2", "steps i will take (step 2)", "कदम 2"],
+                val: s.acad_step2 || s.Academic_Goal_Step_2 || 'Practice 5 math problems daily'
+            },
+            {
+                keys: ["personal goal", "व्यक्तिगत लक्ष्य"],
+                val: s.pers_goal || s.Personal_Goal || 'Improve public speaking and football skills'
+            },
+            {
+                keys: ["personal goal importance", "why is this personal goal"],
+                val: s.pers_goal_importance || s.Personal_Goal_Importance || 'Builds self-confidence and physical fitness'
+            },
+            {
+                keys: ["personal goal step 1", "personal step 1"],
+                val: s.pers_step1 || s.Personal_Goal_Step_1 || 'Participate in morning school assembly debates'
+            },
+            {
+                keys: ["personal goal step 2", "personal step 2"],
+                val: s.pers_step2 || s.Personal_Goal_Step_2 || 'Daily 30 minutes physical exercise'
             },
             {
                 keys: ["kind deed", "good deed", "deed i did", "deed", "अच्छा काम"],
                 val: s.good_deed || 'Shared my lunch with a friend who forgot hers'
             },
             {
-                keys: ["stay at", "address", "location", "स्थान"],
-                val: s.stay_at || 'Sugin, Budgam'
+                keys: ["help with", "teacher help", "teacher to help", "शिक्षक मदद"],
+                val: s.teacher_help || s.For_Teacher_Help_Me_With || s.help_with || 'Advanced math problem solving and laboratory guidance'
             },
             {
-                keys: ["friend name", "friend", "दोस्त का नाम"],
-                val: s.friend_name || s.peer1_name || 'Ayaan Ahmad'
+                keys: ["teacher know", "like them to know", "शिक्षक जानें", "शिक्षक"],
+                val: s.teacher_know || s.For_Teacher_Like_Them_To_Know || 'I love science experiments and collaborative group projects'
             },
             {
-                keys: ["friend age", "दोस्त की उम्र"],
-                val: String(s.friend_age || '10')
+                keys: ["learnt at school", "learned at school", "school 1", "स्कूल में सीखा 1", "स्कूल में सीखा"],
+                val: s.sch_learn1 || s.Learned_At_School_1 || 'Science models and experiments'
             },
             {
-                keys: ["help with", "teacher help", "help", "मदद"],
-                val: s.help_with || s.teacher_help || 'Advanced math puzzles and science experiments'
+                keys: ["school 2", "स्कूल में सीखा 2"],
+                val: s.sch_learn2 || s.Learned_At_School_2 || 'Fast mental math calculations'
             },
             {
-                keys: ["teacher know", "about me", "शिक्षक"],
-                val: s.teacher_know || 'I am enthusiastic about collaborative group projects'
+                keys: ["school 3", "स्कूल में सीखा 3"],
+                val: s.sch_learn3 || s.Learned_At_School_3 || 'Fluent English and Urdu reading'
             },
             {
-                keys: ["care about", "care others", "दूसरों की परवाह"],
-                val: s.care_others || 'Helping peers with notes and sharing resources'
+                keys: ["outside school", "learnt outside", "learned outside", "outside 1", "स्कूल के बाहर 1", "स्कूल के बाहर"],
+                val: s.out_learn1 || s.Learned_Outside_School_1 || 'Kitchen gardening and plant care'
             },
             {
-                keys: ["sch_learn", "learnt in school", "learnt at school", "स्कूल में सीखा"],
-                val: s.sch_learn1 || 'Basic arithmetic formulas and regional folktales'
+                keys: ["outside 2", "स्कूल के बाहर 2"],
+                val: s.out_learn2 || s.Learned_Outside_School_2 || 'Cycling and physical fitness'
             },
             {
-                keys: ["out_learn", "outside school", "learnt outside", "स्कूल के बाहर"],
-                val: s.out_learn1 || 'Organic kitchen gardening and cycling'
+                keys: ["outside 3", "स्कूल के बाहर 3"],
+                val: s.out_learn3 || s.Learned_Outside_School_3 || 'Helping parents with household chores'
             }
         ];
 
-        // 1. Direct prompt node matching for Hand of Self-Reflection
-        const allTextNodes = Array.from(document.querySelectorAll('label, p, span, div, h4, h5, h6, text'));
+        // 1. Direct prompt node matching for Hand of Self-Reflection & All About Me
+        const allTextNodes = Array.from(document.querySelectorAll('label, p, span, div, h4, h5, h6, legend')).filter(el => !isLanguageOrHeaderElement(el));
         rules.forEach(rule => {
             const matchedEl = allTextNodes.find(el => {
                 const t = (el.innerText || el.textContent || '').trim().toLowerCase();
-                return rule.keys.some(k => t.includes(k)) && t.length < 80 && el.children.length <= 1;
+                return rule.keys.some(k => t.includes(k)) && t.length < 150 && el.children.length <= 1;
             });
             if (matchedEl) {
                 const container = matchedEl.closest('div, li, fieldset, tr') || matchedEl.parentElement;
                 const targetInput = container?.querySelector('input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]') ||
                                     matchedEl.nextElementSibling?.querySelector('input, textarea, [contenteditable="true"]') ||
                                     (matchedEl.nextElementSibling?.matches('input, textarea, [contenteditable="true"]') ? matchedEl.nextElementSibling : null);
-                if (targetInput) {
+                if (targetInput && !isLanguageOrHeaderElement(targetInput)) {
                     setNativeValue(targetInput, rule.val);
                 }
             }
         });
 
-        // 2. Scan all inputs, textareas, and contenteditable elements
-        const textElements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, [contenteditable="true"], [role="textbox"]'));
-        textElements.forEach(el => {
+        // 2. Scan all inputs, textareas, and contenteditable elements (excluding headers & language toggles)
+        const textElements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, [contenteditable="true"], [role="textbox"]')).filter(el => !isLanguageOrHeaderElement(el));
+        textElements.forEach((el, idx) => {
             const lbl = getFieldLabel(el);
             if (lbl.includes('search') || el.type === 'search') return;
 
@@ -2662,16 +2701,17 @@
             if (matchedRule) {
                 setNativeValue(el, matchedRule.val);
             } else if (!el.value || el.value.trim() === '') {
-                setNativeValue(el, 'Active and positive participation demonstrated throughout the year.');
+                const fallbackVal = (rules[idx] ? rules[idx].val : null) || 'Active and positive participation demonstrated throughout the year.';
+                setNativeValue(el, fallbackVal);
             }
         });
 
         // 3. Dropdowns (Responsible)
-        const selects = Array.from(document.querySelectorAll('select'));
+        const selects = Array.from(document.querySelectorAll('select')).filter(sel => !isLanguageOrHeaderElement(sel));
         selects.forEach(sel => {
             const lbl = getFieldLabel(sel);
             if (lbl.includes('responsible')) {
-                const targetVal = (s.responsible || 'all the time').toLowerCase();
+                const targetVal = (s.responsible || s.AboutMe_Responsible_Frequency || 'all the time').toLowerCase();
                 const opt = Array.from(sel.options).find(o => o.text.toLowerCase().includes(targetVal) || o.value.toLowerCase().includes(targetVal)) || sel.options[1];
                 if (opt) {
                     sel.value = opt.value;
@@ -2683,6 +2723,7 @@
         // 4. Radio groups in Part A2
         const radioGroups = {};
         document.querySelectorAll('input[type="radio"]').forEach(r => {
+            if (isLanguageOrHeaderElement(r)) return;
             const name = r.name || 'group';
             if (!radioGroups[name]) radioGroups[name] = [];
             radioGroups[name].push(r);
@@ -2853,25 +2894,79 @@
 
     async function fillPartA3(s) {
         logStatus(`[Part-A3] Filling Ambition Card for ${s.name}...`);
-        const orderedA3 = [
-            s.ambition          || 'Doctor / Astrophysicist',
-            s.achieve_how       || 'Conceptual understanding in Maths & Science and dedicated daily practice',
-            s.skills_needed     || 'Critical Thinking, Problem Solving, Communication, Coding, Curiosity',
-            s.focus_subjects    || 'Mathematics, Science, English, Computing',
-            s.habits_i_will     || s.habits_build || s.i_will || 'Disciplined daily study, 30 min morning exercise, and curious questioning',
-            s.mentor            || 'Bilal Ahmad Tali',
-            s.mentor_help       || 'Recommending Olympiad reference books and laboratory guidance',
-            s.learn_new         || 'Scientific problem solving and experimental techniques',
-            s.feel_when_achieve || 'Proud, fulfilled, and motivated to help others',
-            s.parents_feel      || 'Immensely joyful, honored, and proud'
+
+        const ambitionRules = [
+            {
+                keys: ["ambition", "career", "aspire", "goal in life", "want to be", "my ambition", "लक्ष्य", "आकांक्षा", "बनना"],
+                val: s.ambition || s.Ambition_Goal || s.grow_up_be || 'Software Engineer'
+            },
+            {
+                keys: ["achieve", "strategy", "path to achieve", "how i will achieve", "how will i", "action plan", "प्राप्त", "रणनीति"],
+                val: s.achieve_how || s.Ambition_Achieve_Strategy || 'Consistent math problem solving and computer programming practice'
+            },
+            {
+                keys: ["5 skills", "skills needed", "skills required", "skills", "skill", "कौशल"],
+                val: s.skills_needed || s.Ambition_5_Skills_Needed || 'Logical Thinking, Coding, Collaboration, Mathematics, Problem Solving'
+            },
+            {
+                keys: ["focus subjects", "subjects to focus", "subjects", "subject", "विषय"],
+                val: s.focus_subjects || s.Ambition_Subjects_To_Focus || 'Mathematics, Science, English, Computer Science'
+            },
+            {
+                keys: ["habits required", "habits i will", "habits to build", "cultivate", "habits", "habit", "आदतें", "आदत"],
+                val: s.habits_i_will || s.Ambition_Habits_Required || s.habits_build || 'Punctuality, daily revision, and continuous curiosity'
+            },
+            {
+                keys: ["guidance from", "mentor", "person who will guide", "person", "मार्गदर्शन", "परामर्श"],
+                val: s.mentor || s.Ambition_Guidance_From_Person || 'Science & Mathematics Teachers'
+            },
+            {
+                keys: ["how person will help", "how will help", "mentor help", "help me", "मदद करेंगे", "सहायता"],
+                val: s.mentor_help || s.Ambition_How_Person_Will_Help || 'Recommending reference books and mentoring laboratory projects'
+            },
+            {
+                keys: ["learn new", "new things", "what new", "learn", "नया सीखना"],
+                val: s.learn_new || s.Ambition_Learn_New || 'Advanced programming basics and scientific modeling methods'
+            },
+            {
+                keys: ["student will feel", "how will i feel", "i will feel", "feel when", "feel", "महसूस करेंगे", "मुझे कैसा लगेगा"],
+                val: s.feel_when_achieve || s.Ambition_How_Student_Will_Feel || 'Extremely proud, confident, and motivated to serve society'
+            },
+            {
+                keys: ["parents will feel", "parents feel", "माता-पिता कैसा महसूस", "माता-पिता"],
+                val: s.parents_feel || s.Ambition_How_Parents_Will_Feel || 'Immensely joyful, supportive, and proud of my hard work'
+            }
         ];
 
-        const elements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, select'));
-        orderedA3.forEach((val, idx) => {
-            if (elements[idx + 1]) {
-                setNativeValue(elements[idx + 1], val);
-            } else if (elements[idx]) {
-                setNativeValue(elements[idx], val);
+        // 1. Direct prompt node matching
+        const allTextNodes = Array.from(document.querySelectorAll('label, p, span, div, h4, h5, h6, legend')).filter(el => !isLanguageOrHeaderElement(el));
+        ambitionRules.forEach(rule => {
+            const matchedEl = allTextNodes.find(el => {
+                const t = (el.innerText || el.textContent || '').trim().toLowerCase();
+                return rule.keys.some(k => t.includes(k)) && t.length < 120 && el.children.length <= 1;
+            });
+            if (matchedEl) {
+                const container = matchedEl.closest('div, li, fieldset, tr') || matchedEl.parentElement;
+                const targetInput = container?.querySelector('input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]') ||
+                                    matchedEl.nextElementSibling?.querySelector('input, textarea, [contenteditable="true"]') ||
+                                    (matchedEl.nextElementSibling?.matches('input, textarea, [contenteditable="true"]') ? matchedEl.nextElementSibling : null);
+                if (targetInput && !isLanguageOrHeaderElement(targetInput)) {
+                    setNativeValue(targetInput, rule.val);
+                }
+            }
+        });
+
+        // 2. Scan all text inputs and textareas (STRICTLY excluding headers/navbars/language toggles)
+        const inputs = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea')).filter(el => !isLanguageOrHeaderElement(el));
+        
+        inputs.forEach((el, idx) => {
+            const lbl = getFieldLabel(el);
+            const matched = ambitionRules.find(r => r.keys.some(k => lbl.includes(k)));
+            if (matched) {
+                setNativeValue(el, matched.val);
+            } else if (!el.value || el.value.trim() === '') {
+                const val = (ambitionRules[idx] ? ambitionRules[idx].val : null) || 'Focused and motivated towards academic excellence.';
+                setNativeValue(el, val);
             }
         });
 

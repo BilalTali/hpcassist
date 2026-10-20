@@ -4030,12 +4030,16 @@
                 }
             });
 
-            // 6b. Click pill/chip options if questions are formatted as buttons
-            document.querySelectorAll('.appropriate-option-select li, ul.options-list li, button.btn-outline, .pill, .chip').forEach((btn, idx) => {
-                if (isLanguageOrHeaderElement(btn)) return;
-                const txt = (btn.innerText || '').trim().toLowerCase();
-                if (txt.includes('yes') || txt.includes('हाँ') || idx === 0) {
-                    try { btn.click(); } catch(e) {}
+            // 6b. Click pill/chip/emoticon smiley options (Yes / हाँ / Smileys)
+            const smileyItems = Array.from(document.querySelectorAll('li, figure, .appropriate-option-select li, ul.options-list li, button.btn-outline, .pill, .chip, [class*="option" i], [class*="emoticon" i]')).filter(el => !isLanguageOrHeaderElement(el));
+            smileyItems.forEach(el => {
+                const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+                if (txt === 'yes' || txt.includes('yes') || txt === 'हाँ') {
+                    try {
+                        el.click();
+                        const img = el.querySelector('img, figure, svg');
+                        if (img) img.click();
+                    } catch(e) {}
                 }
             });
 

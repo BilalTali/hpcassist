@@ -221,14 +221,19 @@
         try {
             value = String(value ?? '');
             element.focus();
+
+            // 1. ContentEditable or custom textbox elements
             if (element.isContentEditable || element.getAttribute('contenteditable') === 'true' || element.getAttribute('role') === 'textbox') {
                 element.innerText = value;
                 element.textContent = value;
+                element.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: value }));
                 element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
                 element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
                 element.dispatchEvent(new Event('blur', { bubbles: true }));
                 return;
             }
+
+            // 2. Clear React value tracker so React will register future changes
             const tracker = element._valueTracker;
             if (tracker && typeof tracker.setValue === 'function') {
                 try {
@@ -236,56 +241,83 @@
                 } catch(e) {}
             }
 
-            let set = null;
-            const tag = (element.tagName || '').toUpperCase();
-            if (tag === 'TEXTAREA' || element instanceof HTMLTextAreaElement) {
-                set = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-            } else if (tag === 'INPUT' || element instanceof HTMLInputElement) {
-                set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-            } else if (tag === 'SELECT' || element instanceof HTMLSelectElement) {
-                set = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
-            } else {
+            // 3. Try native browser execCommand('insertText') first (most natural for React synthetic events)
+            let typedWithExec = false;
+            try {
+                if (typeof element.select === 'function') {
+                    element.select();
+                } else {
+                    const sel = window.getSelection();
+                    const range = document.createRange();
+                    range.selectNodeContents(element);
+                    sel?.removeAllRanges();
+                    sel?.addRange(range);
+                }
+                typedWithExec = document.execCommand('insertText', false, value);
+            } catch(e) {
+                typedWithExec = false;
+            }
+
+            // 4. If execCommand didn't apply or wasn't supported, use the prototype setter from element's own realm
+            if (!typedWithExec || element.value !== value) {
+                const doc = element.ownerDocument || document;
+                const win = doc.defaultView || window;
+                let setter = null;
+
+                // Walk prototype chain of element itself so it stays within element's realm
                 let proto = Object.getPrototypeOf(element);
                 while (proto && proto !== Object.prototype) {
                     const desc = Object.getOwnPropertyDescriptor(proto, 'value');
                     if (desc && desc.set) {
-                        set = desc.set;
+                        setter = desc.set;
                         break;
                     }
                     proto = Object.getPrototypeOf(proto);
                 }
-            }
 
-            if (set) {
-                try {
-                    set.call(element, value);
-                } catch(e) {
+                // Realm fallback
+                if (!setter && win) {
+                    const tag = (element.tagName || '').toUpperCase();
+                    const targetProto = (tag === 'TEXTAREA')
+                        ? win.HTMLTextAreaElement?.prototype
+                        : (tag === 'SELECT')
+                            ? win.HTMLSelectElement?.prototype
+                            : win.HTMLInputElement?.prototype;
+                    setter = Object.getOwnPropertyDescriptor(targetProto, 'value')?.set;
+                }
+
+                if (setter) {
+                    try {
+                        setter.call(element, value);
+                    } catch(e) {
+                        element.value = value;
+                    }
+                } else {
                     element.value = value;
                 }
-            } else {
-                element.value = value;
             }
 
+            // 5. Dispatch standard DOM events
+            element.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: value }));
             element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
             element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-            try {
-                element.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: value }));
-            } catch(e) {}
 
-            // Direct React synthetic event invocation
-            const rPropsKey = Object.keys(element).find(k => k.startsWith('__reactProps'));
+            // 6. Direct React synthetic event invocation
+            const rPropsKey = Object.keys(element).find(k => k.startsWith('__reactProps') || k.startsWith('__reactEventHandlers'));
             if (rPropsKey && element[rPropsKey]) {
-                if (typeof element[rPropsKey].onChange === 'function') {
+                const rProps = element[rPropsKey];
+                if (typeof rProps.onChange === 'function') {
                     try {
-                        element[rPropsKey].onChange({ target: element, currentTarget: element, preventDefault: () => {}, stopPropagation: () => {} });
+                        rProps.onChange({ target: element, currentTarget: element, bubbles: true, preventDefault: () => {}, stopPropagation: () => {} });
                     } catch(e) {}
                 }
-                if (typeof element[rPropsKey].onInput === 'function') {
+                if (typeof rProps.onInput === 'function') {
                     try {
-                        element[rPropsKey].onInput({ target: element, currentTarget: element, preventDefault: () => {}, stopPropagation: () => {} });
+                        rProps.onInput({ target: element, currentTarget: element, bubbles: true, preventDefault: () => {}, stopPropagation: () => {} });
                     } catch(e) {}
                 }
             }
+
             element.dispatchEvent(new Event('blur', { bubbles: true }));
         } catch(err) {
             console.warn('[HPC Assist] setNativeValue error caught safely:', err);
@@ -2449,35 +2481,48 @@
             for (let l of el.labels) text += ' ' + (l.innerText || '');
         }
 
-        // Climb up to 4 levels checking immediate previous siblings and container titles
-        let curr = el;
-        for (let lvl = 0; lvl < 4 && curr && curr !== document.body; lvl++) {
-            let prev = curr.previousElementSibling;
-            while (prev) {
-                const prevText = (prev.innerText || prev.textContent || '').trim();
-                if (prevText && !prev.querySelector('input, textarea, select')) {
-                    text += ' ' + prevText;
-                }
-                prev = prev.previousElementSibling;
+        // Check previous siblings for dedicated labels/headings
+        let prev = el.previousElementSibling;
+        while (prev) {
+            const prevText = (prev.innerText || prev.textContent || '').trim();
+            if (prevText && !prev.querySelector('input, textarea, select')) {
+                text += ' ' + prevText;
+                break;
             }
-            if (curr.parentElement) {
-                curr = curr.parentElement;
+            prev = prev.previousElementSibling;
+        }
+
+        // Climb up to parent containers only if container is dedicated to this input
+        let curr = el.parentElement;
+        for (let lvl = 0; lvl < 3 && curr && curr !== document.body; lvl++) {
+            const siblingInputs = curr.querySelectorAll('input:not([type="hidden"]), textarea');
+            if (siblingInputs.length <= 1) {
                 const titleEl = curr.querySelector('label, h3, h4, h5, h6, strong, b, .title, [class*="title" i], [class*="label" i], [class*="heading" i]');
                 if (titleEl && !titleEl.contains(el) && !titleEl.querySelector('input, textarea')) {
                     text += ' ' + (titleEl.innerText || titleEl.textContent || '');
                 }
             }
+            curr = curr.parentElement;
         }
         return text.toLowerCase().replace(/\s+/g, ' ');
     }
 
-    async function clickContinueBtn() {
+    async function clickContinueBtn(expectedPattern = null) {
+        if (expectedPattern && !location.href.toLowerCase().includes(expectedPattern.toLowerCase())) {
+            console.warn(`[HPC Assist] clickContinueBtn skipped: expected pattern "${expectedPattern}" not in URL "${location.href}"`);
+            return true;
+        }
+
         logStatus('Waiting for Continue button to be ready...');
         let continueBtn = null;
 
         // Poll up to 6 seconds (12 x 500ms) for the Continue button to become available & enabled
         for (let wait = 0; wait < 12; wait++) {
             await sleep(500);
+            if (expectedPattern && !location.href.toLowerCase().includes(expectedPattern.toLowerCase())) {
+                logStatus(`[HPC Assist] Page already navigated away from ${expectedPattern}`);
+                return true;
+            }
             const candidates = Array.from(document.querySelectorAll('button, a[role="button"], input[type="button"], input[type="submit"], .btn'));
 
             // Priority 1: Text contains 'continue' or 'next' or Hindi 'जारी रखें' or 'आगे बढ़ें' or 'अगला'
@@ -2511,7 +2556,7 @@
             try { HTMLElement.prototype.click.call(continueBtn); } catch(e) {}
 
             // Monitor for SPA navigation
-            for (let step = 0; step < 8; step++) {
+            for (let step = 0; step < 10; step++) {
                 await sleep(600);
                 if (location.href !== initialUrl) {
                     logStatus(`Advanced to: ${location.href}`);
@@ -2633,67 +2678,67 @@
         const prepStageFields = [
             {
                 keys: ["good at", "really well", "do well", "very well", "i do well", "i am good", "अच्छा हूँ", "अच्छा करता", "निपुण", "thumb", "अंगूठा"],
-                val: s.Hand_Reflection_Thumb_GoodAt || s.good_at || s.do_well || s.AboutMe_Do_Very_Well || 'Arithmetic calculations and drawing flowers'
+                val: s.Hand_Reflection_Thumb_GoodAt || s.data?.Hand_Reflection_Thumb_GoodAt || s.good_at || s.do_well || s.AboutMe_Do_Very_Well || 'Arithmetic calculations and drawing flowers'
             },
             {
                 keys: ["no good at", "not good at", "am not good", "struggle with", "cannot do", "अच्छा नहीं हूँ", "कठिनाई", "index", "तर्जनी"],
-                val: s.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings'
+                val: s.Hand_Reflection_Index_NotGoodAt || s.data?.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings'
             },
             {
                 keys: ["want to improve", "improve in", "could improve", "do better", "could do better", "improve my skill", "skill of", "improve my skills of", "कौशल में सुधार", "सुधार करना", "सुधार", "middle", "मध्यमा"],
-                val: s.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || s.do_better || s.AboutMe_Could_Do_Better_Specially || 'Reading storybooks fluently without hesitation'
+                val: s.Hand_Reflection_Middle_ImproveSkill || s.data?.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || s.do_better || s.AboutMe_Could_Do_Better_Specially || 'Reading storybooks fluently without hesitation'
             },
             {
                 keys: ["like to", "things i like", "i like", "love to", "मुझे पसंद", "पसंद है", "ring", "अनामिका"],
-                val: s.Hand_Reflection_Ring_LikeTo || s.like_to || s.free_time || s.AboutMe_Free_Time_Doing || 'Singing rhymes, origami folding, and outdoor games'
+                val: s.Hand_Reflection_Ring_LikeTo || s.data?.Hand_Reflection_Ring_LikeTo || s.like_to || s.free_time || s.AboutMe_Free_Time_Doing || 'Singing rhymes, origami folding, and outdoor games'
             },
             {
                 keys: ["grow up", "when i grow up", "want to be", "aspire to be", "बड़ा होकर", "बनना चाहता", "little", "कनिष्ठिका", "aspiration", "ambition"],
-                val: s.Hand_Reflection_Little_Aspiration || s.grow_up_be || s.ambition || s.Ambition_Goal || 'Become a helpful school teacher or scientist'
+                val: s.Hand_Reflection_Little_Aspiration || s.data?.Hand_Reflection_Little_Aspiration || s.grow_up_be || s.ambition || s.Ambition_Goal || 'Become a helpful school teacher or scientist'
             },
             {
                 keys: ["inspires", "person who inspires", "inspires me", "प्रेरणा स्रोत", "प्रेरित", "prompt 1", "reflection 1", "general reflection 1", "enjoy coming to school"],
-                val: s.General_Reflection_Prompt_1 || s.person_inspires || 'I enjoy coming to school every morning to learn with my classmates'
+                val: s.General_Reflection_Prompt_1 || s.data?.General_Reflection_Prompt_1 || s.person_inspires || 'I enjoy coming to school every morning to learn with my classmates'
             },
             {
                 keys: ["three things", "learn this school year", "want to learn", "learn this year", "सीखना चाहता", "तीन बातें", "prompt 2", "reflection 2", "neat, clean", "desk"],
-                val: s.General_Reflection_Prompt_2 || s.learn_this_year || s.sch_learn1 || 'I keep my notebook and classroom desk neat, clean, and organized'
+                val: s.General_Reflection_Prompt_2 || s.data?.General_Reflection_Prompt_2 || s.learn_this_year || s.sch_learn1 || 'I keep my notebook and classroom desk neat, clean, and organized'
             },
             {
                 keys: ["reflection 3", "general reflection 3", "prompt 3", "listen attentively", "attention", "listen"],
-                val: s.General_Reflection_Prompt_3 || 'I always listen attentively when my teacher explains new topics'
+                val: s.General_Reflection_Prompt_3 || s.data?.General_Reflection_Prompt_3 || 'I always listen attentively when my teacher explains new topics'
             },
             {
                 keys: ["reflection 4", "general reflection 4", "prompt 4", "share", "pencils", "crayons", "classmates"],
-                val: s.General_Reflection_Prompt_4 || 'I share my crayons and pencils whenever my classmates need them'
+                val: s.General_Reflection_Prompt_4 || s.data?.General_Reflection_Prompt_4 || 'I share my crayons and pencils whenever my classmates need them'
             },
             {
                 keys: ["foods", "fruits", "dish", "food", "favourite food", "favorite food", "पसंदीदा भोजन", "फल", "व्यंजन"],
-                val: s.Favorite_Food || s.fav_food || s.fav_dish || 'Dal Chawal, Apples, and seasonal fresh fruits'
+                val: s.Favorite_Food || s.data?.Favorite_Food || s.fav_food || s.fav_dish || 'Dal Chawal, Apples, and seasonal fresh fruits'
             },
             {
                 keys: ["game", "toy", "favourite game", "favorite game", "traditional game", "खेल", "खिलौना"],
-                val: s.Favorite_Games || s.fav_game || s.fav_toy || 'Kho-Kho, Hide and Seek, and Toy-Clock building'
+                val: s.Favorite_Games || s.data?.Favorite_Games || s.fav_game || s.fav_toy || 'Kho-Kho, Hide and Seek, and Toy-Clock building'
             },
             {
                 keys: ["festival", "favourite festival", "favorite festival", "त्योहार", "पर्व"],
-                val: s.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr, Diwali, and National Days'
+                val: s.Favorite_Festival || s.data?.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr, Diwali, and National Days'
             },
             {
                 keys: ["observation 1", "observation statement 1", "statement 1", "row 1"],
-                val: s.Observation_Statement_Row_1 || 'Consistently shows high enthusiasm in collaborative activities and group tasks.'
+                val: s.Observation_Statement_Row_1 || s.data?.Observation_Statement_Row_1 || 'Consistently shows high enthusiasm in collaborative activities and group tasks.'
             },
             {
                 keys: ["observation 2", "observation statement 2", "statement 2", "row 2"],
-                val: s.Observation_Statement_Row_2 || 'Demonstrates strong empathy and helpful attitude towards peers.'
+                val: s.Observation_Statement_Row_2 || s.data?.Observation_Statement_Row_2 || 'Demonstrates strong empathy and helpful attitude towards peers.'
             },
             {
                 keys: ["observation 3", "observation statement 3", "statement 3", "row 3"],
-                val: s.Observation_Statement_Row_3 || 'Shows keen observational skills and curiosity during science experiments.'
+                val: s.Observation_Statement_Row_3 || s.data?.Observation_Statement_Row_3 || 'Shows keen observational skills and curiosity during science experiments.'
             },
             {
                 keys: ["interest", "student interest", "special interest", "रुचि", "विशेष"],
-                val: s.Student_Interests || s.ambition || 'Science experiments and drawing models'
+                val: s.Student_Interests || s.data?.Student_Interests || s.ambition || 'Drawing and Coloring'
             }
         ];
 
@@ -2853,19 +2898,37 @@
             const lbl = getFieldLabel(el);
             if (lbl.includes('search') || el.type === 'search') return;
 
-            const matchedRule = rules.find(r => r.keys.some(k => lbl.includes(k)));
-            if (matchedRule) {
-                setNativeValue(el, matchedRule.val);
-                logStatus(`[Part-A2] Field match: "${lbl.slice(0, 30)}" -> "${String(matchedRule.val).slice(0, 35)}"`);
+            let valToSet = null;
+            let matchType = '';
+
+            // Disambiguate Food, Games, Festival
+            if (lbl.includes('festival') || lbl.includes('त्योहार') || lbl.includes('पर्व')) {
+                valToSet = s.Favorite_Festival || s.data?.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr, Diwali, and National Days';
+                matchType = 'Festival';
+            } else if (lbl.includes('game') || lbl.includes('toy') || lbl.includes('खेल') || lbl.includes('खिलौना')) {
+                valToSet = s.Favorite_Games || s.data?.Favorite_Games || s.fav_game || s.fav_toy || 'Kho-Kho, Hide and Seek, and Toy-Clock building';
+                matchType = 'Games';
+            } else if (lbl.includes('food') || lbl.includes('dish') || lbl.includes('भोजन') || lbl.includes('खाना') || lbl.includes('फल')) {
+                valToSet = s.Favorite_Food || s.data?.Favorite_Food || s.fav_food || s.fav_dish || 'Dal Chawal, Apples, and seasonal fresh fruits';
+                matchType = 'Food';
+            } else {
+                const matchedRule = rules.find(r => r.keys.some(k => lbl.includes(k)));
+                if (matchedRule) {
+                    valToSet = matchedRule.val;
+                    matchType = matchedRule.keys[0];
+                }
+            }
+
+            if (valToSet !== null) {
+                setNativeValue(el, valToSet);
+                logStatus(`[Part-A2] Matched (${matchType}): "${lbl.slice(0, 25)}" -> "${String(valToSet).slice(0, 35)}"`);
                 filledCount++;
-            } else if (!el.value || el.value.trim() === '') {
+            } else {
                 const fallbackVal = (isPrepStage && prepStageFields[idx])
                     ? prepStageFields[idx].val
                     : ((rules[idx] ? rules[idx].val : null) || 'Active and positive participation demonstrated throughout the year.');
                 setNativeValue(el, fallbackVal);
-                logStatus(`[Part-A2] Fallback (${idx}): "${lbl.slice(0, 30)}" -> "${String(fallbackVal).slice(0, 35)}"`);
-                filledCount++;
-            } else {
+                logStatus(`[Part-A2] Field (${idx}): "${lbl.slice(0, 25)}" -> "${String(fallbackVal).slice(0, 35)}"`);
                 filledCount++;
             }
         });
@@ -2884,19 +2947,26 @@
             }
         });
 
-        // 4. Radio groups in Part A2
+        // 4. Radio groups in Part A2 (Self-reflection / Feelings / Responsible)
         const radioGroups = {};
-        document.querySelectorAll('input[type="radio"]').forEach(r => {
+        document.querySelectorAll('input[type="radio"], [role="radio"]').forEach(r => {
             if (isLanguageOrHeaderElement(r)) return;
-            const name = r.name || 'group';
-            if (!radioGroups[name]) radioGroups[name] = [];
-            radioGroups[name].push(r);
+            const parent = r.closest('tr, [role="row"], fieldset, [role="radiogroup"], .form-group, .card, .row, li');
+            const pText = (parent ? parent.innerText.slice(0, 50) : '');
+            const key = r.name || pText || 'group';
+            if (!radioGroups[key]) radioGroups[key] = { radios: [], pText };
+            radioGroups[key].radios.push(r);
         });
         Object.values(radioGroups).forEach(group => {
-            if (group.length > 0 && !group.some(r => r.checked)) {
-                const target = group.find(r => /all the time|always|yes|most times|1/i.test(r.value || r.id || '')) || group[0];
-                target.click();
-                target.dispatchEvent(new Event('change', { bubbles: true }));
+            const list = group.radios;
+            if (list.length > 0 && !list.some(r => r.checked || r.getAttribute('aria-checked') === 'true')) {
+                const target = list.find(r => /yes|always|all the time|positive|1|agree|हाँ|हमेशा/i.test(r.value || r.id || '')) || list[0];
+                if (target) {
+                    target.click();
+                    target.checked = true;
+                    target.setAttribute('aria-checked', 'true');
+                    target.dispatchEvent(new Event('change', { bubbles: true }));
+                }
             }
         });
 
@@ -2910,15 +2980,15 @@
         // Wait up to 8 seconds (16 x 500ms) for form elements to mount
         for (let w = 0; w < 16; w++) {
             const interactive = Array.from(document.querySelectorAll('input, textarea, [role="radio"], .appropriate-option-select, [class*="option-select" i]')).filter(el => !isLanguageOrHeaderElement(el));
-            if (interactive.length > 2) break;
+            if (interactive.length >= 6) break;
             await sleep(500);
         }
         logStatus(`[Part-A3: Preparatory] Filling Feelings, Peer 1, Peer 2 & Parent Feedback for ${s.name}...`);
         
         // 1. Peer Reviewer & Student Names (Peer 1 & Peer 2)
-        const p1Name = s.Peer1_Student_Name || s.peer1_name || s.Peer1_Target_Friend_Name || 'Sahil Bashir';
-        const p2Name = s.Peer2_Student_Name || s.peer2_name || s.Peer2_Target_Friend_Name || 'Iqra Parveen';
-        const stName = s.name || s.my_name || 'Student';
+        const p1Name = s.Peer1_Student_Name || s.data?.Peer1_Student_Name || s.peer1_name || s.Peer1_Target_Friend_Name || 'Sahil Bashir';
+        const p2Name = s.Peer2_Student_Name || s.data?.Peer2_Student_Name || s.peer2_name || s.Peer2_Target_Friend_Name || 'Iqra Parveen';
+        const stName = s.Student_Name || s.data?.Student_Name || s.name || s.my_name || 'Student';
 
         const textInputs = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])')).filter(inp => !isLanguageOrHeaderElement(inp));
         let friendIdx = 0;
@@ -3039,7 +3109,7 @@
         });
 
         // 3. Home Resources Checkboxes ("Your Child Matters! Tick the resources available to your child at home")
-        const resText = (s.parent_home_resources || s.home_resources || 'books, newspaper, toys, games, sports, phone, computer, internet, radio, broadcast, tv').toLowerCase();
+        const resText = (s.parent_home_resources || s.data?.parent_home_resources || s.home_resources || s.data?.home_resources || 'books, newspaper, toys, games, sports, phone, computer, internet, radio, broadcast, tv').toLowerCase();
         document.querySelectorAll('.childrens-resources li, .resources-available li, [class*="resource" i] li, fieldset li, div.form-check').forEach(li => {
             if (isLanguageOrHeaderElement(li)) return;
             const lbl = (li.innerText || '').toLowerCase();
@@ -3083,7 +3153,7 @@
         });
 
         // 5. Parent feedback textareas & specify inputs ("Specify: Write here.")
-        const feedbackText = s.Parent_Support_Other_Specify_Text || s.parent_support_specify || s.parent_support_needed || s.parent_feedback || 'Provide 30 minutes of guided reading and daily arithmetic practice worksheets at home.';
+        const feedbackText = s.Parent_Support_Other_Specify_Text || s.data?.Parent_Support_Other_Specify_Text || s.parent_support_specify || s.parent_support_needed || s.parent_feedback || 'Provide 30 minutes of guided reading and daily arithmetic practice worksheets at home.';
         document.querySelectorAll('textarea, input[placeholder*="Write here" i], input[placeholder*="specify" i]').forEach(ta => {
             if (isLanguageOrHeaderElement(ta)) return;
             if (!ta.value || ta.value.trim() === '') {
@@ -3093,7 +3163,7 @@
         });
 
         logStatus('[Part-A3: Preparatory] ✓ Completed feelings, peer reviews, home resources & parent support.');
-        await sleep(800);
+        await sleep(2500);
     }
 
     async function fillPartA3(s) {
@@ -4450,136 +4520,147 @@
         }
     }, 3500);
 
+    let isHandlingPartStep = false;
+
     async function handleFormPartStep(s) {
-        if (!s) {
-            try {
-                const raw = localStorage.getItem('hpc_teacher_active_student');
-                if (raw) s = JSON.parse(raw);
-            } catch(e) {}
+        if (isHandlingPartStep) {
+            console.log('[HPC Assist] handleFormPartStep already in progress, skipping concurrent call.');
+            return false;
         }
-        if (!s && teacherQueue && teacherQueue[teacherCurrentIndex]) {
-            s = teacherQueue[teacherCurrentIndex];
-        }
-        if (!s) return false;
-
-        const url = location.href.toLowerCase();
-        const pageText = (document.body?.innerText || '').toLowerCase();
-        const pageHeading = (document.querySelector('h1, h2, h3, h4, .page-title, .breadcrumb')?.innerText || '').toLowerCase();
-
-        // ── PART A1 ──
-        const isPartA1 = (url.includes('/part-a1') || url.includes('/part-a(1)') || url.includes('/part-a-1') ||
-                          pageHeading.includes('part - a(1)') || pageHeading.includes('part a(1)') || pageHeading.includes('part - a1')) &&
-                          !url.includes('/part-a2') && !url.includes('/part-a3') && !url.includes('/part-a4') && !url.includes('/part-b') && !url.includes('/part-c');
-
-        if (isPartA1) {
-            await fillPartA1(s);
-            await sleep(1500);
-            await clickContinueBtn();
-            scheduleTeacherEvaluationStep(1500);
-            return true;
-        }
-
-        // ── PART A2 ──
-        const isPartA2 = (url.includes('/part-a2') || url.includes('/part-a(2)') || url.includes('/part-a-2') ||
-                          pageHeading.includes('part - a(2)') || pageHeading.includes('part a(2)') || pageHeading.includes('part - a2') ||
-                          pageHeading.includes('all about me') || pageText.includes('hand of self-reflection') ||
-                          document.querySelector('[class*="hand" i], [id*="hand" i]')) &&
-                          !url.includes('/part-a1') && !url.includes('/part-a3') && !url.includes('/part-a4') && !url.includes('/part-b') && !url.includes('/part-c');
-
-        if (isPartA2) {
-            await fillPartA2(s);
-            await sleep(2500);
-            await clickContinueBtn();
-            scheduleTeacherEvaluationStep(1500);
-            return true;
-        }
-
-        // ── PART A3 ──
-        const isPartA3 = (url.includes('/part-a3') || url.includes('/part-a(3)') || url.includes('/part-a-3') ||
-                          pageHeading.includes('part - a(3)') || pageHeading.includes('part a(3)') || pageHeading.includes('part - a3') ||
-                          pageText.includes('how do i feel at school') || pageText.includes('peer feedback') || pageText.includes('your child matters')) &&
-                          !url.includes('/part-a1') && !url.includes('/part-a2') && !url.includes('/part-a4') && !url.includes('/part-b') && !url.includes('/part-c');
-
-        if (isPartA3) {
-            const isPrep = url.includes('preparatory') || (s && String(s.grade || s.class || s.stage || '').match(/^[345]|prep/i)) ||
-                           pageText.includes('how do i feel at school') || pageText.includes('your child matters');
-            if (isPrep) {
-                await fillPreparatoryPartA3(s);
-            } else {
-                await fillPartA3(s);
+        isHandlingPartStep = true;
+        try {
+            if (!s) {
+                try {
+                    const raw = localStorage.getItem('hpc_teacher_active_student');
+                    if (raw) s = JSON.parse(raw);
+                } catch(e) {}
             }
-            await sleep(2500);
-            await clickContinueBtn();
-            scheduleTeacherEvaluationStep(1500);
-            return true;
-        }
+            if (!s && teacherQueue && teacherQueue[teacherCurrentIndex]) {
+                s = teacherQueue[teacherCurrentIndex];
+            }
+            if (!s) return false;
 
-        // ── PART A4 (Middle Stage Only) ──
-        const isPartA4 = url.includes('/part-a4') || url.includes('/part-a(4)') || url.includes('/part-a-4') ||
-                         pageHeading.includes('part - a(4)') || pageHeading.includes('part a(4)');
+            const url = location.href.toLowerCase();
+            const pageText = (document.body?.innerText || '').toLowerCase();
+            const pageHeading = (document.querySelector('h1, h2, h3, h4, .page-title, .breadcrumb')?.innerText || '').toLowerCase();
 
-        if (isPartA4) {
-            await fillPartA4(s);
-            await sleep(1000);
-            await clickContinueBtn();
-            scheduleTeacherEvaluationStep(1500);
-            return true;
-        }
+            // ── PART A1 ──
+            const isPartA1 = (url.includes('/part-a1') || url.includes('/part-a(1)') || url.includes('/part-a-1') ||
+                              pageHeading.includes('part - a(1)') || pageHeading.includes('part a(1)') || pageHeading.includes('part - a1')) &&
+                              !url.includes('/part-a2') && !url.includes('/part-a3') && !url.includes('/part-a4') && !url.includes('/part-b') && !url.includes('/part-c');
 
-        // ── PART B ──
-        const isPartB = url.includes('/part-b') || pageHeading.includes('part - b') || pageHeading.includes('part b') ||
-                        document.querySelector('.acivity-name-updates, [class*="activity" i]') && Array.from(document.querySelectorAll('*')).some(el => /assessment rubric/i.test(el.innerText || ''));
+            if (isPartA1) {
+                await fillPartA1(s);
+                await sleep(1500);
+                await clickContinueBtn('part-a1');
+                scheduleTeacherEvaluationStep(1500);
+                return true;
+            }
 
-        if (isPartB) {
-            await fillPartB(s);
-            await sleep(1000);
-            await clickContinueBtn();
-            scheduleTeacherEvaluationStep(1500);
-            return true;
-        }
+            // ── PART A2 ──
+            const isPartA2 = (url.includes('/part-a2') || url.includes('/part-a(2)') || url.includes('/part-a-2') ||
+                              pageHeading.includes('part - a(2)') || pageHeading.includes('part a(2)') || pageHeading.includes('part - a2') ||
+                              pageHeading.includes('all about me') || pageText.includes('hand of self-reflection') ||
+                              document.querySelector('[class*="hand" i], [id*="hand" i]')) &&
+                              !url.includes('/part-a1') && !url.includes('/part-a3') && !url.includes('/part-a4') && !url.includes('/part-b') && !url.includes('/part-c');
 
-        // ── PART C ──
-        const isPartC = url.includes('/part-c') || pageHeading.includes('part - c') || pageHeading.includes('part c');
+            if (isPartA2) {
+                await fillPartA2(s);
+                await sleep(2500);
+                await clickContinueBtn('part-a2');
+                scheduleTeacherEvaluationStep(1500);
+                return true;
+            }
 
-        if (isPartC) {
-            await fillPartC(s);
-            await sleep(1000);
-            await clickContinueBtn();
-            scheduleTeacherEvaluationStep(1500);
-            return true;
-        }
+            // ── PART A3 ──
+            const isPartA3 = (url.includes('/part-a3') || url.includes('/part-a(3)') || url.includes('/part-a-3') ||
+                              pageHeading.includes('part - a(3)') || pageHeading.includes('part a(3)') || pageHeading.includes('part - a3') ||
+                              pageText.includes('how do i feel at school') || pageText.includes('peer feedback') || pageText.includes('your child matters')) &&
+                              !url.includes('/part-a1') && !url.includes('/part-a2') && !url.includes('/part-a4') && !url.includes('/part-b') && !url.includes('/part-c');
 
-        // ── HPC CREDIT ──
-        const isHpcCredit = url.includes('/hpc-credit') || url.includes('/credit') || pageHeading.includes('credit');
+            if (isPartA3) {
+                const isPrep = url.includes('preparatory') || (s && String(s.grade || s.class || s.stage || '').match(/^[345]|prep/i)) ||
+                               pageText.includes('how do i feel at school') || pageText.includes('your child matters');
+                if (isPrep) {
+                    await fillPreparatoryPartA3(s);
+                } else {
+                    await fillPartA3(s);
+                }
+                await sleep(2500);
+                await clickContinueBtn('part-a3');
+                scheduleTeacherEvaluationStep(1500);
+                return true;
+            }
 
-        if (isHpcCredit) {
-            await fillHpcCredit(s);
-            logStatus(`🎉 Evaluated & submitted ${s.name} successfully!`);
-            await reportTeacherProgress(teacherCurrentIndex + 1, teacherQueue.length, s.name, s.login_id, 'completed', 'HPC assessment and credit marks submitted successfully');
+            // ── PART A4 (Middle Stage Only) ──
+            const isPartA4 = url.includes('/part-a4') || url.includes('/part-a(4)') || url.includes('/part-a-4') ||
+                             pageHeading.includes('part - a(4)') || pageHeading.includes('part a(4)');
 
-            // Advance index
-            teacherCurrentIndex++;
-            localStorage.setItem('hpc_teacher_index', String(teacherCurrentIndex));
-            localStorage.removeItem('hpc_teacher_active_student');
+            if (isPartA4) {
+                await fillPartA4(s);
+                await sleep(1000);
+                await clickContinueBtn('part-a4');
+                scheduleTeacherEvaluationStep(1500);
+                return true;
+            }
 
-            if (teacherCurrentIndex >= teacherQueue.length) {
-                isTeacherRunning = false;
-                localStorage.setItem('hpc_teacher_running', 'false');
-                alert(`🎉 All ${teacherQueue.length} student evaluations completed successfully!`);
-                updateWidgetContent();
+            // ── PART B ──
+            const isPartB = url.includes('/part-b') || pageHeading.includes('part - b') || pageHeading.includes('part b') ||
+                            document.querySelector('.acivity-name-updates, [class*="activity" i]') && Array.from(document.querySelectorAll('*')).some(el => /assessment rubric/i.test(el.innerText || ''));
+
+            if (isPartB) {
+                await fillPartB(s);
+                await sleep(1000);
+                await clickContinueBtn('part-b');
+                scheduleTeacherEvaluationStep(1500);
+                return true;
+            }
+
+            // ── PART C ──
+            const isPartC = url.includes('/part-c') || pageHeading.includes('part - c') || pageHeading.includes('part c');
+
+            if (isPartC) {
+                await fillPartC(s);
+                await sleep(1000);
+                await clickContinueBtn('part-c');
+                scheduleTeacherEvaluationStep(1500);
+                return true;
+            }
+
+            // ── HPC CREDIT ──
+            const isHpcCredit = url.includes('/hpc-credit') || url.includes('/credit') || pageHeading.includes('credit');
+
+            if (isHpcCredit) {
+                await fillHpcCredit(s);
+                logStatus(`🎉 Evaluated & submitted ${s.name} successfully!`);
+                await reportTeacherProgress(teacherCurrentIndex + 1, teacherQueue.length, s.name, s.login_id, 'completed', 'HPC assessment and credit marks submitted successfully');
+
+                // Advance index
+                teacherCurrentIndex++;
+                localStorage.setItem('hpc_teacher_index', String(teacherCurrentIndex));
+                localStorage.removeItem('hpc_teacher_active_student');
+
+                if (teacherCurrentIndex >= teacherQueue.length) {
+                    isTeacherRunning = false;
+                    localStorage.setItem('hpc_teacher_running', 'false');
+                    alert(`🎉 All ${teacherQueue.length} student evaluations completed successfully!`);
+                    updateWidgetContent();
+                    return false;
+                }
+
+                // Navigate back to stage list for next student
+                const nextStudent = teacherQueue[teacherCurrentIndex];
+                const stageUrl = getStageUrlForGrade(nextStudent.grade);
+                logStatus(`Navigating to ${stageUrl} for next student: ${nextStudent.name}...`);
+                await sleep(1500);
+                window.location.href = stageUrl;
                 return false;
             }
 
-            // Navigate back to stage list for next student
-            const nextStudent = teacherQueue[teacherCurrentIndex];
-            const stageUrl = getStageUrlForGrade(nextStudent.grade);
-            logStatus(`Navigating to ${stageUrl} for next student: ${nextStudent.name}...`);
-            await sleep(1500);
-            window.location.href = stageUrl;
             return false;
+        } finally {
+            isHandlingPartStep = false;
         }
-
-        return false;
     }
 
     async function processNextTeacherStudent() {

@@ -2524,15 +2524,27 @@
                 return true;
             }
             const candidates = Array.from(document.querySelectorAll('button, a[role="button"], input[type="button"], input[type="submit"], .btn'));
+            const reversedCandidates = candidates.slice().reverse();
 
-            // Priority 1: Text contains 'continue' or 'next' or Hindi 'जारी रखें' or 'आगे बढ़ें' or 'अगला'
-            continueBtn = candidates.find(b => {
+            // Priority 1: Page-level navigation button strictly contains 'continue', 'आगे बढ़ें', or 'जारी रखें' from bottom up
+            continueBtn = reversedCandidates.find(b => {
                 if (isLanguageOrHeaderElement(b)) return false;
                 const t = (b.innerText || b.value || '').trim().toLowerCase();
-                const isBack = t.includes('draft') || t.includes('back') || t.includes('वापस') || t.includes('रद्द');
-                const isCont = t.includes('continue') || t.includes('next') || t.includes('जारी रखें') || t.includes('आगे बढ़ें') || t.includes('अगला');
-                return isCont && !isBack;
+                const isBack = t.includes('draft') || t.includes('back') || t.includes('वापस') || t.includes('रद्द') || t.includes('finish') || t.includes('पूर्ण');
+                const isStrictCont = t === 'continue' || t === 'जारी रखें' || t === 'आगे बढ़ें' || (t.includes('continue') && !t.includes('next'));
+                return isStrictCont && !isBack;
             });
+
+            // Priority 2: Fallback to any continue / next button from bottom up
+            if (!continueBtn) {
+                continueBtn = reversedCandidates.find(b => {
+                    if (isLanguageOrHeaderElement(b)) return false;
+                    const t = (b.innerText || b.value || '').trim().toLowerCase();
+                    const isBack = t.includes('draft') || t.includes('back') || t.includes('वापस') || t.includes('रद्द') || t.includes('finish') || t.includes('पूर्ण');
+                    const isCont = t.includes('continue') || t.includes('next') || t.includes('जारी रखें') || t.includes('आगे बढ़ें') || t.includes('अगला');
+                    return isCont && !isBack;
+                });
+            }
 
             if (continueBtn && !continueBtn.disabled) break;
         }
@@ -2563,13 +2575,14 @@
                     return true;
                 }
                 // Handle confirmation modal if one appeared
-                const modal = document.querySelector('.modal, .swal2-popup, [role="dialog"], .fade.show');
+                const modal = document.querySelector('.modal, .swal2-popup, [role="dialog"], [aria-modal="true"], .fade.show, div[class*="modal" i], div[class*="popup" i], div[class*="dialog" i]');
                 if (modal) {
-                    const confirmBtn = Array.from(modal.querySelectorAll('button')).find(b => 
-                        /proceed|continue|yes|ok|confirm|हाँ|पुष्टि|आगे बढ़ें|पूर्ण/i.test((b.innerText || '').trim())
+                    const confirmBtn = Array.from(modal.querySelectorAll('button, a[role="button"]')).find(b => 
+                        /proceed|continue|yes|ok|confirm|finish|हाँ|पुष्टि|आगे बढ़ें|पूर्ण/i.test((b.innerText || '').trim())
                     );
                     if (confirmBtn) {
                         confirmBtn.click();
+                        try { HTMLElement.prototype.click.call(confirmBtn); } catch(e) {}
                         await sleep(800);
                     }
                 }
@@ -3981,20 +3994,35 @@
                 try { HTMLElement.prototype.click.call(finishBtn); } catch(e) {}
                 logStatus('[Part-B] ✓ Clicked Finish Activity button.');
                 
-                // Wait up to 3s for confirmation modal
-                for (let mWait = 0; mWait < 6; mWait++) {
+                // Wait up to 5s for confirmation modal
+                for (let mWait = 0; mWait < 10; mWait++) {
                     await sleep(500);
-                    const modal = document.querySelector('.modal, .swal2-popup, [role="dialog"], .fade.show');
+                    const modal = document.querySelector('.modal, .swal2-popup, [role="dialog"], [aria-modal="true"], .fade.show, div[class*="modal" i], div[class*="popup" i], div[class*="dialog" i]');
                     if (modal) {
-                        const confirmBtn = Array.from(modal.querySelectorAll('button')).find(b => 
+                        const confirmBtn = Array.from(modal.querySelectorAll('button, a[role="button"], .btn')).find(b => 
                             /finish|yes|confirm|proceed|ok|complete|हाँ|पुष्टि|आगे बढ़ें|पूर्ण/i.test((b.innerText || '').trim())
                         );
                         if (confirmBtn) {
                             confirmBtn.click();
+                            try { HTMLElement.prototype.click.call(confirmBtn); } catch(e) {}
                             logStatus('[Part-B] ✓ Confirmed Finish modal.');
                             await sleep(1500);
                             break;
                         }
+                    }
+
+                    // Check for standalone modal / dialog confirm button
+                    const standaloneConfirm = Array.from(document.querySelectorAll('button, a[role="button"]')).find(b => {
+                        if (isLanguageOrHeaderElement(b)) return false;
+                        const txt = (b.innerText || '').trim().toLowerCase();
+                        return txt === 'finish' || txt === 'yes' || txt === 'confirm' || txt === 'proceed' || txt === 'ok' || txt === 'हाँ' || txt === 'पूर्ण करें';
+                    });
+                    if (standaloneConfirm) {
+                        standaloneConfirm.click();
+                        try { HTMLElement.prototype.click.call(standaloneConfirm); } catch(e) {}
+                        logStatus(`[Part-B] ✓ Confirmed Finish via "${standaloneConfirm.innerText.trim()}".`);
+                        await sleep(1500);
+                        break;
                     }
                 }
             }
@@ -4609,9 +4637,30 @@
                             document.querySelector('.acivity-name-updates, [class*="activity" i]') && Array.from(document.querySelectorAll('*')).some(el => /assessment rubric/i.test(el.innerText || ''));
 
             if (isPartB) {
+                const sKey = (s.student_id || s.apaar_id || s.name || 'st') + '_partB_done';
+                if (window[sKey]) {
+                    logStatus(`[Part-B] Activity already completed for ${s.name}. Advancing to Part-C...`);
+                    await clickContinueBtn('part-b');
+                    await sleep(1200);
+                    if (location.href.toLowerCase().includes('/part-b')) {
+                        const targetPartC = location.href.replace(/\/part-b/i, '/part-C');
+                        logStatus(`[Part-B] Advancing directly to: ${targetPartC}`);
+                        location.href = targetPartC;
+                    }
+                    scheduleTeacherEvaluationStep(1500);
+                    return true;
+                }
+
                 await fillPartB(s);
+                window[sKey] = true;
                 await sleep(1000);
                 await clickContinueBtn('part-b');
+                await sleep(1200);
+                if (location.href.toLowerCase().includes('/part-b')) {
+                    const targetPartC = location.href.replace(/\/part-b/i, '/part-C');
+                    logStatus(`[Part-B] Advancing directly to: ${targetPartC}`);
+                    location.href = targetPartC;
+                }
                 scheduleTeacherEvaluationStep(1500);
                 return true;
             }

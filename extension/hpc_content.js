@@ -4647,47 +4647,57 @@
             return null;
         }
 
-        function findActionDropdownItem(rootEl = document) {
+        function findActionDropdownItem(scope = document) {
+            if (!scope) return null;
             const itemSelectors = [
                 '.custom-dropdown-options .custom-dropdown-item',
+                '.custom-dropdown-item',
                 '.custom-dropdown-options div',
                 '.custom-dropdown-options a',
-                '.custom-dropdown-options button',
+                '.custom-dropdown-options li',
                 '.custom-dropdown-options span',
-                '.custom-dropdown-item',
                 '.dropdown-item',
                 '[role="menuitem"]',
                 '.dropdown-menu a',
                 '.dropdown-menu button',
                 '.dropdown-menu li',
                 '[class*="dropdown" i] [class*="item" i]',
+                '[class*="options" i] li',
+                '[class*="options" i] a',
+                '[class*="options" i] button',
                 '[class*="options" i] div',
-                '[class*="popover" i] div',
                 '[class*="popover" i] li',
-                '[class*="menu" i] div',
-                '[class*="menu" i] li',
-                'ul[role="menu"] li'
+                '[class*="popover" i] div'
             ];
-            const allItems = Array.from(rootEl.querySelectorAll(itemSelectors.join(', '))).filter(el => {
+            const allElements = Array.from(scope.querySelectorAll(itemSelectors.join(', '))).filter(el => {
                 if (!el || isLanguageOrHeaderElement(el)) return false;
                 if (el.closest('.top-steps, .stage-stepper, #hpc-status-widget, nav, header')) return false;
-                const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
-                if (!txt || txt.length > 50) return false;
-                if (txt.includes('delete') || txt.includes('remove') || txt.includes('हटायें') || txt.includes('हटाएं')) return false;
+                if (el.classList.contains('custom-dropdown-wrapper') || el.classList.contains('custom-dropdown-header') || el.classList.contains('custom-dropdown-options')) return false;
+                // Exclude elements that have children with their own text (we want the innermost leaf)
+                if (el.children.length > 0 && Array.from(el.children).some(c => (c.innerText || '').trim().length > 0)) return false;
+                const txt = String(el.innerText || el.textContent || '').trim();
+                if (!txt || txt.length > 30 || txt.includes('\n')) return false;
+                const low = txt.toLowerCase();
+                // Filter out non-evaluation actions and nav items
+                if (['dashboard', 'hpc', 'my downloads', 'how to fill', 'tracker', 'report', 'generate pdf', 'pdf', 'delete', 'remove', 'download'].includes(low)) return false;
+                if (low.includes('delete') || low.includes('remove') || low.includes('हटायें') || low.includes('हटाएं')) return false;
                 return true;
             });
 
-            if (allItems.length === 0) return null;
+            if (allElements.length === 0) return null;
 
-            const bestItem = allItems.find(el => {
-                const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
-                return /^(edit|open|evaluat|assess|view|संपादित|खोलें|मूल्यांकन)/i.test(txt);
-            }) || allItems.find(el => {
-                const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
-                return /edit|open|evaluat|assess|view|संपादित|खोलें|मूल्यांकन/i.test(txt);
-            }) || allItems[0];
+            // Strict match for "Open", "Edit", "Evaluate", or regional equivalents
+            const strict = allElements.find(el => {
+                const low = (el.innerText || el.textContent || '').trim().toLowerCase();
+                return low === 'open' || low === 'edit' || low === 'evaluate' || low === 'खोलें' || low === 'संपादित' || low === 'मूल्यांकन';
+            });
+            if (strict) return strict;
 
-            return bestItem;
+            // Partial match
+            return allElements.find(el => {
+                const low = (el.innerText || el.textContent || '').trim().toLowerCase();
+                return low.includes('open') || low.includes('edit') || low.includes('evaluat') || low.includes('खोलें') || low.includes('संपादित');
+            }) || null;
         }
 
         // Strategy 0: Direct React props / Fiber inspect
@@ -4744,6 +4754,11 @@
             const itemLabel = (actionItem.innerText || actionItem.textContent || '').trim();
             logStatus(`Opening evaluation form for ${s.name} (clicked: "${itemLabel}")...`);
             localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
+            // Trigger React onClick if defined on actionItem
+            const itKey = Object.keys(actionItem).find(k => k.startsWith('__reactProps'));
+            if (itKey && actionItem[itKey]?.onClick) {
+                try { actionItem[itKey].onClick({ target: actionItem, currentTarget: actionItem, preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
+            }
             simulateUserClick(actionItem);
             scheduleTeacherEvaluationStep(2500);
             await sleep(3000);

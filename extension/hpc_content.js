@@ -1,6 +1,7 @@
 // HPC Assist PARAKH Portal Student Auto-Submission Script
 (function () {
-    console.log('[HPC Assist] PARAKH HPC Automation script loaded on', location.href);
+    const HPC_EXTENSION_VERSION = '1.4.9';
+    console.log(`[HPC Assist v${HPC_EXTENSION_VERSION}] PARAKH HPC Automation script loaded on`, location.href);
 
     // SERVER_URL is injected by the dashboard via window.__HPC_CONFIG.
     // Never falls back to a hardcoded domain — an empty SERVER_URL will fail
@@ -1255,7 +1256,7 @@
                         ${activeLabel}
                         <span style="color: #1e40af; font-weight: 700; margin-left: 4px;">${progressCount}</span>
                     </span>
-                    <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.3.0</span>
+                    <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v${HPC_EXTENSION_VERSION}</span>
                     <span style="font-size: 9px; padding: 2px 7px; border-radius: 8px; font-weight: 700; background: ${isAnyRunning ? '#dbeafe' : '#dcfce7'}; color: ${isAnyRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isAnyRunning ? '#bfdbfe' : '#bbf7d0'};">
                         ${isAnyRunning ? '⚡ RUNNING' : 'READY'}
                     </span>
@@ -1290,7 +1291,7 @@
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="font-size: 16px;">👩‍🏫</span>
                             <strong style="font-weight: 800; font-size: 13px; color: #0f172a; letter-spacing: -0.2px;">Teacher Evaluation</strong>
-                            <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.3.0</span>
+                            <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v${HPC_EXTENSION_VERSION}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 6px;">
                             <span style="font-size: 10px; background: ${isTeacherRunning ? '#dbeafe' : '#dcfce7'}; color: ${isTeacherRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isTeacherRunning ? '#bfdbfe' : '#bbf7d0'}; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
@@ -1378,7 +1379,7 @@
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span style="font-size: 16px;">🚀</span>
                         <strong style="font-weight: 800; font-size: 13px; color: #0f172a; letter-spacing: -0.2px;">HPC Assist Submitter</strong>
-                        <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v1.3.0</span>
+                        <span style="font-size: 9px; font-weight: 700; color: #475569; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; border: 1px solid #cbd5e1;">v${HPC_EXTENSION_VERSION}</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="font-size: 10px; background: ${isRunning ? '#dbeafe' : '#dcfce7'}; color: ${isRunning ? '#1d4ed8' : '#15803d'}; border: 1px solid ${isRunning ? '#bfdbfe' : '#bbf7d0'}; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
@@ -4582,7 +4583,114 @@
             return;
         }
 
-        // Strategy 1: Any direct link inside targetRow or its cells
+        // Diagnostic DOM beacon to console and server
+        const lastCell = targetRow.cells ? targetRow.cells[targetRow.cells.length - 1] : targetRow.querySelector('td:last-child');
+        const lastCellSnippet = lastCell ? lastCell.innerHTML.replace(/\s+/g, ' ').substring(0, 300) : 'none';
+        logStatus(`[DOM] Row located for ${s.name} (${s.login_id}). ColCount=${cells.length}. ActionCell: ${lastCellSnippet}`);
+
+        function simulateUserClick(el) {
+            if (!el) return;
+            try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+            try { el.focus(); } catch(e) {}
+            const opts = { bubbles: true, cancelable: true, view: window, composed: true };
+            el.dispatchEvent(new PointerEvent('pointerdown', opts));
+            el.dispatchEvent(new MouseEvent('mousedown', opts));
+            el.dispatchEvent(new PointerEvent('pointerup', opts));
+            el.dispatchEvent(new MouseEvent('mouseup', opts));
+            el.click();
+        }
+
+        function extractStudentPortalData(tr) {
+            if (!tr) return null;
+            const fiberKey = Object.keys(tr).find(k => k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance'));
+            if (!fiberKey) return null;
+            let fiber = tr[fiberKey];
+            for (let depth = 0; depth < 25 && fiber; depth++) {
+                const p = fiber.memoizedProps || fiber.pendingProps;
+                if (p) {
+                    const rowData = p.row || p.data || p.record || p.item || p.student;
+                    if (rowData && (rowData.id !== undefined || rowData.std_reg_id || rowData.full_name)) {
+                        return {
+                            id: rowData.id,
+                            regId: rowData.std_reg_id,
+                            apaarId: rowData.std_apaar_id,
+                            name: rowData.full_name || rowData.name,
+                            raw: rowData,
+                            actions: p.actions,
+                            actionCallbacks: p.actionCallbacks
+                        };
+                    }
+                    if (p.id !== undefined && (typeof p.id === 'number' || /^\d+$/.test(p.id))) {
+                        return { id: p.id, actions: p.actions, actionCallbacks: p.actionCallbacks };
+                    }
+                }
+                fiber = fiber.return;
+            }
+            return null;
+        }
+
+        function findActionDropdownItem(rootEl = document) {
+            const itemSelectors = [
+                '.custom-dropdown-options .custom-dropdown-item',
+                '.custom-dropdown-options div',
+                '.custom-dropdown-options a',
+                '.custom-dropdown-options button',
+                '.custom-dropdown-options span',
+                '.custom-dropdown-item',
+                '.dropdown-item',
+                '[role="menuitem"]',
+                '.dropdown-menu a',
+                '.dropdown-menu button',
+                '.dropdown-menu li',
+                '[class*="dropdown" i] [class*="item" i]',
+                '[class*="options" i] div',
+                '[class*="popover" i] div',
+                '[class*="popover" i] li',
+                '[class*="menu" i] div',
+                '[class*="menu" i] li',
+                'ul[role="menu"] li'
+            ];
+            const allItems = Array.from(rootEl.querySelectorAll(itemSelectors.join(', '))).filter(el => {
+                if (!el || isLanguageOrHeaderElement(el)) return false;
+                if (el.closest('.top-steps, .stage-stepper, #hpc-status-widget, nav, header')) return false;
+                const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
+                if (!txt || txt.length > 50) return false;
+                if (txt.includes('delete') || txt.includes('remove') || txt.includes('हटायें') || txt.includes('हटाएं')) return false;
+                return true;
+            });
+
+            if (allItems.length === 0) return null;
+
+            const bestItem = allItems.find(el => {
+                const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
+                return /^(edit|open|evaluat|assess|view|संपादित|खोलें|मूल्यांकन)/i.test(txt);
+            }) || allItems.find(el => {
+                const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
+                return /edit|open|evaluat|assess|view|संपादित|खोलें|मूल्यांकन/i.test(txt);
+            }) || allItems[0];
+
+            return bestItem;
+        }
+
+        // Strategy 0: Direct React props / Fiber inspect
+        const portalData = extractStudentPortalData(targetRow);
+        if (portalData) {
+            logStatus(`[DOM] Discovered React row data: ID=${portalData.id || 'N/A'}, RegID=${portalData.regId || 'N/A'}`);
+            if (portalData.actionCallbacks && typeof portalData.actionCallbacks.edit === 'function') {
+                logStatus(`Triggering React actionCallbacks.edit(${portalData.id}) for ${s.name}...`);
+                localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
+                try {
+                    portalData.actionCallbacks.edit(portalData.id);
+                    scheduleTeacherEvaluationStep(2500);
+                    await sleep(3000);
+                    return;
+                } catch(e) {
+                    console.warn('[HPC Assist] Direct edit callback failed:', e);
+                }
+            }
+        }
+
+        // Strategy 1: Direct link inside targetRow or its cells
         const directLink = targetRow.querySelector('a[href*="/hpc/"], a[href*="part-"], a[href*="stage/"], a[href*="student"]');
         if (directLink) {
             logStatus(`Opening direct evaluation link for ${s.name}...`);
@@ -4593,128 +4701,80 @@
             return;
         }
 
-        // Strategy 2: Action trigger (3-dots kebab menu) in last cell
-        const lastCell = targetRow.cells ? targetRow.cells[targetRow.cells.length - 1] : targetRow.querySelector('td:last-child');
-        const actionTrigger = (lastCell ? lastCell.querySelector('.custom-dropdown-header, [class*="dropdown-header" i], [class*="dropdown-toggle" i], [class*="action" i] button, [class*="action" i] div, [class*="dots" i], [class*="kebab" i], button:has(svg), svg, button, div[role="button"], a') : null)
-            || targetRow.querySelector('.custom-dropdown-header, [class*="action" i] button, [class*="dropdown" i] button, button:has(svg), button');
+        // Strategy 2: Action Dropdown (3 vertical dots ⋮ in lastCell)
+        const wrapper = lastCell ? (lastCell.querySelector('.custom-dropdown-wrapper') || lastCell.firstElementChild || lastCell) : null;
+        const header = wrapper ? (wrapper.querySelector('.custom-dropdown-header') || wrapper) : null;
+        const labelOrSvg = header ? (header.querySelector('label, svg') || header) : null;
 
-        if (actionTrigger) {
-            try { actionTrigger.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
-            await sleep(150);
+        const triggerCandidates = [header, labelOrSvg, wrapper, lastCell].filter(Boolean);
 
-            // Trigger React props onClick on trigger, parent, and SVG
-            const clickTargets = [actionTrigger, actionTrigger.parentElement, actionTrigger.querySelector('svg, i')].filter(Boolean);
-            for (const el of clickTargets) {
-                const rKey = Object.keys(el).find(k => k.startsWith('__reactProps'));
-                if (rKey && el[rKey]?.onClick) {
-                    try { el[rKey].onClick({ target: el, currentTarget: el, preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
-                }
-            }
-            actionTrigger.focus();
-            actionTrigger.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
-            actionTrigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-            actionTrigger.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
-            actionTrigger.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-            actionTrigger.click();
-            try { HTMLElement.prototype.click.call(actionTrigger); } catch(e) {}
+        let actionItem = null;
+        for (let tIdx = 0; tIdx < triggerCandidates.length; tIdx++) {
+            const trig = triggerCandidates[tIdx];
+            logStatus(`Clicking action trigger #${tIdx + 1} (${trig.tagName}.${trig.className || ''}) for ${s.name}...`);
+            simulateUserClick(trig);
+            await sleep(350);
 
-            logStatus(`Clicked action menu for ${s.name}. Waiting for menu options...`);
-
-            // Poll up to 2.5s for the dropdown menu items to mount (in row or React portal)
-            let actionItem = null;
-            for (let poll = 0; poll < 12; poll++) {
-                await sleep(200);
-
-                const localOpts = Array.from(targetRow.querySelectorAll(
-                    '.custom-dropdown-options div, .custom-dropdown-options a, .custom-dropdown-options button, .custom-dropdown-options span, ' +
-                    '.custom-dropdown-item, .dropdown-item, [role="menuitem"], .dropdown-menu a, .dropdown-menu button, .dropdown-menu li, ' +
-                    '[class*="dropdown" i] div, [class*="dropdown" i] a, [class*="dropdown" i] button, [class*="options" i] div'
-                ));
-
-                const globalOpts = Array.from(document.querySelectorAll(
-                    '.custom-dropdown-options div, .custom-dropdown-options a, .custom-dropdown-options button, .custom-dropdown-item, ' +
-                    '.dropdown-item, [role="menuitem"], .dropdown-menu a, .dropdown-menu button, .dropdown-menu li, ' +
-                    '[class*="popover" i] div, [class*="popover" i] a, [class*="popover" i] button, [class*="popover" i] li, ' +
-                    '[class*="menu" i] div, [class*="menu" i] a, [class*="menu" i] button, [class*="menu" i] li, ' +
-                    'ul[role="menu"] li, [role="listbox"] [role="option"]'
-                ));
-
-                const candidates = [...localOpts, ...globalOpts].filter(el => {
-                    if (!el || isLanguageOrHeaderElement(el)) return false;
-                    if (el.closest('.top-steps, .stage-stepper, #hpc-status-widget, nav, header')) return false;
-                    const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
-                    if (!txt || txt.length > 50) return false;
-                    if (txt.includes('delete') || txt.includes('remove') || txt.includes('हटायें') || txt.includes('हटाएं')) return false;
-                    return true;
-                });
-
-                if (candidates.length > 0) {
-                    actionItem = candidates.find(el => {
-                        const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
-                        return /evaluat|assess|open|edit|fill|start|view|form|hpc|मूल्यांकन|संपादित|खोलें|शुरू|प्रपत्र/i.test(txt);
-                    }) || candidates[0];
-
-                    if (actionItem) break;
-                }
-            }
-
+            actionItem = findActionDropdownItem(lastCell) || findActionDropdownItem(document);
             if (actionItem) {
-                const label = (actionItem.innerText || actionItem.textContent || '').trim();
-                logStatus(`Opening evaluation form for ${s.name} (clicked: "${label}")...`);
+                logStatus(`[DOM] Dropdown opened! Found item: "${actionItem.innerText.trim()}"`);
+                break;
+            }
+        }
+
+        if (actionItem) {
+            const itemLabel = (actionItem.innerText || actionItem.textContent || '').trim();
+            logStatus(`Opening evaluation form for ${s.name} (clicked: "${itemLabel}")...`);
+            localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
+            simulateUserClick(actionItem);
+            scheduleTeacherEvaluationStep(2500);
+            await sleep(3000);
+            return;
+        }
+
+        // Strategy 3: Check cells across targetRow for clickable status badges or buttons
+        if (cells[3]) {
+            const statusBtn = cells[3].querySelector('button, a, span, div') || cells[3];
+            const sTxt = (statusBtn.innerText || '').trim().toLowerCase();
+            if (sTxt.includes('pending') || sTxt.includes('progress') || sTxt.includes('evaluate') || sTxt.includes('open')) {
+                logStatus(`Found actionable status badge "${statusBtn.innerText.trim()}" in Col 3. Clicking...`);
                 localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
-
-                const itKey = Object.keys(actionItem).find(k => k.startsWith('__reactProps'));
-                if (itKey && actionItem[itKey]?.onClick) {
-                    try { actionItem[itKey].onClick({ target: actionItem, currentTarget: actionItem, preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
-                }
-                actionItem.focus();
-                actionItem.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
-                actionItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-                actionItem.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
-                actionItem.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-                actionItem.click();
-                try { HTMLElement.prototype.click.call(actionItem); } catch(e) {}
-
+                simulateUserClick(statusBtn);
                 scheduleTeacherEvaluationStep(2500);
                 await sleep(3000);
-                return;
+                if (location.pathname.includes('part-')) return;
             }
         }
 
-        // Strategy 3: Check cells across targetRow for any button, badge, or link
-        for (let c = cells.length - 1; c >= 0; c--) {
-            const cell = cells[c];
-            const buttons = Array.from(cell.querySelectorAll('button, a, [role="button"], span.badge, span[class*="status" i], span[class*="btn" i]')).filter(el => !isLanguageOrHeaderElement(el));
-            for (const btn of buttons) {
-                const txt = (btn.innerText || btn.textContent || '').trim().toLowerCase();
-                if (/evaluat|open|edit|fill|start|view|progress|pending|form|मूल्यांकन|खोलें/i.test(txt)) {
-                    logStatus(`Found actionable element "${btn.innerText.trim()}" in column ${c} for ${s.name}...`);
-                    localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
-                    btn.click();
-                    scheduleTeacherEvaluationStep(2500);
-                    await sleep(3000);
-                    return;
-                }
-            }
+        // Strategy 4: Direct URL Navigation if student ID is known from React data or table
+        const studentPortalId = portalData?.id || (targetRow.getAttribute && targetRow.getAttribute('data-id')) || null;
+        if (studentPortalId) {
+            const curPath = location.pathname;
+            const stageMatch = curPath.match(/\/hpc\/([^\/]+)/);
+            const stageSlug = stageMatch ? stageMatch[1] : 'preparatory-stage';
+            const encodedToken = btoa(`${studentPortalId}-2627-jk`);
+            const targetUrl = `/en/hpc/${stageSlug}/${encodedToken}/part-A1`;
+            logStatus(`Directly navigating to evaluation URL for ${s.name}: ${targetUrl}...`);
+            localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
+            window.location.href = targetUrl;
+            scheduleTeacherEvaluationStep(2500);
+            await sleep(3000);
+            return;
         }
 
-        // Strategy 4: Fallback click on student name cell and row
+        // Strategy 5: Name cell fallback
         const nameCell = targetRow.cells ? targetRow.cells[2] : null;
         logStatus(`Attempting to open via student name cell for ${s.name}...`);
         localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
         if (nameCell) {
             const clickEl = nameCell.querySelector('a, button, span[role="button"]') || nameCell;
-            clickEl.click();
+            simulateUserClick(clickEl);
         }
-        const rProps = Object.keys(targetRow).find(k => k.startsWith('__reactProps'));
-        if (rProps && targetRow[rProps]?.onClick) {
-            try { targetRow[rProps].onClick({ target: targetRow, currentTarget: targetRow, preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
-        }
-        targetRow.click();
+        simulateUserClick(targetRow);
         scheduleTeacherEvaluationStep(2500);
         await sleep(3000);
 
-        logStatus(`⚠️ Could not click Open/Edit for ${s.name}. Please open manually.`);
+        logStatus(`⚠️ Could not auto-open ${s.name}. Please click the 3-dots menu & Edit manually, and automation will take over!`);
     }
 
     async function startTeacherEvaluation() {

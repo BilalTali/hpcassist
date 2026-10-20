@@ -2481,7 +2481,7 @@
             for (let l of el.labels) text += ' ' + (l.innerText || '');
         }
 
-        // Check previous siblings for dedicated labels/headings
+        // 1. Direct previous siblings of el
         let prev = el.previousElementSibling;
         while (prev) {
             const prevText = (prev.innerText || prev.textContent || '').trim();
@@ -2492,17 +2492,37 @@
             prev = prev.previousElementSibling;
         }
 
-        // Climb up to parent containers only if container is dedicated to this input
-        let curr = el.parentElement;
-        for (let lvl = 0; lvl < 3 && curr && curr !== document.body; lvl++) {
-            const siblingInputs = curr.querySelectorAll('input:not([type="hidden"]), textarea');
-            if (siblingInputs.length <= 1) {
-                const titleEl = curr.querySelector('label, h3, h4, h5, h6, strong, b, .title, [class*="title" i], [class*="label" i], [class*="heading" i]');
-                if (titleEl && !titleEl.contains(el) && !titleEl.querySelector('input, textarea')) {
-                    text += ' ' + (titleEl.innerText || titleEl.textContent || '');
-                }
+        // 2. Previous siblings of wrapper parent (e.g. div.input-wrapper)
+        let parentPrev = el.parentElement ? el.parentElement.previousElementSibling : null;
+        while (parentPrev) {
+            const prevText = (parentPrev.innerText || parentPrev.textContent || '').trim();
+            if (prevText && !parentPrev.querySelector('input, textarea, select')) {
+                text += ' ' + prevText;
+                break;
             }
-            curr = curr.parentElement;
+            parentPrev = parentPrev.previousElementSibling;
+        }
+
+        // 3. Dedicated container check (card, form-group, field, row, li)
+        let container = el.closest('.form-group, .card, .field, [class*="field" i], [class*="item" i], [class*="form" i], [class*="col" i], .row, tr, li') || el.parentElement;
+        if (container) {
+            // Find text element strictly preceding this input in DOM order
+            try {
+                const precedingEls = Array.from(container.querySelectorAll('label, p, span, h1, h2, h3, h4, h5, h6, strong, b, div')).filter(node => {
+                    if (node.contains(el) || node.querySelector('input, textarea, select')) return false;
+                    const pos = node.compareDocumentPosition(el);
+                    return (pos & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+                });
+                if (precedingEls.length > 0) {
+                    const closestEl = precedingEls[precedingEls.length - 1];
+                    text += ' ' + (closestEl.innerText || closestEl.textContent || '');
+                }
+            } catch(e) {}
+
+            const titleEl = container.querySelector('label, h3, h4, h5, h6, strong, b, .title, [class*="title" i], [class*="label" i], [class*="heading" i]');
+            if (titleEl && !titleEl.contains(el) && !titleEl.querySelector('input, textarea')) {
+                text += ' ' + (titleEl.innerText || titleEl.textContent || '');
+            }
         }
         return text.toLowerCase().replace(/\s+/g, ' ');
     }
@@ -2690,23 +2710,23 @@
         // ── Canonical 16-part Preparatory Stage inputs matching HpcPreparatoryStageSchema & Portal DOM ──
         const prepStageFields = [
             {
-                keys: ["good at", "really well", "do well", "very well", "i do well", "i am good", "अच्छा हूँ", "अच्छा करता", "निपुण", "thumb", "अंगूठा"],
+                keys: ["good at", "things i am good at", "things i can do well", "i do well", "i am good", "really well", "do well", "very well", "अच्छा हूँ", "अच्छा करता", "निपुण", "thumb", "अंगूठा"],
                 val: s.Hand_Reflection_Thumb_GoodAt || s.data?.Hand_Reflection_Thumb_GoodAt || s.good_at || s.do_well || s.AboutMe_Do_Very_Well || 'Arithmetic calculations and drawing flowers'
             },
             {
-                keys: ["no good at", "not good at", "am not good", "struggle with", "cannot do", "अच्छा नहीं हूँ", "कठिनाई", "index", "तर्जनी"],
+                keys: ["no good at", "not good at", "things i struggle with", "things i am not good at", "am not good", "struggle with", "cannot do", "अच्छा नहीं हूँ", "कठिनाई", "index", "तर्जनी"],
                 val: s.Hand_Reflection_Index_NotGoodAt || s.data?.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings'
             },
             {
-                keys: ["want to improve", "improve in", "could improve", "do better", "could do better", "improve my skill", "skill of", "improve my skills of", "कौशल में सुधार", "सुधार करना", "सुधार", "middle", "मध्यमा"],
+                keys: ["want to improve", "things i want to improve", "improve in", "could improve", "do better", "could do better", "improve my skill", "skill of", "improve my skills of", "कौशल में सुधार", "सुधार करना", "सुधार", "middle", "मध्यमा"],
                 val: s.Hand_Reflection_Middle_ImproveSkill || s.data?.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || s.do_better || s.AboutMe_Could_Do_Better_Specially || 'Reading storybooks fluently without hesitation'
             },
             {
-                keys: ["like to", "things i like", "i like", "love to", "मुझे पसंद", "पसंद है", "ring", "अनामिका"],
+                keys: ["like to", "things i like", "things i love", "i like to do", "i like", "love to", "मुझे पसंद", "पसंद है", "ring", "अनामिका"],
                 val: s.Hand_Reflection_Ring_LikeTo || s.data?.Hand_Reflection_Ring_LikeTo || s.like_to || s.free_time || s.AboutMe_Free_Time_Doing || 'Singing rhymes, origami folding, and outdoor games'
             },
             {
-                keys: ["grow up", "when i grow up", "want to be", "aspire to be", "बड़ा होकर", "बनना चाहता", "little", "कनिष्ठिका", "aspiration", "ambition"],
+                keys: ["grow up", "when i grow up", "as i grow up", "want to be", "aspire to be", "बड़ा होकर", "बनना चाहता", "little", "कनिष्ठिका", "aspiration", "ambition"],
                 val: s.Hand_Reflection_Little_Aspiration || s.data?.Hand_Reflection_Little_Aspiration || s.grow_up_be || s.ambition || s.Ambition_Goal || 'Become a helpful school teacher or scientist'
             },
             {

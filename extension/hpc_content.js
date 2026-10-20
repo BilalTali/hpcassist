@@ -2439,23 +2439,32 @@
 
     function getFieldLabel(el) {
         let text = (el.placeholder || '') + ' ' + (el.name || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('aria-label') || '');
+        if (el.id) {
+            try {
+                const forLabel = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+                if (forLabel) text += ' ' + (forLabel.innerText || '');
+            } catch(e) {}
+        }
         if (el.labels && el.labels.length) {
             for (let l of el.labels) text += ' ' + (l.innerText || '');
         }
         // Inspect previous siblings
         let prev = el.previousElementSibling;
-        for (let i = 0; i < 3 && prev; i++) {
+        for (let i = 0; i < 2 && prev; i++) {
             text += ' ' + (prev.innerText || '');
             prev = prev.previousElementSibling;
         }
-        // Inspect ancestors up to 5 levels
-        let curr = el.parentElement;
-        for (let depth = 0; depth < 5 && curr && curr !== document.body; depth++) {
-            const labels = curr.querySelectorAll('label, p, span, h3, h4, h5, h6, strong, b');
+        // Inspect nearest form container only (avoid ancestor label pollution)
+        const container = el.closest('.form-group, .field, .input-group, .form-item, .form-floating, td, li, .card');
+        if (container) {
+            const labels = container.querySelectorAll('label, p, span, h4, h5, h6, strong, b');
             for (let lbl of labels) {
-                text += ' ' + (lbl.innerText || '');
+                if (!lbl.querySelector('input, textarea') || lbl.querySelector('input, textarea') === el) {
+                    text += ' ' + (lbl.innerText || '');
+                }
             }
-            curr = curr.parentElement;
+        } else if (el.parentElement) {
+            text += ' ' + (el.parentElement.innerText || '');
         }
         return text.toLowerCase();
     }
@@ -2778,25 +2787,74 @@
             {
                 keys: ["outside 3", "स्कूल के बाहर 3"],
                 val: s.out_learn3 || s.Learned_Outside_School_3 || 'Helping parents with household chores'
+            },
+
+            // ── Ambition Card Prompts (Preparatory & Middle Stage) ──
+            {
+                keys: ["ambition", "career", "aspire", "goal in life", "want to be", "my ambition", "लक्ष्य", "आकांक्षा", "बनना", "ambition card"],
+                val: s.ambition || s.Ambition_Goal || s.grow_up_be || s.Hand_Reflection_Little_Aspiration || 'Software Engineer'
+            },
+            {
+                keys: ["how will i feel", "feel when i achieve", "feel when achieve", "student will feel", "i will feel", "feel upon", "महसूस करेंगे", "मुझे कैसा लगेगा", "feel_when_achieve", "how i feel"],
+                val: s.feel_when_achieve || s.Ambition_How_Student_Will_Feel || 'Extremely proud, confident, and motivated to serve society'
+            },
+            {
+                keys: ["parents will feel", "parents feel", "family feel", "parents proud", "माता-पिता कैसा महसूस", "माता-पिता", "parents_feel"],
+                val: s.parents_feel || s.Ambition_How_Parents_Will_Feel || 'Immensely joyful, supportive, and proud of my hard work'
+            },
+            {
+                keys: ["achieve", "strategy", "path to achieve", "how i will achieve", "how will i", "action plan", "प्राप्त", "रणनीति"],
+                val: s.achieve_how || s.Ambition_Achieve_Strategy || 'Consistent math problem solving and computer programming practice'
+            },
+            {
+                keys: ["5 skills", "skills needed", "skills required", "skills", "skill", "कौशल"],
+                val: s.skills_needed || s.Ambition_5_Skills_Needed || 'Logical Thinking, Coding, Collaboration, Mathematics, Problem Solving'
+            },
+            {
+                keys: ["focus subjects", "subjects to focus", "subjects", "subject", "विषय"],
+                val: s.focus_subjects || s.Ambition_Subjects_To_Focus || 'Mathematics, Science, English, Computer Science'
+            },
+            {
+                keys: ["habits required", "habits i will", "habits to build", "cultivate", "habits", "habit", "आदतें", "आदत"],
+                val: s.habits_i_will || s.Ambition_Habits_Required || s.habits_build || 'Punctuality, daily revision, and continuous curiosity'
+            },
+            {
+                keys: ["guidance from", "mentor", "person who will guide", "person", "मार्गदर्शन", "परामर्श"],
+                val: s.mentor || s.Ambition_Guidance_From_Person || 'Science & Mathematics Teachers'
+            },
+            {
+                keys: ["how person will help", "how will help", "mentor help", "help me", "मदद करेंगे", "सहायता"],
+                val: s.mentor_help || s.Ambition_How_Person_Will_Help || 'Recommending reference books and mentoring laboratory projects'
+            },
+            {
+                keys: ["learn new", "new things", "what new", "learn", "नया सीखना"],
+                val: s.learn_new || s.Ambition_Learn_New || 'Advanced programming basics and scientific modeling methods'
             }
         ];
 
         // 1. Direct prompt node matching for Hand of Self-Reflection & All About Me
-        const allTextNodes = Array.from(document.querySelectorAll('label, p, span, div, h4, h5, h6, legend')).filter(el => !isLanguageOrHeaderElement(el));
+        const allTextNodes = Array.from(document.querySelectorAll('label, p, span, h4, h5, h6, legend')).filter(el => !isLanguageOrHeaderElement(el));
         rules.forEach(rule => {
             const matchedEl = allTextNodes.find(el => {
                 const t = (el.innerText || el.textContent || '').trim().toLowerCase();
-                return rule.keys.some(k => t.includes(k)) && t.length < 300 && !el.querySelector('input, textarea');
+                return rule.keys.some(k => t.includes(k)) && t.length < 250 && !el.querySelector('input, textarea');
             });
             if (matchedEl) {
-                const container = matchedEl.closest('.form-group, .card, .field, .input-group, div, li, fieldset, tr') || matchedEl.parentElement;
-                let targetInput = container?.querySelector('input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]');
+                let targetInput = null;
+                const forId = matchedEl.getAttribute('for');
+                if (forId) targetInput = document.getElementById(forId);
+
+                if (!targetInput) {
+                    const container = matchedEl.closest('.form-group, .card, .field, .input-group, .row, .col, li, fieldset, tr') || matchedEl.parentElement;
+                    targetInput = container?.querySelector('input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]');
+                }
                 if (!targetInput) {
                     targetInput = matchedEl.nextElementSibling?.querySelector('input, textarea, [contenteditable="true"]') ||
                                   (matchedEl.nextElementSibling?.matches('input, textarea, [contenteditable="true"]') ? matchedEl.nextElementSibling : null);
                 }
-                if (targetInput && !isLanguageOrHeaderElement(targetInput)) {
+                if (targetInput && !isLanguageOrHeaderElement(targetInput) && (!targetInput.value || targetInput.value.trim() === '')) {
                     setNativeValue(targetInput, rule.val);
+                    logStatus(`[Part-A2] Direct match: "${rule.keys[0]}" -> "${String(rule.val).slice(0, 35)}"`);
                 }
             }
         });
@@ -2811,10 +2869,12 @@
             const matchedRule = rules.find(r => r.keys.some(k => lbl.includes(k)));
             if (matchedRule) {
                 setNativeValue(el, matchedRule.val);
+                logStatus(`[Part-A2] Field match: "${lbl.slice(0, 30)}" -> "${String(matchedRule.val).slice(0, 35)}"`);
                 filledCount++;
             } else if (!el.value || el.value.trim() === '') {
                 const fallbackVal = (rules[idx] ? rules[idx].val : null) || 'Active and positive participation demonstrated throughout the year.';
                 setNativeValue(el, fallbackVal);
+                logStatus(`[Part-A2] Fallback (${idx}): "${lbl.slice(0, 30)}" -> "${String(fallbackVal).slice(0, 35)}"`);
                 filledCount++;
             } else {
                 filledCount++;
@@ -2867,8 +2927,8 @@
         logStatus(`[Part-A3: Preparatory] Filling Feelings, Peer 1, Peer 2 & Parent Feedback for ${s.name}...`);
         
         // 1. Peer Reviewer & Student Names (Peer 1 & Peer 2)
-        const p1Name = s.Peer1_Target_Friend_Name || s.Peer1_Student_Name || s.peer1_name || 'Ayaan Ahmad';
-        const p2Name = s.Peer2_Target_Friend_Name || s.Peer2_Student_Name || s.peer2_name || 'Zaid Farooq';
+        const p1Name = s.Peer1_Student_Name || s.peer1_name || s.Peer1_Target_Friend_Name || 'Sahil Bashir';
+        const p2Name = s.Peer2_Student_Name || s.peer2_name || s.Peer2_Target_Friend_Name || 'Iqra Parveen';
         const stName = s.name || s.my_name || 'Student';
 
         const textInputs = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])')).filter(inp => !isLanguageOrHeaderElement(inp));
@@ -2876,15 +2936,24 @@
         textInputs.forEach(inp => {
             const lbl = (getFieldLabel(inp) || '').toLowerCase();
             const ph = (inp.placeholder || '').toLowerCase();
-            if (lbl.includes('my name') || ph.includes('my name') || ((lbl.includes('name') || ph.includes('name')) && !lbl.includes('friend') && !lbl.includes('peer') && !ph.includes('friend') && !ph.includes('peer'))) {
+            const isFriend = lbl.includes('friend') || ph.includes('friend') || lbl.includes('peer') || ph.includes('peer') ||
+                             lbl.includes('मित्र') || lbl.includes('दोस्त') || lbl.includes('सहपाठी');
+            const isSelf = lbl.includes('my name') || ph.includes('my name') || ((lbl.includes('name') || ph.includes('name') || lbl.includes('नाम')) && !isFriend);
+
+            if (isSelf) {
                 setNativeValue(inp, stName);
-            } else if (lbl.includes('friend') || ph.includes('friend') || lbl.includes('peer') || ph.includes('peer')) {
+                logStatus(`[Part-A3] Filled student name: "${stName}"`);
+            } else if (isFriend) {
                 if (lbl.includes('2') || ph.includes('2')) {
                     setNativeValue(inp, p2Name);
+                    logStatus(`[Part-A3] Filled peer 2 name: "${p2Name}"`);
                 } else if (lbl.includes('1') || ph.includes('1')) {
                     setNativeValue(inp, p1Name);
+                    logStatus(`[Part-A3] Filled peer 1 name: "${p1Name}"`);
                 } else {
-                    setNativeValue(inp, friendIdx === 0 ? p1Name : p2Name);
+                    const chosen = friendIdx === 0 ? p1Name : p2Name;
+                    setNativeValue(inp, chosen);
+                    logStatus(`[Part-A3] Filled peer name (${friendIdx + 1}): "${chosen}"`);
                     friendIdx++;
                 }
             }
@@ -2894,13 +2963,17 @@
         const remainingFriendInputs = textInputs.filter(inp => {
             const lbl = (getFieldLabel(inp) || '').toLowerCase();
             const ph = (inp.placeholder || '').toLowerCase();
-            return (lbl.includes('friend') || lbl.includes('peer') || ph.includes('friend') || ph.includes('peer')) && (!inp.value || inp.value.trim() === '');
+            const isF = lbl.includes('friend') || lbl.includes('peer') || ph.includes('friend') || ph.includes('peer') ||
+                        lbl.includes('मित्र') || lbl.includes('दोस्त') || lbl.includes('सहपाठी');
+            return isF && (!inp.value || inp.value.trim() === '');
         });
         if (remainingFriendInputs.length >= 2) {
             setNativeValue(remainingFriendInputs[0], p1Name);
             setNativeValue(remainingFriendInputs[1], p2Name);
+            logStatus(`[Part-A3] Fallback filled peer 1 & 2: "${p1Name}", "${p2Name}"`);
         } else if (remainingFriendInputs.length === 1) {
             setNativeValue(remainingFriendInputs[0], p1Name);
+            logStatus(`[Part-A3] Fallback filled peer 1: "${p1Name}"`);
         }
 
         // 2. Select radio / smiley options across all questions (Feelings at School Q1-7, Peer 1 Q1-6, Peer 2 Q1-6, Parent Q1-11)
@@ -2935,12 +3008,13 @@
                     target.dispatchEvent(new Event('change', { bubbles: true }));
                     const parentLabel = target.closest('label, td, div');
                     if (parentLabel && parentLabel !== target) parentLabel.click();
+                    logStatus(`[Part-A3] Selected radio for: "${pTxt.slice(0, 30)}"`);
                 }
             }
         });
 
         // Direct table row scan for smileys or list buttons
-        document.querySelectorAll('tbody tr, [role="row"]').forEach(tr => {
+        document.querySelectorAll('tbody tr, [role="row"], .question-card, .evaluation-row').forEach(tr => {
             if (isLanguageOrHeaderElement(tr)) return;
             const radios = Array.from(tr.querySelectorAll('input[type="radio"], [role="radio"]'));
             if (radios.length > 0 && !radios.some(r => r.checked || r.getAttribute('aria-checked') === 'true')) {
@@ -2951,6 +3025,7 @@
                     target.click();
                     target.checked = true;
                     target.dispatchEvent(new Event('change', { bubbles: true }));
+                    logStatus(`[Part-A3] Row radio: "${rowTxt.slice(0, 30)}"`);
                 }
                 return;
             }
@@ -2968,6 +3043,7 @@
                     const target = isDiff ? clickableOpts[Math.min(1, clickableOpts.length - 1)] : clickableOpts[0];
                     if (target) {
                         target.click();
+                        logStatus(`[Part-A3] Row smiley: "${rowTxt.slice(0, 30)}"`);
                     }
                 }
             }
@@ -3023,6 +3099,7 @@
             if (isLanguageOrHeaderElement(ta)) return;
             if (!ta.value || ta.value.trim() === '') {
                 setNativeValue(ta, feedbackText);
+                logStatus(`[Part-A3] Filled feedback textarea: "${feedbackText.slice(0, 35)}"`);
             }
         });
 
@@ -4401,37 +4478,38 @@
         const pageHeading = (document.querySelector('h1, h2, h3, h4, .page-title, .breadcrumb')?.innerText || '').toLowerCase();
 
         // ── PART A1 ──
-        const isPartA1 = url.includes('/part-a1') || url.includes('/part-a(1)') || url.includes('/part-a-1') ||
-                         pageHeading.includes('part - a(1)') || pageHeading.includes('part a(1)') || pageHeading.includes('part - a1') ||
-                         (!url.includes('/part-') && document.querySelector('tbody tr:nth-child(1) td input')) ||
-                         (document.querySelector('tbody tr:nth-child(1) td input') && !url.includes('/part-b') && !url.includes('/part-c') && !url.includes('/hpc-credit'));
+        const isPartA1 = (url.includes('/part-a1') || url.includes('/part-a(1)') || url.includes('/part-a-1') ||
+                          pageHeading.includes('part - a(1)') || pageHeading.includes('part a(1)') || pageHeading.includes('part - a1')) &&
+                          !url.includes('/part-a2') && !url.includes('/part-a3') && !url.includes('/part-a4') && !url.includes('/part-b') && !url.includes('/part-c');
 
         if (isPartA1) {
             await fillPartA1(s);
-            await sleep(1000);
+            await sleep(1500);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;
         }
 
         // ── PART A2 ──
-        const isPartA2 = url.includes('/part-a2') || url.includes('/part-a(2)') || url.includes('/part-a-2') ||
-                         pageHeading.includes('part - a(2)') || pageHeading.includes('part a(2)') || pageHeading.includes('part - a2') ||
-                         pageHeading.includes('all about me') || pageText.includes('hand of self-reflection') ||
-                         document.querySelector('[class*="hand" i], [id*="hand" i]');
+        const isPartA2 = (url.includes('/part-a2') || url.includes('/part-a(2)') || url.includes('/part-a-2') ||
+                          pageHeading.includes('part - a(2)') || pageHeading.includes('part a(2)') || pageHeading.includes('part - a2') ||
+                          pageHeading.includes('all about me') || pageText.includes('hand of self-reflection') ||
+                          document.querySelector('[class*="hand" i], [id*="hand" i]')) &&
+                          !url.includes('/part-a1') && !url.includes('/part-a3') && !url.includes('/part-a4') && !url.includes('/part-b') && !url.includes('/part-c');
 
         if (isPartA2) {
             await fillPartA2(s);
-            await sleep(1000);
+            await sleep(2500);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;
         }
 
         // ── PART A3 ──
-        const isPartA3 = url.includes('/part-a3') || url.includes('/part-a(3)') || url.includes('/part-a-3') ||
-                         pageHeading.includes('part - a(3)') || pageHeading.includes('part a(3)') || pageHeading.includes('part - a3') ||
-                         pageText.includes('how do i feel at school') || pageText.includes('peer feedback') || pageText.includes('your child matters');
+        const isPartA3 = (url.includes('/part-a3') || url.includes('/part-a(3)') || url.includes('/part-a-3') ||
+                          pageHeading.includes('part - a(3)') || pageHeading.includes('part a(3)') || pageHeading.includes('part - a3') ||
+                          pageText.includes('how do i feel at school') || pageText.includes('peer feedback') || pageText.includes('your child matters')) &&
+                          !url.includes('/part-a1') && !url.includes('/part-a2') && !url.includes('/part-a4') && !url.includes('/part-b') && !url.includes('/part-c');
 
         if (isPartA3) {
             const isPrep = url.includes('preparatory') || (s && String(s.grade || s.class || s.stage || '').match(/^[345]|prep/i)) ||
@@ -4441,7 +4519,7 @@
             } else {
                 await fillPartA3(s);
             }
-            await sleep(1000);
+            await sleep(2500);
             await clickContinueBtn();
             scheduleTeacherEvaluationStep(1500);
             return true;

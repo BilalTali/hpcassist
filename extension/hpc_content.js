@@ -3447,39 +3447,32 @@
                 await sleep(1500);
             }
 
-            // 6. Select an activity from the global activity list
-            let targetRow = null;
-            const subStr = String(actSubject || 'World Around Us').toLowerCase();
-            const subjectCode = subStr.includes('world') ? 'twcg' : (subStr.includes('math') ? 'mcg' : 'l1cg');
+            // 6. Select activities across distinct curricular domains (L1, L2, Math, TWC, Art, PE, Other)
+            const targetCodes = ['l1cg', 'mcg', 'twcg', 'l2cg', 'aecg', 'pecg', 'other', 'c-1', 'c-2'];
+            const selectedRows = [];
 
-            // Find rows or checkboxes
-            const rows = Array.from(activeModal.querySelectorAll('tr, li, div[class*="row" i], div[class*="item" i], label')).filter(r => {
-                const rt = (r.innerText || '').trim();
-                return rt.length > 3 && (rt.includes('CG') || rt.includes('C ') || rt.includes('C-') || rt.includes('1.') || rt.includes('1'));
+            // Match at least one row per distinct domain code
+            targetCodes.forEach(code => {
+                const match = rows.find(r => r.innerText.toLowerCase().includes(code) && !selectedRows.includes(r));
+                if (match) selectedRows.push(match);
             });
 
-            if (rows.length > 0) {
-                targetRow = rows.find(r => r.innerText.toLowerCase().includes(subjectCode)) || rows[0];
+            // If none matched by code, select available rows up to 7
+            if (selectedRows.length === 0) {
+                rows.slice(0, Math.min(rows.length, 7)).forEach(r => selectedRows.push(r));
             }
 
-            if (targetRow) {
-                logStatus(`[Part-B] Selecting Global Activity: "${targetRow.innerText.trim().slice(0, 40)}"`);
-                const cb = targetRow.querySelector('input[type="checkbox"], input[type="radio"]');
-                if (cb) {
+            for (const r of selectedRows) {
+                logStatus(`[Part-B] Checking Global Activity: "${r.innerText.trim().slice(0, 40)}"`);
+                const cb = r.querySelector('input[type="checkbox"]');
+                if (cb && !cb.checked) {
                     cb.checked = true;
                     cb.dispatchEvent(new Event('change', { bubbles: true }));
                     cb.click();
-                } else {
-                    targetRow.click();
-                }
-                await sleep(800);
-            } else {
-                const anyCheckbox = activeModal.querySelector('input[type="checkbox"]');
-                if (anyCheckbox) {
-                    anyCheckbox.checked = true;
-                    anyCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
-                    anyCheckbox.click();
-                    await sleep(800);
+                    await sleep(250);
+                } else if (!cb) {
+                    r.click();
+                    await sleep(250);
                 }
             }
 
@@ -3988,6 +3981,24 @@
             await goToStep(6, ['Self Assessment', 'Self', 'स्व-मूल्यांकन', 'मूल्यांकन']);
             await sleep(800);
 
+            // Helper to dispatch full mouse & pointer events to an element
+            const dispatchFullClick = (el) => {
+                if (!el) return;
+                try {
+                    el.focus?.();
+                    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
+                    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                    el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
+                    el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                    el.click();
+                    try { HTMLElement.prototype.click.call(el); } catch(e) {}
+                    const pk = Object.keys(el).find(k => k.startsWith('__reactProps'));
+                    if (pk && el[pk]?.onClick) {
+                        el[pk].onClick({ preventDefault: () => {}, stopPropagation: () => {} });
+                    }
+                } catch(e) {}
+            };
+
             // 6a. Fill ALL Radio Groups in Step 6 (Proud of Effort, Real Life, Motivated to Learn, etc.)
             const step6Radios = Array.from(document.querySelectorAll('input[type="radio"], [role="radio"]')).filter(r => !isLanguageOrHeaderElement(r));
             const step6Groups = [];
@@ -4019,27 +4030,78 @@
 
                     if (target) {
                         try { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
-                        target.click();
+                        dispatchFullClick(target);
                         target.checked = true;
                         target.setAttribute('aria-checked', 'true');
                         target.dispatchEvent(new Event('input', { bubbles: true }));
                         target.dispatchEvent(new Event('change', { bubbles: true }));
                         const pLabel = target.closest('label, td, div');
-                        if (pLabel && pLabel !== target) pLabel.click();
+                        if (pLabel && pLabel !== target) dispatchFullClick(pLabel);
                     }
                 }
             });
 
-            // 6b. Click pill/chip/emoticon smiley options (Yes / हाँ / Smileys)
+            // 6b. COMPLETE EMOJI / SMILEY SCANNER (Colour the emoji for each statement)
+            logStatus('[Part-B] Clicking Yes / Happy Emoji for all Step 6 Self-Assessment statements...');
+            
+            // Strategy 1: Find all question rows in Step 6 tables or grids
+            const statementRows = Array.from(document.querySelectorAll('table tbody tr, table tr, [role="row"], div.row, div[class*="statement"], div[class*="question"]'))
+                .filter(r => !isLanguageOrHeaderElement(r));
+
+            statementRows.forEach(row => {
+                const rowText = (row.innerText || '').toLowerCase();
+                const hasEmojis = row.querySelector('svg, img, [class*="emoji" i], [class*="emoticon" i]');
+                const hasOptions = rowText.includes('yes') || rowText.includes('no') || rowText.includes('हाँ') || rowText.includes('नहीं');
+                
+                if (hasEmojis || hasOptions) {
+                    const candidates = Array.from(row.querySelectorAll('td, div, span, p, label, li, a, figure, [role="button"], [role="cell"]'));
+                    const yesCandidate = candidates.find(el => {
+                        const t = (el.innerText || el.textContent || '').trim().toLowerCase();
+                        return t === 'yes' || t === 'हाँ' || /^yes\b/i.test(t) || /^हाँ\b/i.test(t);
+                    });
+
+                    if (yesCandidate) {
+                        try { yesCandidate.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+                        dispatchFullClick(yesCandidate);
+                        const cell = yesCandidate.closest('td, div, li, [role="cell"]');
+                        if (cell && cell !== yesCandidate) dispatchFullClick(cell);
+                        const icon = (cell || yesCandidate).querySelector('svg, img, figure, path');
+                        if (icon) dispatchFullClick(icon);
+                    } else if (hasEmojis) {
+                        const firstCell = row.querySelector('td:nth-child(2), [role="cell"]:nth-child(2), div[class*="col"]:nth-child(2)') || row.querySelector('td, div');
+                        const firstIcon = row.querySelector('svg, img, figure');
+                        if (firstIcon) dispatchFullClick(firstIcon);
+                        if (firstCell) dispatchFullClick(firstCell);
+                    }
+                }
+            });
+
+            // Strategy 2: Global scan for any element whose text is strictly "Yes" or "हाँ" in Step 6
+            const allYesElements = Array.from(document.querySelectorAll('td, div, span, p, label, button, li, a, [role="button"], [role="cell"]'))
+                .filter(el => {
+                    if (isLanguageOrHeaderElement(el)) return false;
+                    const t = (el.innerText || el.textContent || '').trim().toLowerCase();
+                    return t === 'yes' || t === 'हाँ';
+                });
+
+            allYesElements.forEach(yesEl => {
+                try {
+                    dispatchFullClick(yesEl);
+                    const parent = yesEl.closest('td, div, label, li');
+                    if (parent && parent !== yesEl) dispatchFullClick(parent);
+                    const icon = (parent || yesEl).querySelector('svg, img, figure, path');
+                    if (icon) dispatchFullClick(icon);
+                } catch(e) {}
+            });
+
+            // Strategy 3: Pill/chip/button options
             const smileyItems = Array.from(document.querySelectorAll('li, figure, .appropriate-option-select li, ul.options-list li, button.btn-outline, .pill, .chip, [class*="option" i], [class*="emoticon" i]')).filter(el => !isLanguageOrHeaderElement(el));
             smileyItems.forEach(el => {
                 const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
                 if (txt === 'yes' || txt.includes('yes') || txt === 'हाँ') {
-                    try {
-                        el.click();
-                        const img = el.querySelector('img, figure, svg');
-                        if (img) img.click();
-                    } catch(e) {}
+                    dispatchFullClick(el);
+                    const img = el.querySelector('img, figure, svg');
+                    if (img) dispatchFullClick(img);
                 }
             });
 
@@ -4079,7 +4141,23 @@
             });
 
             logStatus('[Part-B] ✓ Step 6 (Self & Peer Assessment) fully completed!');
-            await sleep(800);
+            await sleep(600);
+
+            // Verify if Step 6 has any lingering red error badge; retry clicking if needed
+            for (let retry = 0; retry < 3; retry++) {
+                const step6Nav = Array.from(document.querySelectorAll('li, div, a, button')).find(el => {
+                    const t = (el.innerText || '').toLowerCase();
+                    return t.includes('self assessment') || t.includes('स्व-मूल्यांकन');
+                });
+                const redBadge = step6Nav?.querySelector('.badge, [class*="badge"], [class*="error"], .text-danger, span');
+                if (redBadge && /^\d+$/.test(redBadge.innerText.trim())) {
+                    logStatus(`[Part-B] Notice: Step 6 red badge "${redBadge.innerText.trim()}" detected. Re-triggering statement clicks (attempt ${retry + 1})...`);
+                    allYesElements.forEach(dispatchFullClick);
+                    await sleep(400);
+                } else {
+                    break;
+                }
+            }
 
             // ─────────────────────────────────────────────────────────
             // 7. THEN FINISH: Click "Finish Activity" / गतिविधि पूर्ण करें
@@ -4127,58 +4205,67 @@
                 console.warn('[HPC Assist] React Fiber state sync note:', e);
             }
 
-            const finishBtns = Array.from(document.querySelectorAll('button, a[role="button"], .btn')).filter(b => {
-                if (isLanguageOrHeaderElement(b)) return false;
-                const t = (b.innerText || '').trim().toLowerCase();
-                return t.includes('finish activity') || t.includes('complete activity') || t.includes('गतिविधि पूर्ण') || t.includes('पूर्ण करें');
-            });
-            const finishBtn = finishBtns[0] || document.querySelector('.hpc-finish-activity-btn');
-            if (finishBtn && !finishBtn.disabled) {
+            const getFinishBtn = () => {
+                const candidates = Array.from(document.querySelectorAll('button, a[role="button"], .btn')).filter(b => {
+                    if (isLanguageOrHeaderElement(b)) return false;
+                    const t = (b.innerText || '').trim().toLowerCase();
+                    return t.includes('finish activity') || t.includes('complete activity') || t.includes('गतिविधि पूर्ण') || t.includes('पूर्ण करें');
+                });
+                return candidates[0] || document.querySelector('.hpc-finish-activity-btn');
+            };
+
+            const finishBtn = getFinishBtn();
+            if (finishBtn) {
+                if (finishBtn.disabled) {
+                    finishBtn.removeAttribute('disabled');
+                    finishBtn.disabled = false;
+                }
                 try { finishBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
                 await sleep(400);
 
-                const pk = Object.keys(finishBtn).find(k => k.startsWith('__reactProps'));
-                if (pk && finishBtn[pk]?.onClick) {
-                    try { finishBtn[pk].onClick({ preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
-                }
-
-                finishBtn.focus();
-                finishBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
-                finishBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-                finishBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
-                finishBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-                finishBtn.click();
-                try { HTMLElement.prototype.click.call(finishBtn); } catch(e) {}
+                dispatchFullClick(finishBtn);
                 logStatus('[Part-B] ✓ Clicked Finish Activity button.');
                 
-                // Wait up to 5s for confirmation modal
-                for (let mWait = 0; mWait < 10; mWait++) {
+                // Wait up to 8s (16 x 500ms) for confirmation modal
+                let modalConfirmed = false;
+                for (let mWait = 0; mWait < 16; mWait++) {
                     await sleep(500);
                     const modal = document.querySelector('.modal, .swal2-popup, [role="dialog"], [aria-modal="true"], .fade.show, div[class*="modal" i], div[class*="popup" i], div[class*="dialog" i]');
                     if (modal) {
-                        const confirmBtn = Array.from(modal.querySelectorAll('button, a[role="button"], .btn')).find(b => 
-                            /finish|yes|confirm|proceed|ok|complete|हाँ|पुष्टि|आगे बढ़ें|पूर्ण/i.test((b.innerText || '').trim())
-                        );
+                        const modalButtons = Array.from(modal.querySelectorAll('button, a[role="button"], .btn'));
+                        const confirmBtn = modalButtons.find(b => {
+                            const t = (b.innerText || '').trim().toLowerCase();
+                            const isCancel = t.includes('cancel') || t.includes('रद्द') || t.includes('नहीं');
+                            const isConfirm = /finish|yes|confirm|proceed|ok|complete|हाँ|पुष्टि|आगे बढ़ें|पूर्ण/i.test(t);
+                            return isConfirm && !isCancel;
+                        });
                         if (confirmBtn) {
-                            confirmBtn.click();
-                            try { HTMLElement.prototype.click.call(confirmBtn); } catch(e) {}
-                            logStatus('[Part-B] ✓ Confirmed Finish modal.');
+                            dispatchFullClick(confirmBtn);
+                            logStatus('[Part-B] ✓ Confirmed Finish in modal dialog.');
+                            modalConfirmed = true;
                             await sleep(1500);
                             break;
                         }
                     }
 
                     // Check for standalone modal / dialog confirm button
-                    const standaloneConfirm = Array.from(document.querySelectorAll('button, a[role="button"]')).find(b => {
+                    const standaloneConfirm = Array.from(document.querySelectorAll('button, a[role="button"], .btn')).find(b => {
                         if (isLanguageOrHeaderElement(b)) return false;
                         const txt = (b.innerText || '').trim().toLowerCase();
                         return txt === 'finish' || txt === 'yes' || txt === 'confirm' || txt === 'proceed' || txt === 'ok' || txt === 'हाँ' || txt === 'पूर्ण करें';
                     });
                     if (standaloneConfirm) {
-                        standaloneConfirm.click();
-                        try { HTMLElement.prototype.click.call(standaloneConfirm); } catch(e) {}
+                        dispatchFullClick(standaloneConfirm);
                         logStatus(`[Part-B] ✓ Confirmed Finish via "${standaloneConfirm.innerText.trim()}".`);
+                        modalConfirmed = true;
                         await sleep(1500);
+                        break;
+                    }
+
+                    // Check if already finished (toast or button shows "Finished")
+                    const updatedBtn = document.querySelector('button, .btn, .hpc-finish-activity-btn');
+                    if (document.body.innerText.includes('Form submitted successfully') || (updatedBtn && /finished|पूर्ण/i.test(updatedBtn.innerText))) {
+                        modalConfirmed = true;
                         break;
                     }
                 }
@@ -4191,35 +4278,38 @@
         // Complete the active activity
         await processActivityTabs();
 
-        // Check if there is an uncompleted Activity 2 in the sidebar
-        const sidebarActItems = Array.from(document.querySelectorAll('div, li, button, a')).filter(el => {
-            if (isLanguageOrHeaderElement(el)) return false;
-            const t = (el.innerText || '').trim();
-            if (el.children.length > 2 || t.length > 60 || t.length < 3) return false;
-            const isAct = t.includes('WCG') || t.includes('TWCG') || t.includes('C-1') || t.includes('C-2') || /activity\s*\d/i.test(t);
-            const isAdd = t.includes('Add Activity') || t.includes('गतिविधि जोड़ें');
-            return isAct && !isAdd;
-        });
-
-        // Find one that is NOT currently active (doesn't have active class or arrow)
+        // Complete all remaining uncompleted activities in the sidebar
         const getElClass = (element) => {
             if (!element) return '';
             const c = element.className;
             return String(typeof c === 'string' ? c : (c?.baseVal || (element.getAttribute && element.getAttribute('class')) || '')).toLowerCase();
         };
-        const uncompletedAct = sidebarActItems.find(el => {
-            const cls = getElClass(el);
-            const parentCls = getElClass(el.parentElement);
-            const isCurrent = cls.includes('active') || parentCls.includes('active') || el.innerText.includes('▶') || el.querySelector('.active');
-            return !isCurrent;
-        });
 
-        if (uncompletedAct) {
-            logStatus(`[Part-B] Found second activity in sidebar: "${uncompletedAct.innerText.trim()}". Processing...`);
+        for (let iter = 0; iter < 10; iter++) {
+            const sidebarActItems = Array.from(document.querySelectorAll('div, li, button, a')).filter(el => {
+                if (isLanguageOrHeaderElement(el)) return false;
+                const t = (el.innerText || '').trim();
+                if (el.children.length > 2 || t.length > 60 || t.length < 3) return false;
+                const isAct = t.includes('WCG') || t.includes('TWCG') || t.includes('MCG') || t.includes('L1CG') || t.includes('L2CG') || t.includes('AECG') || t.includes('PECG') || t.includes('CG') || t.includes('C-1') || t.includes('C-2') || /activity\s*\d/i.test(t);
+                const isAdd = t.includes('Add Activity') || t.includes('गतिविधि जोड़ें');
+                return isAct && !isAdd;
+            });
+
+            const uncompletedAct = sidebarActItems.find(el => {
+                const cls = getElClass(el);
+                const parentCls = getElClass(el.parentElement);
+                const isCurrent = cls.includes('active') || parentCls.includes('active') || el.innerText.includes('▶') || el.querySelector('.active');
+                return !isCurrent;
+            });
+
+            if (!uncompletedAct) break;
+
+            logStatus(`[Part-B] Activating next activity in sidebar: "${uncompletedAct.innerText.trim()}". Processing...`);
             uncompletedAct.scrollIntoView({ behavior: 'smooth', block: 'center' });
             uncompletedAct.click();
             await sleep(1200);
             await processActivityTabs();
+            await sleep(800);
         }
 
         await sleep(1000);
@@ -4258,7 +4348,7 @@
             return false;
         };
 
-        // Helper: Select radio/cell in a specific container
+        // Helper: Select radio/checkbox in a specific container without unchecking
         const selectRadioInContainer = (container, targetLevel = 'proficient') => {
             if (!container) return false;
             const lvl = targetLevel.toLowerCase();
@@ -4266,6 +4356,11 @@
             // 1. Radio / Checkbox inputs
             const radios = Array.from(container.querySelectorAll('input[type="radio"], input[type="checkbox"], [role="radio"], .form-check-input'));
             if (radios.length > 0) {
+                // If already has a checked input in this row, don't double click
+                if (radios.some(r => r.checked || r.getAttribute('aria-checked') === 'true')) {
+                    return true;
+                }
+
                 let chosen = null;
                 // Match by value or label text
                 chosen = radios.find(r => {
@@ -4285,17 +4380,21 @@
                     chosen = radios[idx] || radios[0];
                 }
 
-                if (chosen) {
+                if (chosen && !chosen.checked) {
                     try { chosen.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+                    chosen.focus?.();
+                    chosen.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
+                    chosen.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                    chosen.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
+                    chosen.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
                     chosen.click();
                     chosen.checked = true;
                     chosen.setAttribute('aria-checked', 'true');
                     chosen.dispatchEvent(new Event('input', { bubbles: true }));
                     chosen.dispatchEvent(new Event('change', { bubbles: true }));
-                    const parentLabel = chosen.closest('label, td, div');
-                    if (parentLabel && parentLabel !== chosen) {
-                        parentLabel.click();
-                    }
+                    const pk = Object.keys(chosen).find(k => k.startsWith('__reactProps'));
+                    if (pk && chosen[pk]?.onChange) chosen[pk].onChange({ target: chosen, currentTarget: chosen });
+                    if (pk && chosen[pk]?.onClick) chosen[pk].onClick({ target: chosen, currentTarget: chosen });
                     return true;
                 }
             }
@@ -4310,9 +4409,11 @@
 
                 const targetCell = cells[idx] || cells[cells.length - 1];
                 if (targetCell) {
-                    const clickTarget = targetCell.querySelector('input, label, [role="button"]') || targetCell;
-                    clickTarget.click();
-                    return true;
+                    const clickTarget = targetCell.querySelector('input[type="checkbox"], input[type="radio"], label, [role="button"]') || targetCell;
+                    if (clickTarget && !clickTarget.checked) {
+                        clickTarget.click();
+                        return true;
+                    }
                 }
             }
 
@@ -4343,26 +4444,32 @@
             await sleep(600);
         }
 
-        // ── 1. EXPLICIT AWARENESS SELECTION (CRITICAL) ──
-        logStatus(`[Part-C] Explicitly finding Awareness row/elements for ${s.name}...`);
+        // ── 1. ALL TABLE ROWS (Rubrics / Competencies / Domains) ──
+        const tableRows = Array.from(document.querySelectorAll('table tbody tr, table tr, [role="row"]')).filter(tr => {
+            return !tr.querySelector('th') || tr.querySelectorAll('td').length >= 2;
+        });
+
+        tableRows.forEach(row => {
+            const rowText = (row.innerText || '').toLowerCase();
+            let target = actLevel;
+            if (rowText.includes('awareness')) target = actAwr;
+            else if (rowText.includes('sensitivity')) target = actSen;
+            else if (rowText.includes('creativity')) target = actCre;
+
+            selectRadioInContainer(row, target);
+        });
+
+        // ── 2. EXPLICIT AWARENESS SELECTION (Fallback for custom cards/divs) ──
         const allAwarenessEls = Array.from(document.querySelectorAll('*')).filter(el => {
             if (el.children.length > 2) return false;
             const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
             return txt.includes('awareness') && txt.length < 80;
         });
-
-        let awrFilled = false;
         for (const el of allAwarenessEls) {
             const container = el.closest('tr, [role="row"], .card, .form-group, fieldset, [role="radiogroup"], .row, li') || el.parentElement;
-            if (container) {
-                if (selectRadioInContainer(container, actAwr)) {
-                    awrFilled = true;
-                    logStatus('[Part-C] ✓ Awareness successfully selected!');
-                }
-            }
+            if (container) selectRadioInContainer(container, actAwr);
         }
 
-        // ── 2. EXPLICIT SENSITIVITY & CREATIVITY SELECTIONS ──
         const allSensEls = Array.from(document.querySelectorAll('*')).filter(el => {
             if (el.children.length > 2) return false;
             const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
@@ -4383,26 +4490,11 @@
             if (container) selectRadioInContainer(container, actCre);
         }
 
-        // ── 3. ALL TABLE ROWS (Rubrics / Competencies / Domains) ──
-        const tableRows = Array.from(document.querySelectorAll('table tbody tr, table tr, [role="row"]')).filter(tr => {
-            return !tr.querySelector('th') || tr.querySelectorAll('td').length >= 2;
-        });
-
-        tableRows.forEach(row => {
-            const rowText = (row.innerText || '').toLowerCase();
-            let target = actLevel;
-            if (rowText.includes('awareness')) target = actAwr;
-            else if (rowText.includes('sensitivity')) target = actSen;
-            else if (rowText.includes('creativity')) target = actCre;
-
-            selectRadioInContainer(row, target);
-        });
-
-        // ── 4. SMART FORM-WIDE RADIO GROUPING (Row-by-Row fallback) ──
-        const allPartCRadios = Array.from(document.querySelectorAll('input[type="radio"], [role="radio"], .form-check-input')).filter(r => !isLanguageOrHeaderElement(r));
+        // ── 3. FORM-WIDE UNCHECKED ROWS FALLBACK ──
+        const allPartCCheckboxes = Array.from(document.querySelectorAll('input[type="checkbox"], input[type="radio"], [role="radio"], .form-check-input')).filter(r => !isLanguageOrHeaderElement(r));
         const partCGroups = [];
 
-        allPartCRadios.forEach(r => {
+        allPartCCheckboxes.forEach(r => {
             const rect = r.getBoundingClientRect();
             const parent = r.closest('tr, [role="row"], fieldset, [role="radiogroup"], .form-group, .card, .row, li');
             let g = partCGroups.find(grp => {
@@ -4422,9 +4514,10 @@
             const list = grp.radios;
             if (list.length > 0 && !list.some(r => r.checked || r.getAttribute('aria-checked') === 'true')) {
                 let targetLvl = actLevel;
-                if (idx === 0) targetLvl = actAwr;
-                else if (idx === 1) targetLvl = actSen;
-                else if (idx === 2) targetLvl = actCre;
+                const rowIdx = idx % 3;
+                if (rowIdx === 0) targetLvl = actAwr;
+                else if (rowIdx === 1) targetLvl = actSen;
+                else if (rowIdx === 2) targetLvl = actCre;
 
                 const targetRadio = list.find(r => {
                     const val = (r.value || '').toLowerCase();
@@ -4434,19 +4527,17 @@
                     return val.includes('prof') || val === '2' || val === 'yes' || lbl.includes('prof');
                 }) || list[Math.min(1, list.length - 1)] || list[0];
 
-                if (targetRadio) {
+                if (targetRadio && !targetRadio.checked) {
                     targetRadio.click();
                     targetRadio.checked = true;
                     targetRadio.setAttribute('aria-checked', 'true');
                     targetRadio.dispatchEvent(new Event('input', { bubbles: true }));
                     targetRadio.dispatchEvent(new Event('change', { bubbles: true }));
-                    const pLabel = targetRadio.closest('label, td, div');
-                    if (pLabel && pLabel !== targetRadio) pLabel.click();
                 }
             }
         });
 
-        // ── 5. ALL SELECT DROPDOWNS ──
+        // ── 4. ALL SELECT DROPDOWNS ──
         document.querySelectorAll('select').forEach(sel => {
             if (isLanguageOrHeaderElement(sel)) return;
             if (!sel.value || sel.value === '' || sel.selectedIndex <= 0) {
@@ -4459,12 +4550,22 @@
             }
         });
 
-        // ── 6. ALL TEXTAREAS AND INPUTS ──
-        const defaultFeedback = s.remarks || s.annual_holistic_remarks || s.holistic_remarks || 'Demonstrates strong conceptual awareness, active curiosity, consistent effort, and positive collaboration.';
-        document.querySelectorAll('textarea').forEach(ta => {
-            if (isLanguageOrHeaderElement(ta)) return;
+        // ── 5. ALL 7 SUBJECT OBSERVATIONAL NOTES (TEXTAREAS) ──
+        const subjectNotes = [
+            s.lang1_notes || s.remarks || 'Demonstrates strong vocabulary, clear expression, and active participation in reading and discussion.',
+            s.lang2_notes || s.remarks || 'Actively engages in language comprehension, listens attentively, and expresses ideas confidently.',
+            s.math_notes || s.remarks || 'Shows great number sense, problem-solving skills, and enthusiastically explores mathematical patterns.',
+            s.evs_notes || s.remarks || 'Displays keen observation of natural phenomena and asks insightful questions about the environment.',
+            s.art_notes || s.remarks || 'Expresses creativity joyfully through diverse artistic mediums and imaginative representations.',
+            s.pe_notes || s.remarks || 'Demonstrates agility, teamwork, enthusiastic participation, and healthy habits.',
+            s.other_notes || s.remarks || 'Actively participates in cultural, sports, and reading activities with great enthusiasm and team spirit.'
+        ];
+
+        const partCTextareas = Array.from(document.querySelectorAll('textarea')).filter(ta => !isLanguageOrHeaderElement(ta));
+        partCTextareas.forEach((ta, idx) => {
             if (!ta.value || ta.value.trim().length === 0) {
-                setNativeValue(ta, defaultFeedback);
+                const note = subjectNotes[idx] || s.remarks || s.annual_holistic_remarks || s.holistic_remarks || 'Demonstrates strong conceptual awareness, active curiosity, consistent effort, and positive collaboration.';
+                setNativeValue(ta, note);
             }
         });
 

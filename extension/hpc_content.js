@@ -1,6 +1,6 @@
 // HPC Assist PARAKH Portal Student Auto-Submission Script
 (function () {
-    const HPC_EXTENSION_VERSION = '1.5.5';
+    const HPC_EXTENSION_VERSION = '1.5.6';
     console.log(`[HPC Assist v${HPC_EXTENSION_VERSION}] PARAKH HPC Automation script loaded on`, location.href);
 
     // SERVER_URL is injected by the dashboard via window.__HPC_CONFIG.
@@ -2729,9 +2729,10 @@
                 val: s.Hand_Reflection_Ring_LikeTo || s.data?.Hand_Reflection_Ring_LikeTo || s.like_to || s.free_time || 'Singing rhymes, origami folding, and outdoor games'
             },
             {
-                name: "Little (Don't Like To / Aspiration)",
-                regex: /don'?t like to|do not like|पसंद नहीं|नापसंद|grow up|when i grow up|aspiration/i,
-                val: s.dont_like || s.Hand_Reflection_Little_Aspiration || 'Fighting, shouting, and loud noises'
+                name: "Little (Don't Like To)",
+                regex: /don'?t like to|do not like|पसंद नहीं|नापसंद/i,
+                excludeRegex: /grow up|inspire/i,
+                val: s.dont_like || 'Fighting, shouting, and loud noises'
             },
             // Yellow Card: Favorite Things
             {
@@ -2749,26 +2750,33 @@
                 regex: /festival:|favourite festival|favorite festival|त्योहार|पर्व/i,
                 val: s.Favorite_Festival || s.data?.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr, Diwali, and National Days'
             },
-            // General Reflections (Rows below the hand if present)
+            // Pencil Card: When I grow up I want to be...
             {
-                name: "General Reflection 1",
-                regex: /enjoy coming to school|inspires|प्रेरणा|prompt 1/i,
-                val: s.General_Reflection_Prompt_1 || s.data?.General_Reflection_Prompt_1 || 'I enjoy coming to school every morning to learn with my classmates'
+                name: "Aspiration (Grow Up)",
+                regex: /when i grow up|grow up i want to be|grow up|want to be|बड़े होकर|बनना चाहता/i,
+                val: s.Hand_Reflection_Little_Aspiration || s.ambition || 'A helpful school teacher or scientist'
+            },
+            // Trophy Card: One person who inspires me is...
+            {
+                name: "Inspiration (Inspires Me)",
+                regex: /one person who inspires me|inspires me|who inspires|my idol|प्रेरणा|आदर्श/i,
+                val: s.General_Reflection_Prompt_1 || s.data?.General_Reflection_Prompt_1 || 'My class teacher and parents'
+            },
+            // Alarm Clock Card: Three things I want to learn this school year
+            {
+                name: "Learn This Year 1",
+                regex: /three things i want to learn|three things|want to learn this school year|तीन चीजें/i,
+                val: s.General_Reflection_Prompt_2 || s.data?.General_Reflection_Prompt_2 || 'Neat cursive handwriting and reading stories'
             },
             {
-                name: "General Reflection 2",
-                regex: /neat, clean|classroom desk|notebook|prompt 2/i,
-                val: s.General_Reflection_Prompt_2 || s.data?.General_Reflection_Prompt_2 || 'I keep my notebook and classroom desk neat, clean, and organized'
+                name: "Learn This Year 2",
+                regex: /three things i want to learn|three things|want to learn this school year|तीन चीजें/i,
+                val: s.General_Reflection_Prompt_3 || s.data?.General_Reflection_Prompt_3 || 'Mental math calculations and geometry'
             },
             {
-                name: "General Reflection 3",
-                regex: /listen attentively|attention|prompt 3/i,
-                val: s.General_Reflection_Prompt_3 || s.data?.General_Reflection_Prompt_3 || 'I always listen attentively when my teacher explains new topics'
-            },
-            {
-                name: "General Reflection 4",
-                regex: /share|pencils|crayons|classmates|prompt 4/i,
-                val: s.General_Reflection_Prompt_4 || s.data?.General_Reflection_Prompt_4 || 'I share my crayons and pencils whenever my classmates need them'
+                name: "Learn This Year 3",
+                regex: /three things i want to learn|three things|want to learn this school year|तीन चीजें/i,
+                val: s.General_Reflection_Prompt_4 || s.data?.General_Reflection_Prompt_4 || 'Scientific plant experiments and music'
             }
         ];
 
@@ -3330,6 +3338,7 @@
                                    bodyText.includes('activities - 0') || 
                                    bodyText.includes('no activities added yet');
 
+        // Check if existing activity is active and valid (not empty/0)
         if (pills.length > 0 && !hasNoActivitiesYet) {
             logStatus('[Part-B] Activity is already present and active on screen.');
             return true;
@@ -3340,9 +3349,9 @@
             if (isLanguageOrHeaderElement(el)) return false;
             const t = (el.innerText || '').trim();
             if (t.length < 3 || t.length > 60 || el.children.length > 2) return false;
-            return (t.includes('C-1') || t.includes('1.') || t.includes('TWCG') || t.includes('WCG')) && !t.includes('Add Activity');
+            return (t.includes('C-1') || t.includes('1.') || t.includes('TWCG') || t.includes('WCG') || t.includes('L1CG') || t.includes('MCG')) && !t.includes('Add Activity');
         });
-        if (existingSidebarActs.length > 0) {
+        if (existingSidebarActs.length > 0 && !hasNoActivitiesYet) {
             logStatus(`[Part-B] Found existing activity in sidebar: "${existingSidebarActs[0].innerText.trim()}". Activating...`);
             existingSidebarActs[0].click();
             await sleep(800);
@@ -3356,7 +3365,7 @@
             if (isLanguageOrHeaderElement(b)) return false;
             const t = (b.innerText || b.textContent || '').trim().toLowerCase();
             return t.includes('add activity') || t.includes('गतिविधि जोड़ें');
-        });
+        }) || document.querySelector('button.custom-btn');
 
         if (!addBtn) {
             console.warn('[HPC Assist] "+ Add Activity" button not found.');
@@ -3365,78 +3374,127 @@
 
         logStatus('[Part-B] Clicking "+ Add Activity" button...');
         try { addBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+        await sleep(300);
         addBtn.click();
-        await sleep(1000);
+        try { HTMLElement.prototype.click.call(addBtn); } catch(e) {}
+        await sleep(1200);
 
-        // 4. Wait for Add Activity Modal to appear
-        let modal = null;
+        // 4. Modal 1: "Add Activity" with options "Create Manually" and "Pick from Activity Bank"
+        let modal1 = null;
         for (let m = 0; m < 15; m++) {
-            modal = document.querySelector('.modal, .quick-add-activity, [role="dialog"], [aria-modal="true"], div[class*="modal" i], div[class*="popup" i]');
-            if (modal && modal.offsetParent !== null) break;
+            modal1 = document.querySelector('.modal, .quick-add-activity, [role="dialog"], [aria-modal="true"], div[class*="modal" i], div[class*="popup" i]');
+            if (modal1 && modal1.offsetParent !== null) break;
             await sleep(300);
         }
 
-        if (!modal) {
-            console.warn('[HPC Assist] Add Activity modal did not open.');
-            return false;
-        }
+        if (modal1) {
+            logStatus('[Part-B] Modal 1 (Add Activity) opened. Selecting "Pick from Activity Bank"...');
+            
+            // Find "Pick from Activity Bank" option
+            const pickFromBankOpt = Array.from(modal1.querySelectorAll('label, div, span, input, p')).find(el => {
+                const t = (el.innerText || el.textContent || el.value || '').trim().toLowerCase();
+                return t.includes('activity bank') || t.includes('bank') || t.includes('बैंक');
+            });
 
-        logStatus('[Part-B] Add Activity modal opened. Checking for Global / Activity Bank tab...');
-
-        // 5. Look for Global Activity Bank option/tab in the modal
-        const globalOption = Array.from(modal.querySelectorAll('button, a, div[role="tab"], div[role="button"], span, label, input[type="radio"], input[type="checkbox"]')).find(el => {
-            const t = (el.innerText || el.textContent || el.value || '').trim().toLowerCase();
-            return t.includes('global') || t.includes('activity bank') || t.includes('bank') || t.includes('वैश्विक');
-        });
-        if (globalOption) {
-            logStatus(`[Part-B] Selecting "${(globalOption.innerText || 'Global').trim()}" in modal...`);
-            globalOption.click();
-            await sleep(800);
-        }
-
-        // 6. Look for activity cards or items matching actSubject or actTitle
-        const activityItems = Array.from(modal.querySelectorAll('.card, .activity-card, [class*="activity-item" i], [class*="card" i], tr, li, div[role="button"]')).filter(c => {
-            const ct = (c.innerText || '').trim();
-            return ct.length > 5 && !ct.toLowerCase().includes('custom') && !ct.toLowerCase().includes('filter');
-        });
-
-        let selected = null;
-        if (activityItems.length > 0) {
-            const subWords = String(actSubject || 'World Around Us').toLowerCase().split(/[\s,]+/);
-            selected = activityItems.find(c => {
-                const ct = c.innerText.toLowerCase();
-                return subWords.some(w => w.length > 3 && ct.includes(w)) || (actTitle && ct.includes(actTitle.toLowerCase().slice(0, 8)));
-            }) || activityItems[0];
-
-            if (selected) {
-                logStatus(`[Part-B] Selected Global Activity: "${selected.innerText.trim().slice(0, 40)}"`);
-                const rb = selected.querySelector('input[type="radio"], input[type="checkbox"]');
-                if (rb) rb.click();
-                selected.click();
+            if (pickFromBankOpt) {
+                const clickableRadioOrLabel = pickFromBankOpt.closest('label, div[role="radio"], div[role="button"]') || pickFromBankOpt;
+                clickableRadioOrLabel.click();
+                const rb = clickableRadioOrLabel.querySelector('input[type="radio"]') || pickFromBankOpt.querySelector('input[type="radio"]');
+                if (rb) {
+                    rb.checked = true;
+                    rb.dispatchEvent(new Event('change', { bubbles: true }));
+                }
                 await sleep(500);
+            }
+
+            // Click "Continue" in Modal 1
+            const continueBtn1 = Array.from(modal1.querySelectorAll('button, a[role="button"], .btn')).find(b => {
+                if (b.disabled) return false;
+                const bt = (b.innerText || b.value || '').trim().toLowerCase();
+                return bt === 'continue' || bt.includes('आगे बढ़ें') || bt.includes('जारी रखें');
+            });
+            if (continueBtn1) {
+                logStatus('[Part-B] Clicking "Continue" to open Activity Bank list...');
+                continueBtn1.click();
+                try { HTMLElement.prototype.click.call(continueBtn1); } catch(e) {}
+                await sleep(1500);
             }
         }
 
-        // 7. Click confirm / Add / Continue button in modal
-        const confirmBtn = Array.from(modal.querySelectorAll('button, a[role="button"], input[type="submit"], input[type="button"], .btn')).find(b => {
-            if (b.disabled) return false;
-            const bt = (b.innerText || b.value || '').trim().toLowerCase();
-            return bt === 'add' || bt.includes('add activity') || bt === 'continue' || bt === 'select' || bt === 'confirm' || bt.includes('जोड़ें') || bt.includes('आगे बढ़ें');
-        });
+        // 5. Modal 2: "Pick from Activity Bank" with tabs "My Activities" and "Global Activities"
+        let modal2 = null;
+        for (let m = 0; m < 15; m++) {
+            const modals = Array.from(document.querySelectorAll('.modal, [role="dialog"], [aria-modal="true"], div[class*="modal" i]'));
+            modal2 = modals.find(mod => (mod.innerText || '').toLowerCase().includes('global activities') || (mod.innerText || '').toLowerCase().includes('activity bank'));
+            if (modal2 && modal2.offsetParent !== null) break;
+            await sleep(300);
+        }
 
-        if (confirmBtn) {
-            logStatus(`[Part-B] Confirming activity addition via "${confirmBtn.innerText.trim()}"...`);
-            confirmBtn.click();
-            await sleep(2000);
-        } else {
-            // General fallback button
-            const anyCont = Array.from(document.querySelectorAll('.modal button, button')).find(b => {
-                const t = (b.innerText || '').trim().toLowerCase();
-                return t === 'continue' || t === 'add' || t === 'जोड़ें';
+        const activeModal = modal2 || document.querySelector('.modal, [role="dialog"], [aria-modal="true"]');
+        if (activeModal) {
+            logStatus('[Part-B] Modal 2 (Pick from Activity Bank) opened. Switching to "Global Activities" tab...');
+
+            // Click "Global Activities" tab
+            const globalTab = Array.from(activeModal.querySelectorAll('button, a, div[role="tab"], div[role="button"], span, li, p')).find(el => {
+                const t = (el.innerText || el.textContent || '').trim().toLowerCase();
+                return t.includes('global activities') || t === 'global' || t.includes('वैश्विक');
             });
-            if (anyCont) {
-                anyCont.click();
-                await sleep(2000);
+
+            if (globalTab) {
+                logStatus(`[Part-B] Selecting "${globalTab.innerText.trim()}" tab...`);
+                globalTab.click();
+                try { HTMLElement.prototype.click.call(globalTab); } catch(e) {}
+                await sleep(1500);
+            }
+
+            // 6. Select an activity from the global activity list
+            let targetRow = null;
+            const subStr = String(actSubject || 'World Around Us').toLowerCase();
+            const subjectCode = subStr.includes('world') ? 'twcg' : (subStr.includes('math') ? 'mcg' : 'l1cg');
+
+            // Find rows or checkboxes
+            const rows = Array.from(activeModal.querySelectorAll('tr, li, div[class*="row" i], div[class*="item" i], label')).filter(r => {
+                const rt = (r.innerText || '').trim();
+                return rt.length > 3 && (rt.includes('CG') || rt.includes('C ') || rt.includes('C-') || rt.includes('1.') || rt.includes('1'));
+            });
+
+            if (rows.length > 0) {
+                targetRow = rows.find(r => r.innerText.toLowerCase().includes(subjectCode)) || rows[0];
+            }
+
+            if (targetRow) {
+                logStatus(`[Part-B] Selecting Global Activity: "${targetRow.innerText.trim().slice(0, 40)}"`);
+                const cb = targetRow.querySelector('input[type="checkbox"], input[type="radio"]');
+                if (cb) {
+                    cb.checked = true;
+                    cb.dispatchEvent(new Event('change', { bubbles: true }));
+                    cb.click();
+                } else {
+                    targetRow.click();
+                }
+                await sleep(800);
+            } else {
+                const anyCheckbox = activeModal.querySelector('input[type="checkbox"]');
+                if (anyCheckbox) {
+                    anyCheckbox.checked = true;
+                    anyCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+                    anyCheckbox.click();
+                    await sleep(800);
+                }
+            }
+
+            // 7. Click "Use Activity" button
+            const useActivityBtn = Array.from(activeModal.querySelectorAll('button, a[role="button"], input[type="button"], .btn')).find(b => {
+                if (b.disabled) return false;
+                const bt = (b.innerText || b.value || '').trim().toLowerCase();
+                return bt.includes('use activity') || bt.includes('उपयोग करें') || bt === 'add' || bt.includes('जोड़ें');
+            });
+
+            if (useActivityBtn) {
+                logStatus(`[Part-B] Confirming via "${useActivityBtn.innerText.trim()}"...`);
+                useActivityBtn.click();
+                try { HTMLElement.prototype.click.call(useActivityBtn); } catch(e) {}
+                await sleep(2500);
             }
         }
 
@@ -3444,13 +3502,13 @@
         for (let w = 0; w < 12; w++) {
             const stepPills = document.querySelectorAll('.activate-tab-pills div, .activate-tab-pills button');
             if (stepPills.length > 0) {
-                logStatus('[Part-B] ✓ Activity successfully added and active.');
+                logStatus('[Part-B] ✓ Global Activity successfully added and active.');
                 return true;
             }
             // Check if newly created activity appears in sidebar, click it!
             const newAct = Array.from(document.querySelectorAll('.sidebar div, .activity-list div, div')).find(el => {
                 const t = (el.innerText || '').trim();
-                return (t.includes('C-1') || t.includes('1.') || t.includes('The World Around Us') || t.includes('Activity')) && !t.includes('Add Activity');
+                return (t.includes('C-1') || t.includes('1.') || t.includes('CG') || t.includes('Activity')) && !t.includes('Add Activity');
             });
             if (newAct) {
                 newAct.click();

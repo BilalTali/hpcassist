@@ -1,6 +1,6 @@
 // HPC Assist PARAKH Portal Student Auto-Submission Script
 (function () {
-    const HPC_EXTENSION_VERSION = '1.5.6';
+    const HPC_EXTENSION_VERSION = '1.6.0';
     console.log(`[HPC Assist v${HPC_EXTENSION_VERSION}] PARAKH HPC Automation script loaded on`, location.href);
 
     // SERVER_URL is injected by the dashboard via window.__HPC_CONFIG.
@@ -2698,28 +2698,40 @@
         const inspirationPersonVal = (!isInvalidSentence && rawInsp.trim()) ? rawInsp.trim() : (s.Inspiration_Person || s.Person_Who_Inspires_Me || 'My class teacher and parents');
 
         const directSelectors = [
-            // Green Card: Name
-            { sel: 'input.pre-name, .pre-name input, [class*="pre-name" i] input', val: s.my_name || s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Student', name: 'Student Name' },
-            // Hand of Self-Reflection (5 Fingers)
-            { sel: 'input.pre-hand-thumb, .pre-hand-thumb input, [class*="hand-thumb" i] input', val: s.Hand_Reflection_Thumb_GoodAt || s.data?.Hand_Reflection_Thumb_GoodAt || s.good_at || 'Arithmetic calculations and drawing flowers', name: 'Thumb (Good At)' },
-            { sel: 'input.pre-hand-index, .pre-hand-index input, [class*="hand-index" i] input', val: s.Hand_Reflection_Index_NotGoodAt || s.data?.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings', name: 'Index (Not Good At)' },
-            { sel: 'input.pre-hand-middle, .pre-hand-middle input, [class*="hand-middle" i] input', val: s.Hand_Reflection_Middle_ImproveSkill || s.data?.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || 'Reading storybooks fluently without hesitation', name: 'Middle (Improve Skill)' },
-            { sel: 'input.pre-hand-ring, .pre-hand-ring input, [class*="hand-ring" i] input', val: s.Hand_Reflection_Ring_LikeTo || s.data?.Hand_Reflection_Ring_LikeTo || s.like_to || 'Singing rhymes, origami folding, and outdoor games', name: 'Ring (Like To)' },
-            { sel: 'input.pre-hand-little, .pre-hand-little input, [class*="hand-little" i] input', val: s.dont_like || 'Fighting, shouting, and loud noises', name: 'Little (Don\'t Like To)' },
+            // Green Card: Student Name & Age
+            { sel: 'input.pre-my-name-is, textarea.pre-my-name-is, .pre-my-name-is, input.pre-name, textarea.pre-name, .pre-name, [class*="pre-name" i]', val: s.my_name || s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Student', name: 'Student Name' },
+            { sel: 'input.pre-my-age-is, textarea.pre-my-age-is, .pre-my-age-is, input.pre-age, textarea.pre-age, .pre-age, [class*="my-age" i]', val: String(s.my_age || s.age || '9'), name: 'Student Age' },
+
+            // Hand of Self-Reflection ("Things about me" - 5 Fingers)
+            // Thumb: "I am good at..."
+            { sel: 'textarea.pre-hand-thumb, input.pre-hand-thumb, .pre-hand-thumb, [class*="hand-thumb" i]', val: s.Hand_Reflection_Thumb_GoodAt || s.data?.Hand_Reflection_Thumb_GoodAt || s.good_at || 'Arithmetic calculations and drawing flowers', name: 'Thumb (Good At)' },
+            // Index: "I am not so good at..."
+            { sel: 'textarea.pre-hand-index, input.pre-hand-index, .pre-hand-index, [class*="hand-index" i]', val: s.Hand_Reflection_Index_NotGoodAt || s.data?.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings', name: 'Index (Not Good At)' },
+            // Middle: "I would like to improve my skill of..."
+            { sel: 'textarea.pre-hand-middle, input.pre-hand-middle, .pre-hand-middle, [class*="hand-middle" i]', val: s.Hand_Reflection_Middle_ImproveSkill || s.data?.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || 'Reading storybooks fluently without hesitation', name: 'Middle (Improve Skill)' },
+            // Ring: "I like to..."
+            { sel: 'textarea.pre-hand-ring, input.pre-hand-ring, .pre-hand-ring, [class*="hand-ring" i]', val: s.Hand_Reflection_Ring_LikeTo || s.data?.Hand_Reflection_Ring_LikeTo || s.like_to || 'Singing rhymes, origami folding, and outdoor games', name: 'Ring (Like To)' },
+            // Little: "I don't like to..."
+            { sel: 'textarea.pre-hand-little, input.pre-hand-little, .pre-hand-little, [class*="hand-little" i]', val: s.dont_like || 'Fighting, shouting, and loud noises', name: 'Little (Don\'t Like To)' },
+
             // Yellow Card: Favorite Things (Food, Games, Festival)
-            { sel: 'input.pre-favorite-things-0, textarea.pre-favorite-things-0, .pre-favorite-things-0 input, .pre-favorite-things-0 textarea', val: s.Favorite_Food || s.data?.Favorite_Food || s.fav_food || 'Dal Chawal, Apples, and seasonal fresh fruits', name: 'Favorite Food' },
-            { sel: 'input.pre-favorite-things-1, textarea.pre-favorite-things-1, .pre-favorite-things-1 input, .pre-favorite-things-1 textarea', val: s.Favorite_Games || s.data?.Favorite_Games || s.fav_game || 'Kho-Kho, Hide and Seek, and Toy-Clock building', name: 'Favorite Games' },
-            { sel: 'input.pre-favorite-things-2, textarea.pre-favorite-things-2, .pre-favorite-things-2 input, .pre-favorite-things-2 textarea', val: s.Favorite_Festival || s.data?.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr, Diwali, and National Days', name: 'Favorite Festival' },
+            { sel: 'textarea.pre-favorite-things-0, input.pre-favorite-things-0, .pre-favorite-things-0, [class*="favorite-things-0" i]', val: s.Favorite_Food || s.data?.Favorite_Food || s.fav_food || 'Dal Chawal, Apples, and seasonal fresh fruits', name: 'Favorite Food' },
+            { sel: 'textarea.pre-favorite-things-1, input.pre-favorite-things-1, .pre-favorite-things-1, [class*="favorite-things-1" i]', val: s.Favorite_Games || s.data?.Favorite_Games || s.fav_game || 'Kho-Kho, Hide and Seek, and Toy-Clock building', name: 'Favorite Games' },
+            { sel: 'textarea.pre-favorite-things-2, input.pre-favorite-things-2, .pre-favorite-things-2, [class*="favorite-things-2" i]', val: s.Favorite_Festival || s.data?.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr, Diwali, and National Days', name: 'Favorite Festival' },
+
             // Pencil Card: When I grow up I want to be...
-            { sel: 'input.pre-pencil-grow-up, textarea.pre-pencil-grow-up, .pre-pencil-grow-up input, .pre-pencil-grow-up textarea', val: s.Hand_Reflection_Little_Aspiration || s.ambition || 'Become a helpful school teacher or scientist', name: 'Aspiration (Grow Up)' },
-            // Trophy Card: One person who inspires me is...
-            { sel: 'input.pre-idol, textarea.pre-idol, .pre-idol input, .pre-idol textarea', val: inspirationPersonVal, name: 'Inspiration (My Idol / Person)' },
+            { sel: 'textarea.pre-pencil-grow-up, input.pre-pencil-grow-up, .pre-pencil-grow-up, [class*="pencil-grow-up" i], [class*="grow-up" i]', val: s.Hand_Reflection_Little_Aspiration || s.grow_up_be || s.ambition || 'Become a helpful school teacher or scientist', name: 'Aspiration (Grow Up)' },
+
+            // Trophy Card / My Idol: One person who inspires me is...
+            { sel: 'input.pre-one-person, textarea.pre-one-person, .pre-one-person, input.pre-idol, textarea.pre-idol, .pre-idol, [class*="one-person" i], [class*="inspire" i]', val: inspirationPersonVal, name: 'Inspiration (My Idol / Person)' },
+
             // Alarm Clock Card: Three things I want to learn this school year
-            { sel: 'input.pre-learn-0, textarea.pre-learn-0, .pre-learn-0 input, .pre-learn-0 textarea', val: (s.General_Reflection_Prompt_2 && !/desk|notebook|coming to school/i.test(s.General_Reflection_Prompt_2)) ? s.General_Reflection_Prompt_2 : 'Reading storybooks fluently and learning new words', name: 'Learn This Year 1' },
-            { sel: 'input.pre-learn-1, textarea.pre-learn-1, .pre-learn-1 input, .pre-learn-1 textarea', val: (s.General_Reflection_Prompt_3 && !/attentive|listen|desk/i.test(s.General_Reflection_Prompt_3)) ? s.General_Reflection_Prompt_3 : 'Mental math calculations and geometry shapes', name: 'Learn This Year 2' },
-            { sel: 'input.pre-learn-2, textarea.pre-learn-2, .pre-learn-2 input, .pre-learn-2 textarea', val: (s.General_Reflection_Prompt_4 && !/crayon|pencil|desk/i.test(s.General_Reflection_Prompt_4)) ? s.General_Reflection_Prompt_4 : 'Scientific plant experiments and art and craft', name: 'Learn This Year 3' },
-            // Things about me (Wrist/Palm of hand)
-            { sel: 'input.pre-things-about-me, textarea.pre-things-about-me, [class*="things-about-me" i] input, [class*="things-about-me" i] textarea, [class*="about-me" i] input, [class*="about-me" i] textarea', val: s.Things_About_Me || 'A curious and enthusiastic student who loves learning, creative art, and helping classmates.', name: 'Things About Me' }
+            { sel: 'textarea.pre-0-things, input.pre-0-things, .pre-0-things, textarea.pre-learn-0, input.pre-learn-0, .pre-learn-0, [class*="0-things" i]', val: (s.General_Reflection_Prompt_2 && !/desk|notebook|coming to school|diwali|eid|festival/i.test(s.General_Reflection_Prompt_2)) ? s.General_Reflection_Prompt_2 : 'Reading storybooks fluently and learning new words', name: 'Learn This Year 1' },
+            { sel: 'textarea.pre-1-things, input.pre-1-things, .pre-1-things, textarea.pre-learn-1, input.pre-learn-1, .pre-learn-1, [class*="1-things" i]', val: (s.General_Reflection_Prompt_3 && !/attentive|listen|desk|diwali|eid|festival/i.test(s.General_Reflection_Prompt_3)) ? s.General_Reflection_Prompt_3 : 'Mental math calculations and geometry shapes', name: 'Learn This Year 2' },
+            { sel: 'textarea.pre-2-things, input.pre-2-things, .pre-2-things, textarea.pre-learn-2, input.pre-learn-2, .pre-learn-2, [class*="2-things" i]', val: (s.General_Reflection_Prompt_4 && !/crayon|pencil|desk|diwali|eid|festival/i.test(s.General_Reflection_Prompt_4)) ? s.General_Reflection_Prompt_4 : 'Scientific plant experiments and art and craft', name: 'Learn This Year 3' },
+
+            // Things about me (Wrist/Palm of hand fallback)
+            { sel: 'textarea.pre-things-about-me, input.pre-things-about-me, .pre-things-about-me, [class*="things-about-me" i] textarea, [class*="things-about-me" i] input', val: s.Things_About_Me || 'A curious and enthusiastic student who loves learning, creative art, and helping classmates.', name: 'Things About Me' }
         ];
 
         directSelectors.forEach(item => {
@@ -2732,20 +2744,27 @@
             }
         });
 
-        // Fill Age in Green Card
-        const nameInput = document.querySelector('input.pre-name, .pre-name input, [class*="pre-name" i] input');
-        if (nameInput) {
-            const greenContainer = nameInput.closest('.card, [class*="card" i], div');
-            if (greenContainer) {
-                const unfilledGreenInputs = Array.from(greenContainer.querySelectorAll('input:not([type="checkbox"]):not([type="radio"])')).filter(i => !filledInputs.has(i) && !isLanguageOrHeaderElement(i));
-                if (unfilledGreenInputs.length > 0) {
-                    const ageEl = unfilledGreenInputs[0];
-                    setNativeValue(ageEl, String(s.my_age || s.age || '9'));
-                    filledInputs.add(ageEl);
-                    logStatus(`[Part-A2] ✓ Student Age (Green Card): "${s.my_age || s.age || '9'}"`);
+        // Proximity Fallback for Hand Graphic (5 fingers) if classes changed
+        const handContainer = document.querySelector('.hand-reflection-container, .hand-graphic, [class*="hand" i]');
+        if (handContainer) {
+            const fingerRules = [
+                { match: /good at|अच्छा हूँ/i, val: s.Hand_Reflection_Thumb_GoodAt || s.good_at || 'Arithmetic calculations and drawing flowers', name: 'Thumb (Good At)' },
+                { match: /not so good|कठिनाई|not good/i, val: s.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings', name: 'Index (Not Good At)' },
+                { match: /improve my skill|improve|सुधार/i, val: s.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || 'Reading storybooks fluently without hesitation', name: 'Middle (Improve Skill)' },
+                { match: /like to|पसंद/i, val: s.Hand_Reflection_Ring_LikeTo || s.like_to || 'Singing rhymes, origami folding, and outdoor games', name: 'Ring (Like To)' },
+                { match: /don't like|नफ़रत|नापसंद/i, val: s.dont_like || 'Fighting, shouting, and loud noises', name: 'Little (Don\'t Like To)' }
+            ];
+            const unfilledTextareas = Array.from(handContainer.querySelectorAll('textarea, input')).filter(t => !filledInputs.has(t) && !isLanguageOrHeaderElement(t));
+            unfilledTextareas.forEach(t => {
+                const labelText = getFieldLabel(t);
+                const matched = fingerRules.find(r => r.match.test(labelText));
+                if (matched) {
+                    setNativeValue(t, matched.val);
+                    filledInputs.add(t);
+                    logStatus(`[Part-A2] ✓ Hand Finger Fallback: ${matched.name} -> "${String(matched.val).slice(0, 35)}"`);
                     filledCount++;
                 }
-            }
+            });
         }
 
         // ─────────────────────────────────────────────────────────────────
@@ -2787,16 +2806,28 @@
             } else if (lbl.includes('like to') || lbl.includes('पसंद')) {
                 valToSet = s.Hand_Reflection_Ring_LikeTo || s.like_to || 'Singing rhymes, origami folding, and outdoor games';
                 matchType = 'Like To';
+            } else if (lbl.includes('inspire') || lbl.includes('idol') || lbl.includes('प्रेरणा')) {
+                valToSet = inspirationPersonVal;
+                matchType = 'Inspiration';
+            } else if (lbl.includes('grow up') || lbl.includes('want to be') || lbl.includes('बड़ा होकर') || lbl.includes('ambition')) {
+                valToSet = s.Hand_Reflection_Little_Aspiration || s.grow_up_be || s.ambition || 'Become a helpful school teacher or scientist';
+                matchType = 'Grow Up Aspiration';
+            } else if (lbl.includes('learn') || lbl.includes('सीखना')) {
+                const learnOpts = [
+                    (s.General_Reflection_Prompt_2 && !/desk|notebook|coming to school|diwali|eid|festival/i.test(s.General_Reflection_Prompt_2)) ? s.General_Reflection_Prompt_2 : 'Reading storybooks fluently and learning new words',
+                    (s.General_Reflection_Prompt_3 && !/attentive|listen|desk|diwali|eid|festival/i.test(s.General_Reflection_Prompt_3)) ? s.General_Reflection_Prompt_3 : 'Mental math calculations and geometry shapes',
+                    (s.General_Reflection_Prompt_4 && !/crayon|pencil|desk|diwali|eid|festival/i.test(s.General_Reflection_Prompt_4)) ? s.General_Reflection_Prompt_4 : 'Scientific plant experiments and art and craft'
+                ];
+                valToSet = learnOpts[idx % learnOpts.length];
+                matchType = 'Learn Goals';
             } else {
-                // Positional fallback for standard stage lists
+                // Safe semantic defaults for remaining fields
                 const prepDefaults = [
                     s.Hand_Reflection_Thumb_GoodAt || s.good_at || 'Arithmetic calculations and drawing flowers',
                     s.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings',
                     s.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || 'Reading storybooks fluently without hesitation',
                     s.Hand_Reflection_Ring_LikeTo || s.like_to || 'Singing rhymes, origami folding, and outdoor games',
-                    s.dont_like || s.Hand_Reflection_Little_Aspiration || 'Fighting, shouting, and loud noises',
-                    s.my_name || s.name || 'Student',
-                    String(s.my_age || s.age || '9'),
+                    s.dont_like || 'Fighting, shouting, and loud noises',
                     s.Favorite_Food || 'Dal Chawal, Apples, and seasonal fresh fruits',
                     s.Favorite_Games || 'Kho-Kho, Hide and Seek, and Toy-Clock building',
                     s.Favorite_Festival || 'Eid-ul-Fitr, Diwali, and National Days'

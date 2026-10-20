@@ -3357,41 +3357,67 @@
                 await sleep(1500);
             }
 
-            // 6. Select activities across distinct curricular domains (L1, L2, Math, TWC, Art, PE, Other)
-            const rows = Array.from(activeModal.querySelectorAll('tbody tr, .table-row, [role="row"], tr')).filter(r => {
-                if (isLanguageOrHeaderElement(r)) return false;
-                return r.querySelector('input[type="checkbox"]') || r.querySelector('input[type="radio"]') || r.children.length >= 2;
-            });
-            const targetCodes = ['l1cg', 'mcg', 'twcg', 'l2cg', 'aecg', 'pecg', 'other', 'c-1', 'c-2'];
-            const selectedRows = [];
-
-            // Match at least one row per distinct domain code
-            targetCodes.forEach(code => {
-                const match = rows.find(r => r.innerText.toLowerCase().includes(code) && !selectedRows.includes(r));
-                if (match) selectedRows.push(match);
-            });
-
-            // If none matched by code, select available rows up to 7
-            if (selectedRows.length === 0) {
-                rows.slice(0, Math.min(rows.length, 7)).forEach(r => selectedRows.push(r));
+            // 6. Wait for activity table rows to fully load in the modal
+            let rows = [];
+            for (let waitR = 0; waitR < 12; waitR++) {
+                rows = Array.from(activeModal.querySelectorAll('tbody tr, .table-row, [role="row"], tr')).filter(r => {
+                    if (isLanguageOrHeaderElement(r)) return false;
+                    const rowText = (r.innerText || '').trim().toLowerCase();
+                    if (rowText.length < 3) return false;
+                    return r.querySelector('input[type="checkbox"]') || r.querySelector('input[type="radio"]') || r.children.length >= 2;
+                });
+                if (rows.length > 0) break;
+                await sleep(400);
             }
 
-            for (const r of selectedRows) {
-                logStatus(`[Part-B] Checking Global Activity: "${r.innerText.trim().slice(0, 40)}"`);
-                const cb = r.querySelector('input[type="checkbox"]');
-                if (cb) {
-                    if (!cb.checked) {
-                        cb.click();
-                        if (!cb.checked) {
-                            cb.checked = true;
-                            cb.dispatchEvent(new Event('input', { bubbles: true }));
-                            cb.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-                    }
-                } else {
-                    r.click();
+            logStatus(`[Part-B] Found ${rows.length} activity row(s) in Global Activity Bank.`);
+
+            if (rows.length === 0) {
+                logStatus('[Part-B] No activity rows found — modal may not have loaded. Will retry after Use Activity.');
+            } else {
+                // Strategy: Try to match one per distinct CG domain, else pick all available rows (up to 8)
+                const targetCodes = ['l1cg', 'mcg', 'twcg', 'l2cg', 'aecg', 'pecg', 'other', 'c-1', 'c-2',
+                                     'language', 'math', 'world around', 'art', 'physical', 'environmental'];
+                const selectedRows = [];
+
+                // First: try to find a row matching the student's own activity subject
+                const actSubjectLow = (actSubject || '').toLowerCase();
+                if (actSubjectLow) {
+                    const subjectMatch = rows.find(r => (r.innerText || '').toLowerCase().includes(actSubjectLow));
+                    if (subjectMatch) selectedRows.push(subjectMatch);
                 }
-                await sleep(250);
+
+                // Then match one row per distinct domain code
+                targetCodes.forEach(code => {
+                    const match = rows.find(r => (r.innerText || '').toLowerCase().includes(code) && !selectedRows.includes(r));
+                    if (match) selectedRows.push(match);
+                });
+
+                // If still none matched by code (portal uses different names), select ALL rows up to 8
+                if (selectedRows.length === 0) {
+                    rows.slice(0, Math.min(rows.length, 8)).forEach(r => selectedRows.push(r));
+                }
+
+                logStatus(`[Part-B] Selecting ${selectedRows.length} activity row(s) from Global Activity Bank.`);
+
+                for (const r of selectedRows) {
+                    logStatus(`[Part-B] Selecting Global Activity: "${(r.innerText || '').trim().slice(0, 50)}"`);
+                    const cb = r.querySelector('input[type="checkbox"]');
+                    if (cb) {
+                        if (!cb.checked) {
+                            cb.click();
+                            await sleep(150);
+                            if (!cb.checked) {
+                                cb.checked = true;
+                                cb.dispatchEvent(new Event('input', { bubbles: true }));
+                                cb.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        }
+                    } else {
+                        r.click();
+                    }
+                    await sleep(200);
+                }
             }
 
             // 7. Click "Use Activity" button

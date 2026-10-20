@@ -4582,10 +4582,10 @@
             return;
         }
 
-        // Strategy 1: Direct link inside targetRow
-        const directLink = targetRow.querySelector('a[href*="/hpc/"], a[href*="part-"], a[href*="student"]');
+        // Strategy 1: Any direct link inside targetRow or its cells
+        const directLink = targetRow.querySelector('a[href*="/hpc/"], a[href*="part-"], a[href*="stage/"], a[href*="student"]');
         if (directLink) {
-            logStatus(`Opening evaluation link for ${s.name}...`);
+            logStatus(`Opening direct evaluation link for ${s.name}...`);
             localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
             directLink.click();
             scheduleTeacherEvaluationStep(2500);
@@ -4593,87 +4593,126 @@
             return;
         }
 
-        // Strategy 2: Locate Action / 3-dots button in the row's Action cell
+        // Strategy 2: Action trigger (3-dots kebab menu) in last cell
         const lastCell = targetRow.cells ? targetRow.cells[targetRow.cells.length - 1] : targetRow.querySelector('td:last-child');
-        const actionBtn = (lastCell ? lastCell.querySelector('button, [role="button"], .dropdown-toggle, .custom-dropdown-header, [class*="action" i], [class*="menu" i], [class*="btn" i], a') : null)
+        const actionTrigger = (lastCell ? lastCell.querySelector('.custom-dropdown-header, [class*="dropdown-header" i], [class*="dropdown-toggle" i], [class*="action" i] button, [class*="action" i] div, [class*="dots" i], [class*="kebab" i], button:has(svg), svg, button, div[role="button"], a') : null)
             || targetRow.querySelector('.custom-dropdown-header, [class*="action" i] button, [class*="dropdown" i] button, button:has(svg), button');
 
-        if (actionBtn) {
-            try { actionBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
-            await sleep(200);
+        if (actionTrigger) {
+            try { actionTrigger.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+            await sleep(150);
 
-            // React props trigger
-            const rKey = Object.keys(actionBtn).find(k => k.startsWith('__reactProps'));
-            if (rKey && actionBtn[rKey]?.onClick) {
-                try { actionBtn[rKey].onClick({ preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
+            // Trigger React props onClick on trigger, parent, and SVG
+            const clickTargets = [actionTrigger, actionTrigger.parentElement, actionTrigger.querySelector('svg, i')].filter(Boolean);
+            for (const el of clickTargets) {
+                const rKey = Object.keys(el).find(k => k.startsWith('__reactProps'));
+                if (rKey && el[rKey]?.onClick) {
+                    try { el[rKey].onClick({ target: el, currentTarget: el, preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
+                }
             }
-            actionBtn.focus();
-            actionBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
-            actionBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-            actionBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
-            actionBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-            actionBtn.click();
-            try { HTMLElement.prototype.click.call(actionBtn); } catch(e) {}
-            await sleep(500);
+            actionTrigger.focus();
+            actionTrigger.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
+            actionTrigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+            actionTrigger.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
+            actionTrigger.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+            actionTrigger.click();
+            try { HTMLElement.prototype.click.call(actionTrigger); } catch(e) {}
 
-            // Look for menu items across the entire DOM (including React portals/drawers)
-            const candidateItems = Array.from(document.querySelectorAll(
-                '.custom-dropdown-item, .dropdown-item, [role="menuitem"], .dropdown-menu a, .dropdown-menu button, ' +
-                '[class*="menu" i] a, [class*="menu" i] button, [class*="menu" i] li, [class*="popover" i] li, ' +
-                'ul[role="menu"] li, .options-list li, div[role="button"], a, button'
-            )).filter(el => {
-                if (isLanguageOrHeaderElement(el)) return false;
-                if (el.closest('.top-steps, .stage-stepper, #hpc-status-widget')) return false;
-                const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
-                return /^(open|edit|fill|start|evaluate|view|खोलें|संपादित|मूल्यांकन|शुरू)(\s+(form|evaluation|hpc|student))?$/i.test(txt) ||
-                       (txt.includes('edit') && !txt.includes('profile')) ||
-                       (txt.includes('open') && !txt.includes('drawer')) ||
-                       txt.includes('मूल्यांकन');
-            });
+            logStatus(`Clicked action menu for ${s.name}. Waiting for menu options...`);
 
-            const actionItem = candidateItems[0];
+            // Poll up to 2.5s for the dropdown menu items to mount (in row or React portal)
+            let actionItem = null;
+            for (let poll = 0; poll < 12; poll++) {
+                await sleep(200);
+
+                const localOpts = Array.from(targetRow.querySelectorAll(
+                    '.custom-dropdown-options div, .custom-dropdown-options a, .custom-dropdown-options button, .custom-dropdown-options span, ' +
+                    '.custom-dropdown-item, .dropdown-item, [role="menuitem"], .dropdown-menu a, .dropdown-menu button, .dropdown-menu li, ' +
+                    '[class*="dropdown" i] div, [class*="dropdown" i] a, [class*="dropdown" i] button, [class*="options" i] div'
+                ));
+
+                const globalOpts = Array.from(document.querySelectorAll(
+                    '.custom-dropdown-options div, .custom-dropdown-options a, .custom-dropdown-options button, .custom-dropdown-item, ' +
+                    '.dropdown-item, [role="menuitem"], .dropdown-menu a, .dropdown-menu button, .dropdown-menu li, ' +
+                    '[class*="popover" i] div, [class*="popover" i] a, [class*="popover" i] button, [class*="popover" i] li, ' +
+                    '[class*="menu" i] div, [class*="menu" i] a, [class*="menu" i] button, [class*="menu" i] li, ' +
+                    'ul[role="menu"] li, [role="listbox"] [role="option"]'
+                ));
+
+                const candidates = [...localOpts, ...globalOpts].filter(el => {
+                    if (!el || isLanguageOrHeaderElement(el)) return false;
+                    if (el.closest('.top-steps, .stage-stepper, #hpc-status-widget, nav, header')) return false;
+                    const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
+                    if (!txt || txt.length > 50) return false;
+                    if (txt.includes('delete') || txt.includes('remove') || txt.includes('हटायें') || txt.includes('हटाएं')) return false;
+                    return true;
+                });
+
+                if (candidates.length > 0) {
+                    actionItem = candidates.find(el => {
+                        const txt = String(el.innerText || el.textContent || '').trim().toLowerCase();
+                        return /evaluat|assess|open|edit|fill|start|view|form|hpc|मूल्यांकन|संपादित|खोलें|शुरू|प्रपत्र/i.test(txt);
+                    }) || candidates[0];
+
+                    if (actionItem) break;
+                }
+            }
+
             if (actionItem) {
-                logStatus(`Opening evaluation form for ${s.name}...`);
+                const label = (actionItem.innerText || actionItem.textContent || '').trim();
+                logStatus(`Opening evaluation form for ${s.name} (clicked: "${label}")...`);
                 localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
+
                 const itKey = Object.keys(actionItem).find(k => k.startsWith('__reactProps'));
                 if (itKey && actionItem[itKey]?.onClick) {
-                    try { actionItem[itKey].onClick({ preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
+                    try { actionItem[itKey].onClick({ target: actionItem, currentTarget: actionItem, preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
                 }
                 actionItem.focus();
+                actionItem.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window }));
+                actionItem.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                actionItem.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, view: window }));
+                actionItem.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
                 actionItem.click();
                 try { HTMLElement.prototype.click.call(actionItem); } catch(e) {}
-                scheduleTeacherEvaluationStep(2500);
-                await sleep(3000);
-                return;
-            }
 
-            // Fallback: If no specific "Open/Edit" text matched, pick the first option from the opened dropdown
-            const anyMenuItem = Array.from(document.querySelectorAll('.dropdown-menu a, .dropdown-menu button, .dropdown-menu li, [role="menu"] [role="menuitem"], [class*="dropdown" i] ul li, .custom-dropdown-menu li')).find(el => {
-                if (isLanguageOrHeaderElement(el)) return false;
-                const txt = String(el.innerText || el.textContent || '').trim();
-                return txt.length > 0 && txt.length < 35;
-            });
-            if (anyMenuItem) {
-                logStatus(`Clicking menu item "${anyMenuItem.innerText.trim()}" for ${s.name}...`);
-                localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
-                anyMenuItem.click();
                 scheduleTeacherEvaluationStep(2500);
                 await sleep(3000);
                 return;
             }
         }
 
-        // Strategy 3: Click student name cell or link directly
+        // Strategy 3: Check cells across targetRow for any button, badge, or link
+        for (let c = cells.length - 1; c >= 0; c--) {
+            const cell = cells[c];
+            const buttons = Array.from(cell.querySelectorAll('button, a, [role="button"], span.badge, span[class*="status" i], span[class*="btn" i]')).filter(el => !isLanguageOrHeaderElement(el));
+            for (const btn of buttons) {
+                const txt = (btn.innerText || btn.textContent || '').trim().toLowerCase();
+                if (/evaluat|open|edit|fill|start|view|progress|pending|form|मूल्यांकन|खोलें/i.test(txt)) {
+                    logStatus(`Found actionable element "${btn.innerText.trim()}" in column ${c} for ${s.name}...`);
+                    localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
+                    btn.click();
+                    scheduleTeacherEvaluationStep(2500);
+                    await sleep(3000);
+                    return;
+                }
+            }
+        }
+
+        // Strategy 4: Fallback click on student name cell and row
         const nameCell = targetRow.cells ? targetRow.cells[2] : null;
+        logStatus(`Attempting to open via student name cell for ${s.name}...`);
+        localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
         if (nameCell) {
             const clickEl = nameCell.querySelector('a, button, span[role="button"]') || nameCell;
-            logStatus(`Attempting to open via student name cell for ${s.name}...`);
-            localStorage.setItem('hpc_teacher_active_student', JSON.stringify(s));
             clickEl.click();
-            scheduleTeacherEvaluationStep(2500);
-            await sleep(3000);
-            return;
         }
+        const rProps = Object.keys(targetRow).find(k => k.startsWith('__reactProps'));
+        if (rProps && targetRow[rProps]?.onClick) {
+            try { targetRow[rProps].onClick({ target: targetRow, currentTarget: targetRow, preventDefault: () => {}, stopPropagation: () => {} }); } catch(e) {}
+        }
+        targetRow.click();
+        scheduleTeacherEvaluationStep(2500);
+        await sleep(3000);
 
         logStatus(`⚠️ Could not click Open/Edit for ${s.name}. Please open manually.`);
     }

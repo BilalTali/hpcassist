@@ -1,6 +1,6 @@
 // HPC Assist PARAKH Portal Student Auto-Submission Script
 (function () {
-    const HPC_EXTENSION_VERSION = '1.4.9';
+    const HPC_EXTENSION_VERSION = '1.5.5';
     console.log(`[HPC Assist v${HPC_EXTENSION_VERSION}] PARAKH HPC Automation script loaded on`, location.href);
 
     // SERVER_URL is injected by the dashboard via window.__HPC_CONFIG.
@@ -220,7 +220,7 @@
         if (!element) return;
         try {
             value = String(value ?? '');
-            element.focus();
+            try { element.focus(); } catch(e) {}
 
             // 1. ContentEditable or custom textbox elements
             if (element.isContentEditable || element.getAttribute('contenteditable') === 'true' || element.getAttribute('role') === 'textbox') {
@@ -233,7 +233,7 @@
                 return;
             }
 
-            // 2. Clear React value tracker so React will register future changes
+            // 2. Clear React value tracker so React detects changes
             const tracker = element._valueTracker;
             if (tracker && typeof tracker.setValue === 'function') {
                 try {
@@ -241,68 +241,47 @@
                 } catch(e) {}
             }
 
-            // 3. Try native browser execCommand('insertText') first (most natural for React synthetic events)
-            let typedWithExec = false;
-            try {
-                if (typeof element.select === 'function') {
-                    element.select();
-                } else {
-                    const sel = window.getSelection();
-                    const range = document.createRange();
-                    range.selectNodeContents(element);
-                    sel?.removeAllRanges();
-                    sel?.addRange(range);
+            // 3. Directly invoke Prototype Setter from element realm (most reliable, prevents execCommand truncation)
+            const doc = element.ownerDocument || document;
+            const win = doc.defaultView || window;
+            let setter = null;
+
+            let proto = Object.getPrototypeOf(element);
+            while (proto && proto !== Object.prototype) {
+                const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+                if (desc && desc.set) {
+                    setter = desc.set;
+                    break;
                 }
-                typedWithExec = document.execCommand('insertText', false, value);
-            } catch(e) {
-                typedWithExec = false;
+                proto = Object.getPrototypeOf(proto);
             }
 
-            // 4. If execCommand didn't apply or wasn't supported, use the prototype setter from element's own realm
-            if (!typedWithExec || element.value !== value) {
-                const doc = element.ownerDocument || document;
-                const win = doc.defaultView || window;
-                let setter = null;
+            if (!setter && win) {
+                const tag = (element.tagName || '').toUpperCase();
+                const targetProto = (tag === 'TEXTAREA')
+                    ? win.HTMLTextAreaElement?.prototype
+                    : (tag === 'SELECT')
+                        ? win.HTMLSelectElement?.prototype
+                        : win.HTMLInputElement?.prototype;
+                setter = Object.getOwnPropertyDescriptor(targetProto, 'value')?.set;
+            }
 
-                // Walk prototype chain of element itself so it stays within element's realm
-                let proto = Object.getPrototypeOf(element);
-                while (proto && proto !== Object.prototype) {
-                    const desc = Object.getOwnPropertyDescriptor(proto, 'value');
-                    if (desc && desc.set) {
-                        setter = desc.set;
-                        break;
-                    }
-                    proto = Object.getPrototypeOf(proto);
-                }
-
-                // Realm fallback
-                if (!setter && win) {
-                    const tag = (element.tagName || '').toUpperCase();
-                    const targetProto = (tag === 'TEXTAREA')
-                        ? win.HTMLTextAreaElement?.prototype
-                        : (tag === 'SELECT')
-                            ? win.HTMLSelectElement?.prototype
-                            : win.HTMLInputElement?.prototype;
-                    setter = Object.getOwnPropertyDescriptor(targetProto, 'value')?.set;
-                }
-
-                if (setter) {
-                    try {
-                        setter.call(element, value);
-                    } catch(e) {
-                        element.value = value;
-                    }
-                } else {
+            if (setter) {
+                try {
+                    setter.call(element, value);
+                } catch(e) {
                     element.value = value;
                 }
+            } else {
+                element.value = value;
             }
 
-            // 5. Dispatch standard DOM events
+            // 4. Dispatch standard DOM events
             element.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: value }));
             element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
             element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
 
-            // 6. Direct React synthetic event invocation
+            // 5. Direct React synthetic event invocation
             const rPropsKey = Object.keys(element).find(k => k.startsWith('__reactProps') || k.startsWith('__reactEventHandlers'));
             if (rPropsKey && element[rPropsKey]) {
                 const rProps = element[rPropsKey];
@@ -318,7 +297,7 @@
                 }
             }
 
-            element.dispatchEvent(new Event('blur', { bubbles: true }));
+            try { element.dispatchEvent(new Event('blur', { bubbles: true })); } catch(e) {}
         } catch(err) {
             console.warn('[HPC Assist] setNativeValue error caught safely:', err);
             try { element.value = value; } catch(e) {}
@@ -2698,244 +2677,178 @@
         let textElements = [];
         for (let w = 0; w < 16; w++) {
             textElements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, [contenteditable="true"], [role="textbox"]')).filter(el => !isLanguageOrHeaderElement(el));
-            if (textElements.length > 0) break;
+            if (textElements.length >= 7) break;
             await sleep(500);
         }
         logStatus(`[Part-A2] Found ${textElements.length} fillable input(s). Filling All About Me & Self-Reflection for ${s.name}...`);
 
         const isPrepStage = location.href.toLowerCase().includes('preparatory') ||
                             (s && String(s.grade || s.class || s.stage || '').match(/^[345]|prep/i)) ||
-                            document.body?.innerText.toLowerCase().includes('hand of self-reflection');
+                            document.body?.innerText.toLowerCase().includes('hand of self-reflection') ||
+                            document.body?.innerText.toLowerCase().includes('good at');
 
-        // ── Canonical 16-part Preparatory Stage inputs matching HpcPreparatoryStageSchema & Portal DOM ──
-        const prepStageFields = [
-            {
-                keys: ["good at", "things i am good at", "things i can do well", "i do well", "i am good", "really well", "do well", "very well", "अच्छा हूँ", "अच्छा करता", "निपुण", "thumb", "अंगूठा"],
-                val: s.Hand_Reflection_Thumb_GoodAt || s.data?.Hand_Reflection_Thumb_GoodAt || s.good_at || s.do_well || s.AboutMe_Do_Very_Well || 'Arithmetic calculations and drawing flowers'
-            },
-            {
-                keys: ["no good at", "not good at", "things i struggle with", "things i am not good at", "am not good", "struggle with", "cannot do", "अच्छा नहीं हूँ", "कठिनाई", "index", "तर्जनी"],
-                val: s.Hand_Reflection_Index_NotGoodAt || s.data?.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings'
-            },
-            {
-                keys: ["want to improve", "things i want to improve", "improve in", "could improve", "do better", "could do better", "improve my skill", "skill of", "improve my skills of", "कौशल में सुधार", "सुधार करना", "सुधार", "middle", "मध्यमा"],
-                val: s.Hand_Reflection_Middle_ImproveSkill || s.data?.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || s.do_better || s.AboutMe_Could_Do_Better_Specially || 'Reading storybooks fluently without hesitation'
-            },
-            {
-                keys: ["like to", "things i like", "things i love", "i like to do", "i like", "love to", "मुझे पसंद", "पसंद है", "ring", "अनामिका"],
-                val: s.Hand_Reflection_Ring_LikeTo || s.data?.Hand_Reflection_Ring_LikeTo || s.like_to || s.free_time || s.AboutMe_Free_Time_Doing || 'Singing rhymes, origami folding, and outdoor games'
-            },
-            {
-                keys: ["grow up", "when i grow up", "as i grow up", "want to be", "aspire to be", "बड़ा होकर", "बनना चाहता", "little", "कनिष्ठिका", "aspiration", "ambition"],
-                val: s.Hand_Reflection_Little_Aspiration || s.data?.Hand_Reflection_Little_Aspiration || s.grow_up_be || s.ambition || s.Ambition_Goal || 'Become a helpful school teacher or scientist'
-            },
-            {
-                keys: ["inspires", "person who inspires", "inspires me", "प्रेरणा स्रोत", "प्रेरित", "prompt 1", "reflection 1", "general reflection 1", "enjoy coming to school"],
-                val: s.General_Reflection_Prompt_1 || s.data?.General_Reflection_Prompt_1 || s.person_inspires || 'I enjoy coming to school every morning to learn with my classmates'
-            },
-            {
-                keys: ["three things", "learn this school year", "want to learn", "learn this year", "सीखना चाहता", "तीन बातें", "prompt 2", "reflection 2", "neat, clean", "desk"],
-                val: s.General_Reflection_Prompt_2 || s.data?.General_Reflection_Prompt_2 || s.learn_this_year || s.sch_learn1 || 'I keep my notebook and classroom desk neat, clean, and organized'
-            },
-            {
-                keys: ["reflection 3", "general reflection 3", "prompt 3", "listen attentively", "attention", "listen"],
-                val: s.General_Reflection_Prompt_3 || s.data?.General_Reflection_Prompt_3 || 'I always listen attentively when my teacher explains new topics'
-            },
-            {
-                keys: ["reflection 4", "general reflection 4", "prompt 4", "share", "pencils", "crayons", "classmates"],
-                val: s.General_Reflection_Prompt_4 || s.data?.General_Reflection_Prompt_4 || 'I share my crayons and pencils whenever my classmates need them'
-            },
-            {
-                keys: ["foods", "fruits", "dish", "food", "favourite food", "favorite food", "पसंदीदा भोजन", "फल", "व्यंजन"],
-                val: s.Favorite_Food || s.data?.Favorite_Food || s.fav_food || s.fav_dish || 'Dal Chawal, Apples, and seasonal fresh fruits'
-            },
-            {
-                keys: ["game", "toy", "favourite game", "favorite game", "traditional game", "खेल", "खिलौना"],
-                val: s.Favorite_Games || s.data?.Favorite_Games || s.fav_game || s.fav_toy || 'Kho-Kho, Hide and Seek, and Toy-Clock building'
-            },
-            {
-                keys: ["festival", "favourite festival", "favorite festival", "त्योहार", "पर्व"],
-                val: s.Favorite_Festival || s.data?.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr, Diwali, and National Days'
-            },
-            {
-                keys: ["observation 1", "observation statement 1", "statement 1", "row 1"],
-                val: s.Observation_Statement_Row_1 || s.data?.Observation_Statement_Row_1 || 'Consistently shows high enthusiasm in collaborative activities and group tasks.'
-            },
-            {
-                keys: ["observation 2", "observation statement 2", "statement 2", "row 2"],
-                val: s.Observation_Statement_Row_2 || s.data?.Observation_Statement_Row_2 || 'Demonstrates strong empathy and helpful attitude towards peers.'
-            },
-            {
-                keys: ["observation 3", "observation statement 3", "statement 3", "row 3"],
-                val: s.Observation_Statement_Row_3 || s.data?.Observation_Statement_Row_3 || 'Shows keen observational skills and curiosity during science experiments.'
-            },
-            {
-                keys: ["interest", "student interest", "special interest", "रुचि", "विशेष"],
-                val: s.Student_Interests || s.data?.Student_Interests || s.ambition || 'Drawing and Coloring'
-            }
-        ];
+        const filledInputs = new Set();
+        let filledCount = 0;
 
-        // ── Middle Stage / Ambition Card Rules ──
-        const middleStageRules = [
+        // ─────────────────────────────────────────────────────────────────
+        // 1. Direct Visual Prompt & Coordinate Proximity Resolver
+        // ─────────────────────────────────────────────────────────────────
+        const promptMappings = [
+            // Green Card: Student Name & Age
             {
-                keys: ["my name is", "my name", "name is", "मेरा नाम"],
+                name: "Student Name",
+                regex: /my name is|मेरा नाम/i,
                 val: s.my_name || s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Student'
             },
             {
-                keys: ["years old", "i am ... years old", "years of age", "वर्ष", "उम्र", "आयु"],
+                name: "Student Age",
+                regex: /years old|वर्ष|उम्र|आयु/i,
                 val: String(s.my_age || s.age || '9')
             },
+            // Hand of Self-Reflection (5 Fingers)
             {
-                keys: ["don't like", "dont like", "do not like", "dislike", "not like", "no like", "पसंद नहीं", "नापसंद"],
-                val: s.dont_like || 'Fighting, shouting, and loud noises'
+                name: "Thumb (Good At)",
+                regex: /\bi am good at\b|\bgood at\b|अच्छा हूँ|निपुण/i,
+                excludeRegex: /not so good at|not good at/i,
+                val: s.Hand_Reflection_Thumb_GoodAt || s.data?.Hand_Reflection_Thumb_GoodAt || s.good_at || s.do_well || 'Arithmetic calculations and drawing flowers'
             },
             {
-                keys: ["live with", "stay with", "living with", "who do you live", "रहता हूँ", "किसके साथ"],
-                val: s.live_with || s.AboutMe_Live_With || 'My parents, siblings, and grandparents'
+                name: "Index (Not Good At)",
+                regex: /not so good at|not good at|no good at|struggle with|अच्छा नहीं हूँ|कठिनाई/i,
+                val: s.Hand_Reflection_Index_NotGoodAt || s.data?.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings'
             },
             {
-                keys: ["stay at", "address", "location", "stay", "रहता", "स्थान", "पता"],
-                val: s.stay_at || s.AboutMe_Stay_At || 'Family home in rural district'
+                name: "Middle (Improve Skill)",
+                regex: /improve my skill|would like to improve|want to improve|सुधार करना|कौशल में सुधार|improve in/i,
+                val: s.Hand_Reflection_Middle_ImproveSkill || s.data?.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || s.do_better || 'Reading storybooks fluently without hesitation'
             },
             {
-                keys: ["free time", "in my free time", "leisure", "खाली समय", "खाली समय में"],
-                val: s.free_time || s.AboutMe_Free_Time_Doing || s.like_to || 'Reading storybooks, drawing landscapes, and playing sports'
+                name: "Ring (Like To)",
+                regex: /\bi like to\b|things i like|मुझे पसंद|पसंद है/i,
+                excludeRegex: /don'?t like to|do not like/i,
+                val: s.Hand_Reflection_Ring_LikeTo || s.data?.Hand_Reflection_Ring_LikeTo || s.like_to || s.free_time || 'Singing rhymes, origami folding, and outdoor games'
             },
             {
-                keys: ["care about", "care others", "care for others", "दूसरों की परवाह", "देखभाल"],
-                val: s.care_others || s.AboutMe_Care_About_Others_By || 'Sharing study notes and listening patiently to peers'
+                name: "Little (Don't Like To / Aspiration)",
+                regex: /don'?t like to|do not like|पसंद नहीं|नापसंद|grow up|when i grow up|aspiration/i,
+                val: s.dont_like || s.Hand_Reflection_Little_Aspiration || 'Fighting, shouting, and loud noises'
+            },
+            // Yellow Card: Favorite Things
+            {
+                name: "Favorite Food",
+                regex: /food:|favourite food|favorite food|भोजन|खाना|फल/i,
+                val: s.Favorite_Food || s.data?.Favorite_Food || s.fav_food || s.fav_dish || 'Dal Chawal, Apples, and seasonal fresh fruits'
             },
             {
-                keys: ["proud of", "feel proud", "proud", "गर्व", "गर्व महसूस"],
-                val: s.feel_proud || s.proud_of || s.AboutMe_Proud_Of_Myself_When || 'Solving difficult science and math problems independently'
+                name: "Favorite Games",
+                regex: /games?:|favourite game|favorite game|खेल|खिलौना/i,
+                val: s.Favorite_Games || s.data?.Favorite_Games || s.fav_game || s.fav_toy || 'Kho-Kho, Hide and Seek, and Toy-Clock building'
             },
             {
-                keys: ["learning goal", "academic goal", "goal this year", "acad goal", "शैक्षणिक लक्ष्य", "लक्ष्य"],
-                val: s.acad_goal || s.goal_acad || s.Academic_Goal || 'Master algebraic concepts and score above 90% in Science and Math'
+                name: "Favorite Festival",
+                regex: /festival:|favourite festival|favorite festival|त्योहार|पर्व/i,
+                val: s.Favorite_Festival || s.data?.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr, Diwali, and National Days'
+            },
+            // General Reflections (Rows below the hand if present)
+            {
+                name: "General Reflection 1",
+                regex: /enjoy coming to school|inspires|प्रेरणा|prompt 1/i,
+                val: s.General_Reflection_Prompt_1 || s.data?.General_Reflection_Prompt_1 || 'I enjoy coming to school every morning to learn with my classmates'
             },
             {
-                keys: ["academic goal importance", "why is this goal important", "goal importance", "महत्व"],
-                val: s.acad_goal_importance || s.Academic_Goal_Importance || 'Important for future scientific research'
+                name: "General Reflection 2",
+                regex: /neat, clean|classroom desk|notebook|prompt 2/i,
+                val: s.General_Reflection_Prompt_2 || s.data?.General_Reflection_Prompt_2 || 'I keep my notebook and classroom desk neat, clean, and organized'
             },
             {
-                keys: ["step 1", "steps i will take (step 1)", "goal_step", "action step", "कदम 1"],
-                val: s.acad_step1 || s.goal_step || s.Academic_Goal_Step_1 || 'Read 2 pages every evening before bed'
+                name: "General Reflection 3",
+                regex: /listen attentively|attention|prompt 3/i,
+                val: s.General_Reflection_Prompt_3 || s.data?.General_Reflection_Prompt_3 || 'I always listen attentively when my teacher explains new topics'
             },
             {
-                keys: ["step 2", "steps i will take (step 2)", "कदम 2"],
-                val: s.acad_step2 || s.Academic_Goal_Step_2 || 'Practice 5 math problems daily'
-            },
-            {
-                keys: ["personal goal", "व्यक्तिगत लक्ष्य"],
-                val: s.pers_goal || s.Personal_Goal || 'Improve public speaking and football skills'
-            },
-            {
-                keys: ["personal goal importance", "why is this personal goal"],
-                val: s.pers_goal_importance || s.Personal_Goal_Importance || 'Builds self-confidence and physical fitness'
-            },
-            {
-                keys: ["personal goal step 1", "personal step 1"],
-                val: s.pers_step1 || s.Personal_Goal_Step_1 || 'Participate in morning school assembly debates'
-            },
-            {
-                keys: ["personal goal step 2", "personal step 2"],
-                val: s.pers_step2 || s.Personal_Goal_Step_2 || 'Daily 30 minutes physical exercise'
-            },
-            {
-                keys: ["kind deed", "good deed", "deed i did", "deed", "अच्छा काम"],
-                val: s.good_deed || 'Shared my lunch with a friend who forgot hers'
-            },
-            {
-                keys: ["help with", "teacher help", "teacher to help", "शिक्षक मदद"],
-                val: s.teacher_help || s.For_Teacher_Help_Me_With || s.help_with || 'Advanced math problem solving and laboratory guidance'
-            },
-            {
-                keys: ["teacher know", "like them to know", "शिक्षक जानें", "शिक्षक"],
-                val: s.teacher_know || s.For_Teacher_Like_Them_To_Know || 'I love science experiments and collaborative group projects'
-            },
-            {
-                keys: ["ambition", "career", "aspire", "goal in life", "want to be", "my ambition", "लक्ष्य", "आकांक्षा", "बनना", "ambition card"],
-                val: s.ambition || s.Ambition_Goal || s.grow_up_be || s.Hand_Reflection_Little_Aspiration || 'Software Engineer'
-            },
-            {
-                keys: ["how will i feel", "feel when i achieve", "feel when achieve", "student will feel", "i will feel", "feel upon", "महसूस करेंगे", "मुझे कैसा लगेगा", "feel_when_achieve", "how i feel"],
-                val: s.feel_when_achieve || s.Ambition_How_Student_Will_Feel || 'Extremely proud, confident, and motivated to serve society'
-            },
-            {
-                keys: ["parents will feel", "parents feel", "family feel", "parents proud", "माता-पिता कैसा महसूस", "माता-पिता", "parents_feel"],
-                val: s.parents_feel || s.Ambition_How_Parents_Will_Feel || 'Immensely joyful, supportive, and proud of my hard work'
-            },
-            {
-                keys: ["achieve", "strategy", "path to achieve", "how i will achieve", "how will i", "action plan", "प्राप्त", "रणनीति"],
-                val: s.achieve_how || s.Ambition_Achieve_Strategy || 'Consistent math problem solving and computer programming practice'
-            },
-            {
-                keys: ["5 skills", "skills needed", "skills required", "skills", "skill", "कौशल"],
-                val: s.skills_needed || s.Ambition_5_Skills_Needed || 'Logical Thinking, Coding, Collaboration, Mathematics, Problem Solving'
-            },
-            {
-                keys: ["focus subjects", "subjects to focus", "subjects", "subject", "विषय"],
-                val: s.focus_subjects || s.Ambition_Subjects_To_Focus || 'Mathematics, Science, English, Computer Science'
-            },
-            {
-                keys: ["habits required", "habits i will", "habits to build", "cultivate", "habits", "habit", "आदतें", "आदत"],
-                val: s.habits_i_will || s.Ambition_Habits_Required || s.habits_build || 'Punctuality, daily revision, and continuous curiosity'
-            },
-            {
-                keys: ["guidance from", "mentor", "person who will guide", "person", "मार्गदर्शन", "परामर्श"],
-                val: s.mentor || s.Ambition_Guidance_From_Person || 'Science & Mathematics Teachers'
-            },
-            {
-                keys: ["how person will help", "how will help", "mentor help", "help me", "मदद करेंगे", "सहायता"],
-                val: s.mentor_help || s.Ambition_How_Person_Will_Help || 'Recommending reference books and mentoring laboratory projects'
-            },
-            {
-                keys: ["learn new", "new things", "what new", "learn", "नया सीखना"],
-                val: s.learn_new || s.Ambition_Learn_New || 'Advanced programming basics and scientific modeling methods'
+                name: "General Reflection 4",
+                regex: /share|pencils|crayons|classmates|prompt 4/i,
+                val: s.General_Reflection_Prompt_4 || s.data?.General_Reflection_Prompt_4 || 'I share my crayons and pencils whenever my classmates need them'
             }
         ];
 
-        const rules = isPrepStage ? prepStageFields.concat(middleStageRules) : middleStageRules.concat(prepStageFields);
+        // Gather all visible candidate text nodes across whole page
+        const allTextNodes = Array.from(document.querySelectorAll('label, p, span, h1, h2, h3, h4, h5, h6, strong, b, div, text')).filter(el => {
+            if (isLanguageOrHeaderElement(el)) return false;
+            const t = (el.innerText || el.textContent || '').trim().replace(/\s+/g, ' ');
+            return t.length > 0 && t.length < 150 && !el.querySelector('input:not([type="checkbox"]):not([type="radio"]), textarea');
+        });
 
-        // 1. Direct prompt node matching for Hand of Self-Reflection & All About Me
-        const allTextNodes = Array.from(document.querySelectorAll('label, p, span, h4, h5, h6, legend')).filter(el => !isLanguageOrHeaderElement(el));
-        rules.forEach(rule => {
-            const matchedEl = allTextNodes.find(el => {
-                const t = (el.innerText || el.textContent || '').trim().toLowerCase();
-                return rule.keys.some(k => t.includes(k)) && t.length < 250 && !el.querySelector('input, textarea');
+        promptMappings.forEach(mapping => {
+            // Find text nodes matching this prompt
+            const matchedNodes = allTextNodes.filter(node => {
+                const t = (node.innerText || node.textContent || '').trim().replace(/\s+/g, ' ');
+                if (mapping.excludeRegex && mapping.excludeRegex.test(t)) return false;
+                return mapping.regex.test(t);
             });
-            if (matchedEl) {
-                let targetInput = null;
-                const forId = matchedEl.getAttribute('for');
-                if (forId) targetInput = document.getElementById(forId);
 
-                if (!targetInput) {
-                    const container = matchedEl.closest('.form-group, .card, .field, .input-group, .row, .col, li, fieldset, tr') || matchedEl.parentElement;
-                    targetInput = container?.querySelector('input:not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]');
+            if (matchedNodes.length === 0) return;
+
+            let bestInput = null;
+            let minDistance = 300; // max reasonable pixel radius
+
+            for (const node of matchedNodes) {
+                // Strategy A: Immediate parent or sibling container
+                const directCandidate = node.parentElement?.querySelector('input:not([type="checkbox"]):not([type="radio"]), textarea') ||
+                                        node.nextElementSibling?.querySelector('input, textarea') ||
+                                        (node.nextElementSibling?.matches('input, textarea') ? node.nextElementSibling : null);
+                if (directCandidate && !isLanguageOrHeaderElement(directCandidate) && !filledInputs.has(directCandidate)) {
+                    bestInput = directCandidate;
+                    break;
                 }
-                if (!targetInput) {
-                    targetInput = matchedEl.nextElementSibling?.querySelector('input, textarea, [contenteditable="true"]') ||
-                                  (matchedEl.nextElementSibling?.matches('input, textarea, [contenteditable="true"]') ? matchedEl.nextElementSibling : null);
+
+                // Strategy B: Geometric coordinate proximity
+                const nRect = node.getBoundingClientRect();
+                const nx = nRect.left + nRect.width / 2;
+                const ny = nRect.top + nRect.height / 2;
+
+                for (const inp of textElements) {
+                    if (filledInputs.has(inp)) continue;
+                    const iRect = inp.getBoundingClientRect();
+                    if (iRect.width === 0 && iRect.height === 0) continue;
+                    const ix = iRect.left + iRect.width / 2;
+                    const iy = iRect.top + iRect.height / 2;
+                    const dist = Math.hypot(ix - nx, iy - ny);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        bestInput = inp;
+                    }
                 }
-                if (targetInput && !isLanguageOrHeaderElement(targetInput) && (!targetInput.value || targetInput.value.trim() === '')) {
-                    setNativeValue(targetInput, rule.val);
-                    logStatus(`[Part-A2] Direct match: "${rule.keys[0]}" -> "${String(rule.val).slice(0, 35)}"`);
-                }
+                if (bestInput) break;
+            }
+
+            if (bestInput) {
+                setNativeValue(bestInput, mapping.val);
+                filledInputs.add(bestInput);
+                logStatus(`[Part-A2] ✓ ${mapping.name}: "${String(mapping.val).slice(0, 35)}"`);
+                filledCount++;
             }
         });
 
-        // 2. Scan all inputs, textareas, and contenteditable elements (excluding headers & language toggles)
-        textElements = Array.from(document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), textarea, [contenteditable="true"], [role="textbox"]')).filter(el => !isLanguageOrHeaderElement(el));
-        let filledCount = 0;
+        // ─────────────────────────────────────────────────────────────────
+        // 2. Scan remaining unfilled inputs & apply targeted fallback
+        // ─────────────────────────────────────────────────────────────────
         textElements.forEach((el, idx) => {
+            if (filledInputs.has(el)) return;
             const lbl = getFieldLabel(el);
             if (lbl.includes('search') || el.type === 'search') return;
 
             let valToSet = null;
             let matchType = '';
 
-            // Disambiguate Food, Games, Festival
-            if (lbl.includes('festival') || lbl.includes('त्योहार') || lbl.includes('पर्व')) {
+            // Check field label heuristics
+            if (lbl.includes('name') && !lbl.includes('peer') && !lbl.includes('friend')) {
+                valToSet = s.my_name || s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Student';
+                matchType = 'Name';
+            } else if (lbl.includes('age') || lbl.includes('year') || el.type === 'number') {
+                valToSet = String(s.my_age || s.age || '9');
+                matchType = 'Age';
+            } else if (lbl.includes('festival') || lbl.includes('त्योहार') || lbl.includes('पर्व')) {
                 valToSet = s.Favorite_Festival || s.data?.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr, Diwali, and National Days';
                 matchType = 'Festival';
             } else if (lbl.includes('game') || lbl.includes('toy') || lbl.includes('खेल') || lbl.includes('खिलौना')) {
@@ -2944,33 +2857,51 @@
             } else if (lbl.includes('food') || lbl.includes('dish') || lbl.includes('भोजन') || lbl.includes('खाना') || lbl.includes('फल')) {
                 valToSet = s.Favorite_Food || s.data?.Favorite_Food || s.fav_food || s.fav_dish || 'Dal Chawal, Apples, and seasonal fresh fruits';
                 matchType = 'Food';
+            } else if (lbl.includes('good at') || lbl.includes('अच्छा हूँ')) {
+                valToSet = s.Hand_Reflection_Thumb_GoodAt || s.good_at || 'Arithmetic calculations and drawing flowers';
+                matchType = 'Good At';
+            } else if (lbl.includes('not good at') || lbl.includes('कठिनाई')) {
+                valToSet = s.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings';
+                matchType = 'Not Good At';
+            } else if (lbl.includes('improve') || lbl.includes('सुधार')) {
+                valToSet = s.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || 'Reading storybooks fluently without hesitation';
+                matchType = 'Improve';
+            } else if (lbl.includes('like to') || lbl.includes('पसंद')) {
+                valToSet = s.Hand_Reflection_Ring_LikeTo || s.like_to || 'Singing rhymes, origami folding, and outdoor games';
+                matchType = 'Like To';
             } else {
-                const matchedRule = rules.find(r => r.keys.some(k => lbl.includes(k)));
-                if (matchedRule) {
-                    valToSet = matchedRule.val;
-                    matchType = matchedRule.keys[0];
-                }
+                // Positional fallback for standard stage lists
+                const prepDefaults = [
+                    s.Hand_Reflection_Thumb_GoodAt || s.good_at || 'Arithmetic calculations and drawing flowers',
+                    s.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings',
+                    s.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || 'Reading storybooks fluently without hesitation',
+                    s.Hand_Reflection_Ring_LikeTo || s.like_to || 'Singing rhymes, origami folding, and outdoor games',
+                    s.dont_like || s.Hand_Reflection_Little_Aspiration || 'Fighting, shouting, and loud noises',
+                    s.my_name || s.name || 'Student',
+                    String(s.my_age || s.age || '9'),
+                    s.Favorite_Food || 'Dal Chawal, Apples, and seasonal fresh fruits',
+                    s.Favorite_Games || 'Kho-Kho, Hide and Seek, and Toy-Clock building',
+                    s.Favorite_Festival || 'Eid-ul-Fitr, Diwali, and National Days'
+                ];
+                valToSet = prepDefaults[idx % prepDefaults.length];
+                matchType = `Positional-${idx}`;
             }
 
             if (valToSet !== null) {
                 setNativeValue(el, valToSet);
+                filledInputs.add(el);
                 logStatus(`[Part-A2] Matched (${matchType}): "${lbl.slice(0, 25)}" -> "${String(valToSet).slice(0, 35)}"`);
-                filledCount++;
-            } else {
-                const fallbackVal = (isPrepStage && prepStageFields[idx])
-                    ? prepStageFields[idx].val
-                    : ((rules[idx] ? rules[idx].val : null) || 'Active and positive participation demonstrated throughout the year.');
-                setNativeValue(el, fallbackVal);
-                logStatus(`[Part-A2] Field (${idx}): "${lbl.slice(0, 25)}" -> "${String(fallbackVal).slice(0, 35)}"`);
                 filledCount++;
             }
         });
 
-        // 3. Dropdowns (Responsible)
+        // ─────────────────────────────────────────────────────────────────
+        // 3. Dropdowns (Responsible & Frequency)
+        // ─────────────────────────────────────────────────────────────────
         const selects = Array.from(document.querySelectorAll('select')).filter(sel => !isLanguageOrHeaderElement(sel));
         selects.forEach(sel => {
             const lbl = getFieldLabel(sel);
-            if (lbl.includes('responsible')) {
+            if (lbl.includes('responsible') || lbl.includes('ज़िम्मेदार')) {
                 const targetVal = (s.responsible || s.AboutMe_Responsible_Frequency || 'all the time').toLowerCase();
                 const opt = Array.from(sel.options).find(o => o.text.toLowerCase().includes(targetVal) || o.value.toLowerCase().includes(targetVal)) || sel.options[1];
                 if (opt) {
@@ -2980,7 +2911,9 @@
             }
         });
 
-        // 4. Radio groups in Part A2 (Self-reflection / Feelings / Responsible)
+        // ─────────────────────────────────────────────────────────────────
+        // 4. Radio Groups in Part A2 (Feelings / Yes / Sometimes / Always)
+        // ─────────────────────────────────────────────────────────────────
         const radioGroups = {};
         document.querySelectorAll('input[type="radio"], [role="radio"]').forEach(r => {
             if (isLanguageOrHeaderElement(r)) return;
@@ -3385,6 +3318,148 @@
         });
 
         await sleep(800);
+    }
+
+    async function ensureActivityExistsInPartB(s, actSubject, actTitle) {
+        logStatus('[Part-B] Checking if student already has an active activity...');
+
+        // 1. Check if an activity or Step 1..6 tabs already exist on screen
+        const pills = document.querySelectorAll('.activate-tab-pills div, .activate-tab-pills button, .activate-tab-pills li');
+        const bodyText = (document.body?.innerText || '').toLowerCase();
+        const hasNoActivitiesYet = bodyText.includes('no activities yet') || 
+                                   bodyText.includes('activities - 0') || 
+                                   bodyText.includes('no activities added yet');
+
+        if (pills.length > 0 && !hasNoActivitiesYet) {
+            logStatus('[Part-B] Activity is already present and active on screen.');
+            return true;
+        }
+
+        // 2. Check sidebar if an activity exists that just needs to be clicked
+        const existingSidebarActs = Array.from(document.querySelectorAll('.sidebar div, .activity-list div, div')).filter(el => {
+            if (isLanguageOrHeaderElement(el)) return false;
+            const t = (el.innerText || '').trim();
+            if (t.length < 3 || t.length > 60 || el.children.length > 2) return false;
+            return (t.includes('C-1') || t.includes('1.') || t.includes('TWCG') || t.includes('WCG')) && !t.includes('Add Activity');
+        });
+        if (existingSidebarActs.length > 0) {
+            logStatus(`[Part-B] Found existing activity in sidebar: "${existingSidebarActs[0].innerText.trim()}". Activating...`);
+            existingSidebarActs[0].click();
+            await sleep(800);
+            return true;
+        }
+
+        logStatus('[Part-B] No activities found on student card. Adding from Global Activity Bank...');
+
+        // 3. Locate "+ Add Activity" button
+        const addBtn = Array.from(document.querySelectorAll('button, a[role="button"], div[role="button"], .btn')).find(b => {
+            if (isLanguageOrHeaderElement(b)) return false;
+            const t = (b.innerText || b.textContent || '').trim().toLowerCase();
+            return t.includes('add activity') || t.includes('गतिविधि जोड़ें');
+        });
+
+        if (!addBtn) {
+            console.warn('[HPC Assist] "+ Add Activity" button not found.');
+            return false;
+        }
+
+        logStatus('[Part-B] Clicking "+ Add Activity" button...');
+        try { addBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(e) {}
+        addBtn.click();
+        await sleep(1000);
+
+        // 4. Wait for Add Activity Modal to appear
+        let modal = null;
+        for (let m = 0; m < 15; m++) {
+            modal = document.querySelector('.modal, .quick-add-activity, [role="dialog"], [aria-modal="true"], div[class*="modal" i], div[class*="popup" i]');
+            if (modal && modal.offsetParent !== null) break;
+            await sleep(300);
+        }
+
+        if (!modal) {
+            console.warn('[HPC Assist] Add Activity modal did not open.');
+            return false;
+        }
+
+        logStatus('[Part-B] Add Activity modal opened. Checking for Global / Activity Bank tab...');
+
+        // 5. Look for Global Activity Bank option/tab in the modal
+        const globalOption = Array.from(modal.querySelectorAll('button, a, div[role="tab"], div[role="button"], span, label, input[type="radio"], input[type="checkbox"]')).find(el => {
+            const t = (el.innerText || el.textContent || el.value || '').trim().toLowerCase();
+            return t.includes('global') || t.includes('activity bank') || t.includes('bank') || t.includes('वैश्विक');
+        });
+        if (globalOption) {
+            logStatus(`[Part-B] Selecting "${(globalOption.innerText || 'Global').trim()}" in modal...`);
+            globalOption.click();
+            await sleep(800);
+        }
+
+        // 6. Look for activity cards or items matching actSubject or actTitle
+        const activityItems = Array.from(modal.querySelectorAll('.card, .activity-card, [class*="activity-item" i], [class*="card" i], tr, li, div[role="button"]')).filter(c => {
+            const ct = (c.innerText || '').trim();
+            return ct.length > 5 && !ct.toLowerCase().includes('custom') && !ct.toLowerCase().includes('filter');
+        });
+
+        let selected = null;
+        if (activityItems.length > 0) {
+            const subWords = String(actSubject || 'World Around Us').toLowerCase().split(/[\s,]+/);
+            selected = activityItems.find(c => {
+                const ct = c.innerText.toLowerCase();
+                return subWords.some(w => w.length > 3 && ct.includes(w)) || (actTitle && ct.includes(actTitle.toLowerCase().slice(0, 8)));
+            }) || activityItems[0];
+
+            if (selected) {
+                logStatus(`[Part-B] Selected Global Activity: "${selected.innerText.trim().slice(0, 40)}"`);
+                const rb = selected.querySelector('input[type="radio"], input[type="checkbox"]');
+                if (rb) rb.click();
+                selected.click();
+                await sleep(500);
+            }
+        }
+
+        // 7. Click confirm / Add / Continue button in modal
+        const confirmBtn = Array.from(modal.querySelectorAll('button, a[role="button"], input[type="submit"], input[type="button"], .btn')).find(b => {
+            if (b.disabled) return false;
+            const bt = (b.innerText || b.value || '').trim().toLowerCase();
+            return bt === 'add' || bt.includes('add activity') || bt === 'continue' || bt === 'select' || bt === 'confirm' || bt.includes('जोड़ें') || bt.includes('आगे बढ़ें');
+        });
+
+        if (confirmBtn) {
+            logStatus(`[Part-B] Confirming activity addition via "${confirmBtn.innerText.trim()}"...`);
+            confirmBtn.click();
+            await sleep(2000);
+        } else {
+            // General fallback button
+            const anyCont = Array.from(document.querySelectorAll('.modal button, button')).find(b => {
+                const t = (b.innerText || '').trim().toLowerCase();
+                return t === 'continue' || t === 'add' || t === 'जोड़ें';
+            });
+            if (anyCont) {
+                anyCont.click();
+                await sleep(2000);
+            }
+        }
+
+        // 8. Wait for Step 1 or activity tabs to mount in DOM
+        for (let w = 0; w < 12; w++) {
+            const stepPills = document.querySelectorAll('.activate-tab-pills div, .activate-tab-pills button');
+            if (stepPills.length > 0) {
+                logStatus('[Part-B] ✓ Activity successfully added and active.');
+                return true;
+            }
+            // Check if newly created activity appears in sidebar, click it!
+            const newAct = Array.from(document.querySelectorAll('.sidebar div, .activity-list div, div')).find(el => {
+                const t = (el.innerText || '').trim();
+                return (t.includes('C-1') || t.includes('1.') || t.includes('The World Around Us') || t.includes('Activity')) && !t.includes('Add Activity');
+            });
+            if (newAct) {
+                newAct.click();
+                await sleep(600);
+            }
+            await sleep(500);
+        }
+
+        return true;
     }
 
     async function fillPartB(s) {
@@ -4047,6 +4122,9 @@
                 }
             }
         };
+
+        // Ensure student has an activity before starting tab processing
+        await ensureActivityExistsInPartB(s, actSubject, actTitle);
 
         // Complete the active activity
         await processActivityTabs();

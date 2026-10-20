@@ -2448,25 +2448,27 @@
         if (el.labels && el.labels.length) {
             for (let l of el.labels) text += ' ' + (l.innerText || '');
         }
-        // Inspect previous siblings
-        let prev = el.previousElementSibling;
-        for (let i = 0; i < 2 && prev; i++) {
-            text += ' ' + (prev.innerText || '');
-            prev = prev.previousElementSibling;
-        }
-        // Inspect nearest form container only (avoid ancestor label pollution)
-        const container = el.closest('.form-group, .field, .input-group, .form-item, .form-floating, td, li, .card');
-        if (container) {
-            const labels = container.querySelectorAll('label, p, span, h4, h5, h6, strong, b');
-            for (let lbl of labels) {
-                if (!lbl.querySelector('input, textarea') || lbl.querySelector('input, textarea') === el) {
-                    text += ' ' + (lbl.innerText || '');
+
+        // Climb up to 4 levels checking immediate previous siblings and container titles
+        let curr = el;
+        for (let lvl = 0; lvl < 4 && curr && curr !== document.body; lvl++) {
+            let prev = curr.previousElementSibling;
+            while (prev) {
+                const prevText = (prev.innerText || prev.textContent || '').trim();
+                if (prevText && !prev.querySelector('input, textarea, select')) {
+                    text += ' ' + prevText;
+                }
+                prev = prev.previousElementSibling;
+            }
+            if (curr.parentElement) {
+                curr = curr.parentElement;
+                const titleEl = curr.querySelector('label, h3, h4, h5, h6, strong, b, .title, [class*="title" i], [class*="label" i], [class*="heading" i]');
+                if (titleEl && !titleEl.contains(el) && !titleEl.querySelector('input, textarea')) {
+                    text += ' ' + (titleEl.innerText || titleEl.textContent || '');
                 }
             }
-        } else if (el.parentElement) {
-            text += ' ' + (el.parentElement.innerText || '');
         }
-        return text.toLowerCase();
+        return text.toLowerCase().replace(/\s+/g, ' ');
     }
 
     async function clickContinueBtn() {
@@ -2623,9 +2625,80 @@
         }
         logStatus(`[Part-A2] Found ${textElements.length} fillable input(s). Filling All About Me & Self-Reflection for ${s.name}...`);
 
-        // Context-aware rules map covering both Preparatory "Hand of Self-Reflection" and Middle Stage fields
-        const rules = [
-            // ── Preparatory Stage 12 Part A(2) Prompts (English & Hindi) ──
+        const isPrepStage = location.href.toLowerCase().includes('preparatory') ||
+                            (s && String(s.grade || s.class || s.stage || '').match(/^[345]|prep/i)) ||
+                            document.body?.innerText.toLowerCase().includes('hand of self-reflection');
+
+        // ── Canonical 16-part Preparatory Stage inputs matching HpcPreparatoryStageSchema & Portal DOM ──
+        const prepStageFields = [
+            {
+                keys: ["good at", "really well", "do well", "very well", "i do well", "i am good", "अच्छा हूँ", "अच्छा करता", "निपुण", "thumb", "अंगूठा"],
+                val: s.Hand_Reflection_Thumb_GoodAt || s.good_at || s.do_well || s.AboutMe_Do_Very_Well || 'Arithmetic calculations and drawing flowers'
+            },
+            {
+                keys: ["no good at", "not good at", "am not good", "struggle with", "cannot do", "अच्छा नहीं हूँ", "कठिनाई", "index", "तर्जनी"],
+                val: s.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings'
+            },
+            {
+                keys: ["want to improve", "improve in", "could improve", "do better", "could do better", "improve my skill", "skill of", "improve my skills of", "कौशल में सुधार", "सुधार करना", "सुधार", "middle", "मध्यमा"],
+                val: s.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || s.do_better || s.AboutMe_Could_Do_Better_Specially || 'Reading storybooks fluently without hesitation'
+            },
+            {
+                keys: ["like to", "things i like", "i like", "love to", "मुझे पसंद", "पसंद है", "ring", "अनामिका"],
+                val: s.Hand_Reflection_Ring_LikeTo || s.like_to || s.free_time || s.AboutMe_Free_Time_Doing || 'Singing rhymes, origami folding, and outdoor games'
+            },
+            {
+                keys: ["grow up", "when i grow up", "want to be", "aspire to be", "बड़ा होकर", "बनना चाहता", "little", "कनिष्ठिका", "aspiration", "ambition"],
+                val: s.Hand_Reflection_Little_Aspiration || s.grow_up_be || s.ambition || s.Ambition_Goal || 'Become a helpful school teacher or scientist'
+            },
+            {
+                keys: ["inspires", "person who inspires", "inspires me", "प्रेरणा स्रोत", "प्रेरित", "prompt 1", "reflection 1", "general reflection 1", "enjoy coming to school"],
+                val: s.General_Reflection_Prompt_1 || s.person_inspires || 'I enjoy coming to school every morning to learn with my classmates'
+            },
+            {
+                keys: ["three things", "learn this school year", "want to learn", "learn this year", "सीखना चाहता", "तीन बातें", "prompt 2", "reflection 2", "neat, clean", "desk"],
+                val: s.General_Reflection_Prompt_2 || s.learn_this_year || s.sch_learn1 || 'I keep my notebook and classroom desk neat, clean, and organized'
+            },
+            {
+                keys: ["reflection 3", "general reflection 3", "prompt 3", "listen attentively", "attention", "listen"],
+                val: s.General_Reflection_Prompt_3 || 'I always listen attentively when my teacher explains new topics'
+            },
+            {
+                keys: ["reflection 4", "general reflection 4", "prompt 4", "share", "pencils", "crayons", "classmates"],
+                val: s.General_Reflection_Prompt_4 || 'I share my crayons and pencils whenever my classmates need them'
+            },
+            {
+                keys: ["foods", "fruits", "dish", "food", "favourite food", "favorite food", "पसंदीदा भोजन", "फल", "व्यंजन"],
+                val: s.Favorite_Food || s.fav_food || s.fav_dish || 'Dal Chawal, Apples, and seasonal fresh fruits'
+            },
+            {
+                keys: ["game", "toy", "favourite game", "favorite game", "traditional game", "खेल", "खिलौना"],
+                val: s.Favorite_Games || s.fav_game || s.fav_toy || 'Kho-Kho, Hide and Seek, and Toy-Clock building'
+            },
+            {
+                keys: ["festival", "favourite festival", "favorite festival", "त्योहार", "पर्व"],
+                val: s.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr, Diwali, and National Days'
+            },
+            {
+                keys: ["observation 1", "observation statement 1", "statement 1", "row 1"],
+                val: s.Observation_Statement_Row_1 || 'Consistently shows high enthusiasm in collaborative activities and group tasks.'
+            },
+            {
+                keys: ["observation 2", "observation statement 2", "statement 2", "row 2"],
+                val: s.Observation_Statement_Row_2 || 'Demonstrates strong empathy and helpful attitude towards peers.'
+            },
+            {
+                keys: ["observation 3", "observation statement 3", "statement 3", "row 3"],
+                val: s.Observation_Statement_Row_3 || 'Shows keen observational skills and curiosity during science experiments.'
+            },
+            {
+                keys: ["interest", "student interest", "special interest", "रुचि", "विशेष"],
+                val: s.Student_Interests || s.ambition || 'Science experiments and drawing models'
+            }
+        ];
+
+        // ── Middle Stage / Ambition Card Rules ──
+        const middleStageRules = [
             {
                 keys: ["my name is", "my name", "name is", "मेरा नाम"],
                 val: s.my_name || s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Student'
@@ -2638,68 +2711,6 @@
                 keys: ["don't like", "dont like", "do not like", "dislike", "not like", "no like", "पसंद नहीं", "नापसंद"],
                 val: s.dont_like || 'Fighting, shouting, and loud noises'
             },
-            {
-                keys: ["like to", "things i like", "i like", "love to", "मुझे पसंद", "पसंद है", "ring"],
-                val: s.Hand_Reflection_Ring_LikeTo || s.like_to || s.free_time || s.AboutMe_Free_Time_Doing || 'Reading storybooks, drawing nature, and playing outdoors'
-            },
-            {
-                keys: ["want to improve", "improve in", "could improve", "do better", "could do better", "improve my skill", "skill of", "improve my skills of", "कौशल में सुधार", "सुधार करना", "सुधार", "middle"],
-                val: s.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || s.do_better || s.AboutMe_Could_Do_Better_Specially || 'Revision planning and cursive handwriting speed'
-            },
-            {
-                keys: ["no good at", "not good at", "am not good", "struggle with", "cannot do", "अच्छा नहीं हूँ", "कठिनाई", "index"],
-                val: s.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Drawing complex diagrams and spelling long words'
-            },
-            {
-                keys: ["good at", "really well", "do well", "very well", "i do well", "i am good", "अच्छा हूँ", "अच्छा करता", "निपुण", "thumb"],
-                val: s.Hand_Reflection_Thumb_GoodAt || s.good_at || s.do_well || s.AboutMe_Do_Very_Well || 'Solving numerical puzzles and explaining concepts to classmates'
-            },
-            {
-                keys: ["foods", "fruits", "dish", "food", "favourite food", "favorite food", "पसंदीदा भोजन", "फल", "व्यंजन"],
-                val: s.Favorite_Food || s.fav_food || s.fav_dish || 'Dal Chawal, Apples, and seasonal fresh fruits'
-            },
-            {
-                keys: ["game", "toy", "favourite game", "favorite game", "traditional game", "खेल"],
-                val: s.Favorite_Games || s.fav_game || s.fav_toy || 'Kho-Kho and Badminton'
-            },
-            {
-                keys: ["festival", "favourite festival", "favorite festival", "त्योहार", "पर्व"],
-                val: s.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr and National Festivals'
-            },
-            {
-                keys: ["grow up", "when i grow up", "want to be", "aspire to be", "बड़ा होकर", "बनना चाहता", "little"],
-                val: s.Hand_Reflection_Little_Aspiration || s.grow_up_be || s.ambition || s.Ambition_Goal || 'Software Engineer'
-            },
-            {
-                keys: ["inspires", "person who inspires", "inspires me", "प्रेरणा स्रोत", "प्रेरित"],
-                val: s.General_Reflection_Prompt_1 || s.person_inspires || 'Dr. A.P.J. Abdul Kalam and my teacher'
-            },
-            {
-                keys: ["three things", "learn this school year", "want to learn", "learn this year", "सीखना चाहता", "तीन बातें"],
-                val: s.General_Reflection_Prompt_2 || s.learn_this_year || s.sch_learn1 || '1. Science models 2. Fast division math 3. Fluent English reading'
-            },
-            {
-                keys: ["reflection 3", "general reflection 3", "prompt 3"],
-                val: s.General_Reflection_Prompt_3 || 'Active participation in group discussions and sports activities'
-            },
-            {
-                keys: ["reflection 4", "general reflection 4", "prompt 4"],
-                val: s.General_Reflection_Prompt_4 || 'Regular revision and asking questions when in doubt'
-            },
-            {
-                keys: ["observation 1", "observation statement 1", "statement 1"],
-                val: s.Observation_Statement_Row_1 || 'Consistently shows high enthusiasm in collaborative activities and group tasks.'
-            },
-            {
-                keys: ["observation 2", "observation statement 2", "statement 2"],
-                val: s.Observation_Statement_Row_2 || 'Demonstrates strong empathy and helpful attitude towards peers.'
-            },
-            {
-                keys: ["observation 3", "observation statement 3", "statement 3"],
-                val: s.Observation_Statement_Row_3 || 'Shows keen observational skills and curiosity during science experiments.'
-            },
-
-            // ── Middle Stage & Shared Context Rules ──
             {
                 keys: ["live with", "stay with", "living with", "who do you live", "रहता हूँ", "किसके साथ"],
                 val: s.live_with || s.AboutMe_Live_With || 'My parents, siblings, and grandparents'
@@ -2765,32 +2776,6 @@
                 val: s.teacher_know || s.For_Teacher_Like_Them_To_Know || 'I love science experiments and collaborative group projects'
             },
             {
-                keys: ["learnt at school", "learned at school", "school 1", "स्कूल में सीखा 1", "स्कूल में सीखा"],
-                val: s.sch_learn1 || s.Learned_At_School_1 || 'Science models and experiments'
-            },
-            {
-                keys: ["school 2", "स्कूल में सीखा 2"],
-                val: s.sch_learn2 || s.Learned_At_School_2 || 'Fast mental math calculations'
-            },
-            {
-                keys: ["school 3", "स्कूल में सीखा 3"],
-                val: s.sch_learn3 || s.Learned_At_School_3 || 'Fluent English and Urdu reading'
-            },
-            {
-                keys: ["outside school", "learnt outside", "learned outside", "outside 1", "स्कूल के बाहर 1", "स्कूल के बाहर"],
-                val: s.out_learn1 || s.Learned_Outside_School_1 || 'Kitchen gardening and plant care'
-            },
-            {
-                keys: ["outside 2", "स्कूल के बाहर 2"],
-                val: s.out_learn2 || s.Learned_Outside_School_2 || 'Cycling and physical fitness'
-            },
-            {
-                keys: ["outside 3", "स्कूल के बाहर 3"],
-                val: s.out_learn3 || s.Learned_Outside_School_3 || 'Helping parents with household chores'
-            },
-
-            // ── Ambition Card Prompts (Preparatory & Middle Stage) ──
-            {
                 keys: ["ambition", "career", "aspire", "goal in life", "want to be", "my ambition", "लक्ष्य", "आकांक्षा", "बनना", "ambition card"],
                 val: s.ambition || s.Ambition_Goal || s.grow_up_be || s.Hand_Reflection_Little_Aspiration || 'Software Engineer'
             },
@@ -2832,6 +2817,8 @@
             }
         ];
 
+        const rules = isPrepStage ? prepStageFields.concat(middleStageRules) : middleStageRules.concat(prepStageFields);
+
         // 1. Direct prompt node matching for Hand of Self-Reflection & All About Me
         const allTextNodes = Array.from(document.querySelectorAll('label, p, span, h4, h5, h6, legend')).filter(el => !isLanguageOrHeaderElement(el));
         rules.forEach(rule => {
@@ -2872,7 +2859,9 @@
                 logStatus(`[Part-A2] Field match: "${lbl.slice(0, 30)}" -> "${String(matchedRule.val).slice(0, 35)}"`);
                 filledCount++;
             } else if (!el.value || el.value.trim() === '') {
-                const fallbackVal = (rules[idx] ? rules[idx].val : null) || 'Active and positive participation demonstrated throughout the year.';
+                const fallbackVal = (isPrepStage && prepStageFields[idx])
+                    ? prepStageFields[idx].val
+                    : ((rules[idx] ? rules[idx].val : null) || 'Active and positive participation demonstrated throughout the year.');
                 setNativeValue(el, fallbackVal);
                 logStatus(`[Part-A2] Fallback (${idx}): "${lbl.slice(0, 30)}" -> "${String(fallbackVal).slice(0, 35)}"`);
                 filledCount++;

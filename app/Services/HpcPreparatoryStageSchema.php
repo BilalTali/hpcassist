@@ -88,11 +88,11 @@ class HpcPreparatoryStageSchema
             ['key' => 'Hand_Reflection_Index_NotGoodAt', 'label' => '⚡ [AUTO] Hand Reflection Index NotGoodAt', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
             ['key' => 'Hand_Reflection_Middle_ImproveSkill', 'label' => '⚡ [AUTO] Hand Reflection Middle ImproveSkill', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
             ['key' => 'Hand_Reflection_Ring_LikeTo', 'label' => '⚡ [AUTO] Hand Reflection Ring LikeTo', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
-            ['key' => 'Hand_Reflection_Little_Aspiration', 'label' => '⚡ [AUTO] Hand Reflection Little Aspiration', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
-            ['key' => 'General_Reflection_Prompt_1', 'label' => '⚡ [AUTO] General Reflection Prompt 1', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
-            ['key' => 'General_Reflection_Prompt_2', 'label' => '⚡ [AUTO] General Reflection Prompt 2', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
-            ['key' => 'General_Reflection_Prompt_3', 'label' => '⚡ [AUTO] General Reflection Prompt 3', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
-            ['key' => 'General_Reflection_Prompt_4', 'label' => '⚡ [AUTO] General Reflection Prompt 4', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
+            ['key' => 'Hand_Reflection_Little_Aspiration', 'label' => '⚡ [AUTO] When I grow up I want to be (Aspiration)', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
+            ['key' => 'General_Reflection_Prompt_1', 'label' => '⚡ [AUTO] One Person Who Inspires Me (My Idol)', 'type' => 'string', 'width' => 30, 'note' => 'Person who inspires student (e.g. My class teacher and parents)', 'classification' => 'auto'],
+            ['key' => 'General_Reflection_Prompt_2', 'label' => '⚡ [AUTO] Want to Learn This Year - 1', 'type' => 'string', 'width' => 30, 'note' => 'Skill/topic student wants to learn (e.g. Reading storybooks fluently)', 'classification' => 'auto'],
+            ['key' => 'General_Reflection_Prompt_3', 'label' => '⚡ [AUTO] Want to Learn This Year - 2', 'type' => 'string', 'width' => 30, 'note' => 'Skill/topic student wants to learn (e.g. Mental math calculations)', 'classification' => 'auto'],
+            ['key' => 'General_Reflection_Prompt_4', 'label' => '⚡ [AUTO] Want to Learn This Year - 3', 'type' => 'string', 'width' => 30, 'note' => 'Skill/topic student wants to learn (e.g. Scientific plant experiments)', 'classification' => 'auto'],
             ['key' => 'Favorite_Food', 'label' => '⚡ [AUTO] Favorite Food', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
             ['key' => 'Favorite_Games', 'label' => '⚡ [AUTO] Favorite Games', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
             ['key' => 'Favorite_Festival', 'label' => '⚡ [AUTO] Favorite Festival', 'type' => 'string', 'width' => 30, 'note' => 'Learner voice or teacher observational statement', 'classification' => 'auto'],
@@ -294,10 +294,10 @@ class HpcPreparatoryStageSchema
         $vals[] = $autoFill ? 'Reading storybooks fluently without hesitation' : '';
         $vals[] = $autoFill ? 'Singing rhymes, origami folding, and outdoor games' : '';
         $vals[] = $autoFill ? 'Become a helpful school teacher or scientist' : '';
-        $vals[] = $autoFill ? 'I enjoy coming to school every morning to learn with my classmates' : '';
-        $vals[] = $autoFill ? 'I keep my notebook and classroom desk neat, clean, and organized' : '';
-        $vals[] = $autoFill ? 'I always listen attentively when my teacher explains new topics' : '';
-        $vals[] = $autoFill ? 'I share my crayons and pencils whenever my classmates need them' : '';
+        $vals[] = $autoFill ? 'My class teacher and parents' : '';
+        $vals[] = $autoFill ? 'Reading storybooks fluently and learning new words' : '';
+        $vals[] = $autoFill ? 'Mental math calculations and geometry shapes' : '';
+        $vals[] = $autoFill ? 'Scientific plant experiments and art and craft' : '';
         $vals[] = $autoFill ? 'Dal Chawal, Apples, and seasonal fresh fruits' : '';
         $vals[] = $autoFill ? 'Kho-Kho, Hide and Seek, and Toy-Clock building' : '';
         $vals[] = $autoFill ? 'Eid-ul-Fitr, Diwali, and National Days' : '';

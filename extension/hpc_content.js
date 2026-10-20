@@ -2691,152 +2691,62 @@
         let filledCount = 0;
 
         // ─────────────────────────────────────────────────────────────────
-        // 1. Direct Visual Prompt & Coordinate Proximity Resolver
+        // 1. Direct Visual Prompt & Semantic Portal Class Selectors
         // ─────────────────────────────────────────────────────────────────
-        const promptMappings = [
-            // Green Card: Student Name & Age
-            {
-                name: "Student Name",
-                regex: /my name is|मेरा नाम/i,
-                val: s.my_name || s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Student'
-            },
-            {
-                name: "Student Age",
-                regex: /years old|वर्ष|उम्र|आयु/i,
-                val: String(s.my_age || s.age || '9')
-            },
+        const rawInsp = s.General_Reflection_Prompt_1 || s.Inspiration_Person || s.Person_Who_Inspires_Me || '';
+        const isInvalidSentence = /coming to school|classroom desk|neat|clean|listen attentively|share my crayons|enjoy coming/i.test(rawInsp);
+        const inspirationPersonVal = (!isInvalidSentence && rawInsp.trim()) ? rawInsp.trim() : (s.Inspiration_Person || s.Person_Who_Inspires_Me || 'My class teacher and parents');
+
+        const directSelectors = [
+            // Green Card: Name
+            { sel: 'input.pre-name, .pre-name input, [class*="pre-name" i] input', val: s.my_name || s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Student', name: 'Student Name' },
             // Hand of Self-Reflection (5 Fingers)
-            {
-                name: "Thumb (Good At)",
-                regex: /\bi am good at\b|\bgood at\b|अच्छा हूँ|निपुण/i,
-                excludeRegex: /not so good at|not good at/i,
-                val: s.Hand_Reflection_Thumb_GoodAt || s.data?.Hand_Reflection_Thumb_GoodAt || s.good_at || s.do_well || 'Arithmetic calculations and drawing flowers'
-            },
-            {
-                name: "Index (Not Good At)",
-                regex: /not so good at|not good at|no good at|struggle with|अच्छा नहीं हूँ|कठिनाई/i,
-                val: s.Hand_Reflection_Index_NotGoodAt || s.data?.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings'
-            },
-            {
-                name: "Middle (Improve Skill)",
-                regex: /improve my skill|would like to improve|want to improve|सुधार करना|कौशल में सुधार|improve in/i,
-                val: s.Hand_Reflection_Middle_ImproveSkill || s.data?.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || s.do_better || 'Reading storybooks fluently without hesitation'
-            },
-            {
-                name: "Ring (Like To)",
-                regex: /\bi like to\b|things i like|मुझे पसंद|पसंद है/i,
-                excludeRegex: /don'?t like to|do not like/i,
-                val: s.Hand_Reflection_Ring_LikeTo || s.data?.Hand_Reflection_Ring_LikeTo || s.like_to || s.free_time || 'Singing rhymes, origami folding, and outdoor games'
-            },
-            {
-                name: "Little (Don't Like To)",
-                regex: /don'?t like to|do not like|पसंद नहीं|नापसंद/i,
-                excludeRegex: /grow up|inspire/i,
-                val: s.dont_like || 'Fighting, shouting, and loud noises'
-            },
-            // Yellow Card: Favorite Things
-            {
-                name: "Favorite Food",
-                regex: /food:|favourite food|favorite food|भोजन|खाना|फल/i,
-                val: s.Favorite_Food || s.data?.Favorite_Food || s.fav_food || s.fav_dish || 'Dal Chawal, Apples, and seasonal fresh fruits'
-            },
-            {
-                name: "Favorite Games",
-                regex: /games?:|favourite game|favorite game|खेल|खिलौना/i,
-                val: s.Favorite_Games || s.data?.Favorite_Games || s.fav_game || s.fav_toy || 'Kho-Kho, Hide and Seek, and Toy-Clock building'
-            },
-            {
-                name: "Favorite Festival",
-                regex: /festival:|favourite festival|favorite festival|त्योहार|पर्व/i,
-                val: s.Favorite_Festival || s.data?.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr, Diwali, and National Days'
-            },
+            { sel: 'input.pre-hand-thumb, .pre-hand-thumb input, [class*="hand-thumb" i] input', val: s.Hand_Reflection_Thumb_GoodAt || s.data?.Hand_Reflection_Thumb_GoodAt || s.good_at || 'Arithmetic calculations and drawing flowers', name: 'Thumb (Good At)' },
+            { sel: 'input.pre-hand-index, .pre-hand-index input, [class*="hand-index" i] input', val: s.Hand_Reflection_Index_NotGoodAt || s.data?.Hand_Reflection_Index_NotGoodAt || s.not_good_at || 'Fast cursive handwriting and long spellings', name: 'Index (Not Good At)' },
+            { sel: 'input.pre-hand-middle, .pre-hand-middle input, [class*="hand-middle" i] input', val: s.Hand_Reflection_Middle_ImproveSkill || s.data?.Hand_Reflection_Middle_ImproveSkill || s.want_to_improve || 'Reading storybooks fluently without hesitation', name: 'Middle (Improve Skill)' },
+            { sel: 'input.pre-hand-ring, .pre-hand-ring input, [class*="hand-ring" i] input', val: s.Hand_Reflection_Ring_LikeTo || s.data?.Hand_Reflection_Ring_LikeTo || s.like_to || 'Singing rhymes, origami folding, and outdoor games', name: 'Ring (Like To)' },
+            { sel: 'input.pre-hand-little, .pre-hand-little input, [class*="hand-little" i] input', val: s.dont_like || 'Fighting, shouting, and loud noises', name: 'Little (Don\'t Like To)' },
+            // Yellow Card: Favorite Things (Food, Games, Festival)
+            { sel: 'input.pre-favorite-things-0, textarea.pre-favorite-things-0, .pre-favorite-things-0 input, .pre-favorite-things-0 textarea', val: s.Favorite_Food || s.data?.Favorite_Food || s.fav_food || 'Dal Chawal, Apples, and seasonal fresh fruits', name: 'Favorite Food' },
+            { sel: 'input.pre-favorite-things-1, textarea.pre-favorite-things-1, .pre-favorite-things-1 input, .pre-favorite-things-1 textarea', val: s.Favorite_Games || s.data?.Favorite_Games || s.fav_game || 'Kho-Kho, Hide and Seek, and Toy-Clock building', name: 'Favorite Games' },
+            { sel: 'input.pre-favorite-things-2, textarea.pre-favorite-things-2, .pre-favorite-things-2 input, .pre-favorite-things-2 textarea', val: s.Favorite_Festival || s.data?.Favorite_Festival || s.fav_festival || 'Eid-ul-Fitr, Diwali, and National Days', name: 'Favorite Festival' },
             // Pencil Card: When I grow up I want to be...
-            {
-                name: "Aspiration (Grow Up)",
-                regex: /when i grow up|grow up i want to be|grow up|want to be|बड़े होकर|बनना चाहता/i,
-                val: s.Hand_Reflection_Little_Aspiration || s.ambition || 'A helpful school teacher or scientist'
-            },
+            { sel: 'input.pre-pencil-grow-up, textarea.pre-pencil-grow-up, .pre-pencil-grow-up input, .pre-pencil-grow-up textarea', val: s.Hand_Reflection_Little_Aspiration || s.ambition || 'Become a helpful school teacher or scientist', name: 'Aspiration (Grow Up)' },
             // Trophy Card: One person who inspires me is...
-            {
-                name: "Inspiration (Inspires Me)",
-                regex: /one person who inspires me|inspires me|who inspires|my idol|प्रेरणा|आदर्श/i,
-                val: s.General_Reflection_Prompt_1 || s.data?.General_Reflection_Prompt_1 || 'My class teacher and parents'
-            },
+            { sel: 'input.pre-idol, textarea.pre-idol, .pre-idol input, .pre-idol textarea', val: inspirationPersonVal, name: 'Inspiration (My Idol / Person)' },
             // Alarm Clock Card: Three things I want to learn this school year
-            {
-                name: "Learn This Year 1",
-                regex: /three things i want to learn|three things|want to learn this school year|तीन चीजें/i,
-                val: s.General_Reflection_Prompt_2 || s.data?.General_Reflection_Prompt_2 || 'Neat cursive handwriting and reading stories'
-            },
-            {
-                name: "Learn This Year 2",
-                regex: /three things i want to learn|three things|want to learn this school year|तीन चीजें/i,
-                val: s.General_Reflection_Prompt_3 || s.data?.General_Reflection_Prompt_3 || 'Mental math calculations and geometry'
-            },
-            {
-                name: "Learn This Year 3",
-                regex: /three things i want to learn|three things|want to learn this school year|तीन चीजें/i,
-                val: s.General_Reflection_Prompt_4 || s.data?.General_Reflection_Prompt_4 || 'Scientific plant experiments and music'
-            }
+            { sel: 'input.pre-learn-0, textarea.pre-learn-0, .pre-learn-0 input, .pre-learn-0 textarea', val: (s.General_Reflection_Prompt_2 && !/desk|notebook|coming to school/i.test(s.General_Reflection_Prompt_2)) ? s.General_Reflection_Prompt_2 : 'Reading storybooks fluently and learning new words', name: 'Learn This Year 1' },
+            { sel: 'input.pre-learn-1, textarea.pre-learn-1, .pre-learn-1 input, .pre-learn-1 textarea', val: (s.General_Reflection_Prompt_3 && !/attentive|listen|desk/i.test(s.General_Reflection_Prompt_3)) ? s.General_Reflection_Prompt_3 : 'Mental math calculations and geometry shapes', name: 'Learn This Year 2' },
+            { sel: 'input.pre-learn-2, textarea.pre-learn-2, .pre-learn-2 input, .pre-learn-2 textarea', val: (s.General_Reflection_Prompt_4 && !/crayon|pencil|desk/i.test(s.General_Reflection_Prompt_4)) ? s.General_Reflection_Prompt_4 : 'Scientific plant experiments and art and craft', name: 'Learn This Year 3' },
+            // Things about me (Wrist/Palm of hand)
+            { sel: 'input.pre-things-about-me, textarea.pre-things-about-me, [class*="things-about-me" i] input, [class*="things-about-me" i] textarea, [class*="about-me" i] input, [class*="about-me" i] textarea', val: s.Things_About_Me || 'A curious and enthusiastic student who loves learning, creative art, and helping classmates.', name: 'Things About Me' }
         ];
 
-        // Gather all visible candidate text nodes across whole page
-        const allTextNodes = Array.from(document.querySelectorAll('label, p, span, h1, h2, h3, h4, h5, h6, strong, b, div, text')).filter(el => {
-            if (isLanguageOrHeaderElement(el)) return false;
-            const t = (el.innerText || el.textContent || '').trim().replace(/\s+/g, ' ');
-            return t.length > 0 && t.length < 150 && !el.querySelector('input:not([type="checkbox"]):not([type="radio"]), textarea');
-        });
-
-        promptMappings.forEach(mapping => {
-            // Find text nodes matching this prompt
-            const matchedNodes = allTextNodes.filter(node => {
-                const t = (node.innerText || node.textContent || '').trim().replace(/\s+/g, ' ');
-                if (mapping.excludeRegex && mapping.excludeRegex.test(t)) return false;
-                return mapping.regex.test(t);
-            });
-
-            if (matchedNodes.length === 0) return;
-
-            let bestInput = null;
-            let minDistance = 300; // max reasonable pixel radius
-
-            for (const node of matchedNodes) {
-                // Strategy A: Immediate parent or sibling container
-                const directCandidate = node.parentElement?.querySelector('input:not([type="checkbox"]):not([type="radio"]), textarea') ||
-                                        node.nextElementSibling?.querySelector('input, textarea') ||
-                                        (node.nextElementSibling?.matches('input, textarea') ? node.nextElementSibling : null);
-                if (directCandidate && !isLanguageOrHeaderElement(directCandidate) && !filledInputs.has(directCandidate)) {
-                    bestInput = directCandidate;
-                    break;
-                }
-
-                // Strategy B: Geometric coordinate proximity
-                const nRect = node.getBoundingClientRect();
-                const nx = nRect.left + nRect.width / 2;
-                const ny = nRect.top + nRect.height / 2;
-
-                for (const inp of textElements) {
-                    if (filledInputs.has(inp)) continue;
-                    const iRect = inp.getBoundingClientRect();
-                    if (iRect.width === 0 && iRect.height === 0) continue;
-                    const ix = iRect.left + iRect.width / 2;
-                    const iy = iRect.top + iRect.height / 2;
-                    const dist = Math.hypot(ix - nx, iy - ny);
-                    if (dist < minDistance) {
-                        minDistance = dist;
-                        bestInput = inp;
-                    }
-                }
-                if (bestInput) break;
-            }
-
-            if (bestInput) {
-                setNativeValue(bestInput, mapping.val);
-                filledInputs.add(bestInput);
-                logStatus(`[Part-A2] ✓ ${mapping.name}: "${String(mapping.val).slice(0, 35)}"`);
+        directSelectors.forEach(item => {
+            const el = document.querySelector(item.sel);
+            if (el && !filledInputs.has(el) && !isLanguageOrHeaderElement(el)) {
+                setNativeValue(el, item.val);
+                filledInputs.add(el);
+                logStatus(`[Part-A2] ✓ ${item.name}: "${String(item.val).slice(0, 35)}"`);
                 filledCount++;
             }
         });
+
+        // Fill Age in Green Card
+        const nameInput = document.querySelector('input.pre-name, .pre-name input, [class*="pre-name" i] input');
+        if (nameInput) {
+            const greenContainer = nameInput.closest('.card, [class*="card" i], div');
+            if (greenContainer) {
+                const unfilledGreenInputs = Array.from(greenContainer.querySelectorAll('input:not([type="checkbox"]):not([type="radio"])')).filter(i => !filledInputs.has(i) && !isLanguageOrHeaderElement(i));
+                if (unfilledGreenInputs.length > 0) {
+                    const ageEl = unfilledGreenInputs[0];
+                    setNativeValue(ageEl, String(s.my_age || s.age || '9'));
+                    filledInputs.add(ageEl);
+                    logStatus(`[Part-A2] ✓ Student Age (Green Card): "${s.my_age || s.age || '9'}"`);
+                    filledCount++;
+                }
+            }
+        }
 
         // ─────────────────────────────────────────────────────────────────
         // 2. Scan remaining unfilled inputs & apply targeted fallback
@@ -3448,6 +3358,10 @@
             }
 
             // 6. Select activities across distinct curricular domains (L1, L2, Math, TWC, Art, PE, Other)
+            const rows = Array.from(activeModal.querySelectorAll('tbody tr, .table-row, [role="row"], tr')).filter(r => {
+                if (isLanguageOrHeaderElement(r)) return false;
+                return r.querySelector('input[type="checkbox"]') || r.querySelector('input[type="radio"]') || r.children.length >= 2;
+            });
             const targetCodes = ['l1cg', 'mcg', 'twcg', 'l2cg', 'aecg', 'pecg', 'other', 'c-1', 'c-2'];
             const selectedRows = [];
 
@@ -3465,15 +3379,19 @@
             for (const r of selectedRows) {
                 logStatus(`[Part-B] Checking Global Activity: "${r.innerText.trim().slice(0, 40)}"`);
                 const cb = r.querySelector('input[type="checkbox"]');
-                if (cb && !cb.checked) {
-                    cb.checked = true;
-                    cb.dispatchEvent(new Event('change', { bubbles: true }));
-                    cb.click();
-                    await sleep(250);
-                } else if (!cb) {
+                if (cb) {
+                    if (!cb.checked) {
+                        cb.click();
+                        if (!cb.checked) {
+                            cb.checked = true;
+                            cb.dispatchEvent(new Event('input', { bubbles: true }));
+                            cb.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+                } else {
                     r.click();
-                    await sleep(250);
                 }
+                await sleep(250);
             }
 
             // 7. Click "Use Activity" button

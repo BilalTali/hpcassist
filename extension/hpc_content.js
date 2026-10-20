@@ -34,6 +34,24 @@
     let isWidgetMinimized = localStorage.getItem('hpc_widget_minimized') === 'true';
     let showSchoolSelector = false;
 
+    // Report all extension errors to logStatus and server
+    window.addEventListener('error', (event) => {
+        try {
+            if (event.filename && event.filename.includes('hpc_content')) {
+                logStatus(`❌ Extension error: ${event.message} (${event.lineno}:${event.colno})`);
+            }
+        } catch(e) {}
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+        try {
+            const reason = event.reason;
+            const msg = (reason && (reason.stack || reason.message)) ? String(reason.message || reason) : String(reason);
+            if (msg && !msg.includes('Extension context invalidated')) {
+                logStatus(`❌ Unhandled promise rejection: ${msg.slice(0, 150)}`);
+            }
+        } catch(e) {}
+    });
+
     // Manifest V3 CSP-immune fetch proxy via background service worker
     async function extensionFetch(url, options = {}) {
         if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {

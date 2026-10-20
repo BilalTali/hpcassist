@@ -199,49 +199,79 @@
 
     function setNativeValue(element, value) {
         if (!element) return;
-        value = String(value ?? '');
-        element.focus();
-        if (element.isContentEditable || element.getAttribute('contenteditable') === 'true' || element.getAttribute('role') === 'textbox') {
-            element.innerText = value;
-            element.textContent = value;
+        try {
+            value = String(value ?? '');
+            element.focus();
+            if (element.isContentEditable || element.getAttribute('contenteditable') === 'true' || element.getAttribute('role') === 'textbox') {
+                element.innerText = value;
+                element.textContent = value;
+                element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                element.dispatchEvent(new Event('blur', { bubbles: true }));
+                return;
+            }
+            const tracker = element._valueTracker;
+            if (tracker && typeof tracker.setValue === 'function') {
+                try {
+                    tracker.setValue('__REACT_BYPASS_' + Math.random());
+                } catch(e) {}
+            }
+
+            let set = null;
+            const tag = (element.tagName || '').toUpperCase();
+            if (tag === 'TEXTAREA' || element instanceof HTMLTextAreaElement) {
+                set = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+            } else if (tag === 'INPUT' || element instanceof HTMLInputElement) {
+                set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+            } else if (tag === 'SELECT' || element instanceof HTMLSelectElement) {
+                set = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
+            } else {
+                let proto = Object.getPrototypeOf(element);
+                while (proto && proto !== Object.prototype) {
+                    const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+                    if (desc && desc.set) {
+                        set = desc.set;
+                        break;
+                    }
+                    proto = Object.getPrototypeOf(proto);
+                }
+            }
+
+            if (set) {
+                try {
+                    set.call(element, value);
+                } catch(e) {
+                    element.value = value;
+                }
+            } else {
+                element.value = value;
+            }
+
             element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
             element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-            element.dispatchEvent(new Event('blur', { bubbles: true }));
-            return;
-        }
-        const tracker = element._valueTracker;
-        if (tracker) {
-            tracker.setValue('__REACT_BYPASS_' + Math.random());
-        }
-        const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set ||
-                    Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set ||
-                    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), 'value')?.set;
-        if (set) {
-            set.call(element, value);
-        } else {
-            element.value = value;
-        }
-        element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-        try {
-            element.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: value }));
-        } catch(e) {}
+            try {
+                element.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: value }));
+            } catch(e) {}
 
-        // Direct React synthetic event invocation
-        const rPropsKey = Object.keys(element).find(k => k.startsWith('__reactProps'));
-        if (rPropsKey && element[rPropsKey]) {
-            if (typeof element[rPropsKey].onChange === 'function') {
-                try {
-                    element[rPropsKey].onChange({ target: element, currentTarget: element, preventDefault: () => {}, stopPropagation: () => {} });
-                } catch(e) {}
+            // Direct React synthetic event invocation
+            const rPropsKey = Object.keys(element).find(k => k.startsWith('__reactProps'));
+            if (rPropsKey && element[rPropsKey]) {
+                if (typeof element[rPropsKey].onChange === 'function') {
+                    try {
+                        element[rPropsKey].onChange({ target: element, currentTarget: element, preventDefault: () => {}, stopPropagation: () => {} });
+                    } catch(e) {}
+                }
+                if (typeof element[rPropsKey].onInput === 'function') {
+                    try {
+                        element[rPropsKey].onInput({ target: element, currentTarget: element, preventDefault: () => {}, stopPropagation: () => {} });
+                    } catch(e) {}
+                }
             }
-            if (typeof element[rPropsKey].onInput === 'function') {
-                try {
-                    element[rPropsKey].onInput({ target: element, currentTarget: element, preventDefault: () => {}, stopPropagation: () => {} });
-                } catch(e) {}
-            }
+            element.dispatchEvent(new Event('blur', { bubbles: true }));
+        } catch(err) {
+            console.warn('[HPC Assist] setNativeValue error caught safely:', err);
+            try { element.value = value; } catch(e) {}
         }
-        element.dispatchEvent(new Event('blur', { bubbles: true }));
     }
 
     function parseDate(dobStr) {

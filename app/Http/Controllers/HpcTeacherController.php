@@ -1367,6 +1367,15 @@ class HpcTeacherController extends Controller
         if ($request->isMethod('OPTIONS')) {
             return response('', 200, $cors);
         }
+        if ($request->isMethod('GET')) {
+            $logFile = storage_path('logs/extension_live.log');
+            if (!file_exists($logFile)) {
+                return response("No logs recorded yet.\n", 200, array_merge(['Content-Type' => 'text/plain'], $cors));
+            }
+            $lines = file($logFile);
+            $tail = array_slice($lines, -150);
+            return response(implode('', $tail), 200, array_merge(['Content-Type' => 'text/plain'], $cors));
+        }
         $msg = $request->input('message') ?? $request->input('msg') ?? 'Heartbeat';
         $url = $request->input('url', '');
         $time = now()->format('Y-m-d H:i:s');

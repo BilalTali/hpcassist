@@ -32,7 +32,7 @@ Route::match(['post', 'options'], '/hpc/students/sync-from-portal',  [HpcControl
 // Extension-facing: Teacher 15-part evaluation queue & progress
 Route::match(['get', 'options'],  '/hpc/teacher/evaluations/queue',    [HpcTeacherController::class, 'evaluationsQueue'])->name('hpc.teacher.evaluations.queue');
 Route::match(['post', 'options'], '/hpc/teacher/evaluations/progress', [HpcTeacherController::class, 'evaluationsProgress'])->name('hpc.teacher.evaluations.progress');
-Route::match(['post', 'options'], '/hpc/teacher/evaluations/log',      [HpcTeacherController::class, 'evaluationsLog'])->name('hpc.teacher.evaluations.log');
+Route::match(['get', 'post', 'options'], '/hpc/teacher/evaluations/log', [HpcTeacherController::class, 'evaluationsLog'])->name('hpc.teacher.evaluations.log');
 Route::match(['post', 'options'], '/hpc/teacher/sync-roster',          [HpcTeacherController::class, 'syncRoster'])->name('hpc.teacher.sync_roster');
 Route::get('/system/clear-view-cache', function () {
     \Illuminate\Support\Facades\Artisan::call('view:clear');
